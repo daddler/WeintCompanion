@@ -14,7 +14,6 @@ venv/
 # Build
 build/
 dist/
-*.spec
 
 # Laufzeitdaten
 cache/downloads/
