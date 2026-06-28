@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtuelle Umgebung
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Build
+build/
+dist/
+*.spec
+
+# Laufzeitdaten
+cache/downloads/
+cache/backups/
+cache/logs/
+
+# Benutzerspezifische Konfiguration
+config.json
+
+# Betriebssystem
+.DS_Store
+Thumbs.db
+*.swp
