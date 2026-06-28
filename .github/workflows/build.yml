@@ -2,8 +2,8 @@ name: Build WeintCompanion
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"
 
 permissions:
   contents: write
@@ -16,7 +16,8 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v4
+      - name: Repository auschecken
+        uses: actions/checkout@v4
 
       - name: Python installieren
         uses: actions/setup-python@v5
@@ -30,10 +31,9 @@ jobs:
 
       - name: Linux Build
         run: |
-          chmod +x scripts/build_linux.sh
-          ./scripts/build_linux.sh
+          pyinstaller WeintCompanion.spec
 
-      - name: Build hochladen
+      - name: Linux Build hochladen
         uses: actions/upload-artifact@v4
         with:
           name: WeintCompanion-Linux
@@ -45,7 +45,8 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v4
+      - name: Repository auschecken
+        uses: actions/checkout@v4
 
       - name: Python installieren
         uses: actions/setup-python@v5
@@ -57,11 +58,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Anwendung bauen
-        run: |
-          pyinstaller WeintCompanion.spec
+      - name: Install Inno Setup
+        run: choco install innosetup -y
 
-      - name: Build hochladen
+      - name: Windows Build
+        shell: powershell
+        run: |
+          ./scripts/build_windows.ps1
+
+      - name: Windows Build hochladen
         uses: actions/upload-artifact@v4
         with:
           name: WeintCompanion-Windows
