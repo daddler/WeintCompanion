@@ -18,7 +18,7 @@ WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=lowest
 
-SetupIconFile=assets\icon.ico
+SetupIconFile=..\assets\icon.ico
 
 [Languages]
 Name: "german"; MessagesFile: "compiler:Languages\German.isl"
@@ -27,7 +27,7 @@ Name: "german"; MessagesFile: "compiler:Languages\German.isl"
 Name: "desktopicon"; Description: "Desktop-Verknüpfung erstellen"; GroupDescription: "Zusätzliche Aufgaben:"
 
 [Files]
-Source: "dist\WeintCompanion\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
+Source: "..\dist\WeintCompanion\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\Weint Companion"; Filename: "{app}\{#MyAppExeName}"
