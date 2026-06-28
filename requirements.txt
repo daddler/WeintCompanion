@@ -16,3 +16,4 @@ shiboken6==6.11.1
 urllib3==2.7.0
 watchdog==6.0.0
 zstandard==0.24.0
+Pillow==11.3.0

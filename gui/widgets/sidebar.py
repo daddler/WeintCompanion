@@ -69,7 +69,7 @@ class Sidebar(QFrame):
 
         layout.addWidget(subtitle)
 
-        version = QLabel("Version 0.1.0")
+        version = QLabel("Version 1.0.0")
 
         version.setObjectName("subtitle")
         version.setAlignment(Qt.AlignCenter)
