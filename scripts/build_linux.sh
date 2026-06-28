@@ -15,14 +15,7 @@ rm -rf dist
 
 echo "Starte PyInstaller..."
 
-pyinstaller \
-    --noconfirm \
-    --clean \
-    --windowed \
-    --name WeintCompanion \
-    --icon assets/icon.png \
-    --add-data "assets:assets" \
-    app.py
+pyinstaller WeintCompanion.spec
 
 echo ""
 echo "========================================"
