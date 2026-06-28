@@ -1,11 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-from PyInstaller.utils.hooks import collect_submodules
-
-
-hiddenimports = collect_submodules("PySide6")
-
-
 a = Analysis(
     ["app.py"],
     pathex=[],
@@ -13,7 +7,11 @@ a = Analysis(
     datas=[
         ("assets", "assets"),
     ],
-    hiddenimports=hiddenimports,
+    hiddenimports=[
+        "PySide6.QtCore",
+        "PySide6.QtGui",
+        "PySide6.QtWidgets",
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -40,7 +38,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="assets/icon.png",
+    icon="assets/icon.ico",
 )
 
 coll = COLLECT(
