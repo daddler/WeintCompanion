@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 from gui.widgets.navigation_item import NavigationItem
+from core.resources import Resources
 
 
 class Sidebar(QFrame):
@@ -32,10 +33,9 @@ class Sidebar(QFrame):
         #
 
         self.logo = QLabel()
-
         self.logo.setAlignment(Qt.AlignCenter)
 
-        pix = QPixmap("assets/logo.png")
+        pix = QPixmap(Resources.logo())
 
         if not pix.isNull():
 
@@ -86,15 +86,15 @@ class Sidebar(QFrame):
 
         pages = [
 
-            ("assets/home.png", "Dashboard"),
+            (Resources.home(), "Dashboard"),
 
-            ("assets/package.png", "WeintCodex"),
+            (Resources.package(), "WeintCodex"),
 
-            ("assets/sync.png", "Synchronisation"),
+            (Resources.sync(), "Synchronisation"),
 
-            ("assets/settings.png", "Einstellungen"),
+            (Resources.settings(), "Einstellungen"),
 
-            ("assets/logs.png", "Logs"),
+            (Resources.logs(), "Logs"),
 
         ]
 

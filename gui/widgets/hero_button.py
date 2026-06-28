@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
 )
+from core.resources import Resources
 
 
 class HeroButton(QFrame):

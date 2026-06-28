@@ -1,0 +1,68 @@
+name: Build WeintCompanion
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+
+  linux:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Python installieren
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Abhängigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Linux Build
+        run: |
+          chmod +x scripts/build_linux.sh
+          ./scripts/build_linux.sh
+
+      - name: Build hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: WeintCompanion-Linux
+          path: dist/
+
+  windows:
+
+    runs-on: windows-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - name: Python installieren
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Abhängigkeiten installieren
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Anwendung bauen
+        run: |
+          pyinstaller WeintCompanion.spec
+
+      - name: Build hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: WeintCompanion-Windows
+          path: dist/

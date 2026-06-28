@@ -17,6 +17,7 @@ from gui.pages.addon import AddonPage
 from gui.pages.sync import SyncPage
 from gui.pages.settings import SettingsPage
 from gui.pages.logs import LogsPage
+from core.resources import Resources
 
 
 class MainWindow(QMainWindow):
@@ -32,7 +33,9 @@ class MainWindow(QMainWindow):
         self.resize(1200, 750)
         self.setMinimumSize(1050, 680)
 
-        self.setWindowIcon(QIcon("assets/icon.png"))
+        self.setWindowIcon(
+            QIcon(Resources.icon())
+        )
 
         #
         # Zentraler CompanionManager

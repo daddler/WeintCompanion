@@ -6,6 +6,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from core.resources import Resources
+
 
 class DashboardHeader(QFrame):
 
@@ -26,10 +28,9 @@ class DashboardHeader(QFrame):
         #
 
         self.banner = QLabel()
-
         self.banner.setAlignment(Qt.AlignCenter)
 
-        pix = QPixmap("assets/companion_banner.png")
+        pix = QPixmap(Resources.banner())
 
         if not pix.isNull():
 
@@ -49,7 +50,6 @@ class DashboardHeader(QFrame):
         #
 
         self.title = QLabel("Dashboard")
-
         self.title.setObjectName("title")
 
         layout.addWidget(self.title)
