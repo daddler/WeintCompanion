@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.paths import Paths
 from gui.widgets.log_widget import LogWidget
 
 
@@ -111,12 +112,7 @@ class LogsPage(QWidget):
 
     def open_log_folder(self):
 
-        folder = Path("cache/logs")
-
-        folder.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+        folder = Paths.logs()
 
         if sys.platform.startswith("linux"):
 

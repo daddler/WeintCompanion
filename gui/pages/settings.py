@@ -1,4 +1,3 @@
-import shutil
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -13,6 +12,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from core.paths import Paths
 
 
 class SettingsPage(QWidget):
@@ -248,7 +248,7 @@ class SettingsPage(QWidget):
         # Downloads
         #
 
-        download_dir = Path("cache/downloads")
+        download_dir = Paths.downloads()
 
         if download_dir.exists():
 
@@ -392,7 +392,7 @@ class SettingsPage(QWidget):
         if answer != QMessageBox.Yes:
             return
 
-        download_dir = Path("cache/downloads")
+        download_dir = Paths.downloads()
 
         count = 0
 
@@ -427,7 +427,7 @@ class SettingsPage(QWidget):
         if answer != QMessageBox.Yes:
             return
 
-        backup_dir = Path("cache/backups")
+        backup_dir = Paths.backups()
 
         count = 0
 

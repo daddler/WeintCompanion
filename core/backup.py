@@ -2,17 +2,14 @@ from datetime import datetime
 from pathlib import Path
 import shutil
 
+from core.paths import Paths
+
 
 class BackupManager:
 
     def __init__(self):
 
-        self.backup_dir = Path("cache/backups")
-
-        self.backup_dir.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+        self.backup_dir = Paths.backups()
 
     # --------------------------------------------------
 
@@ -33,15 +30,10 @@ class BackupManager:
         )
 
         shutil.make_archive(
-
             str(archive),
-
             "zip",
-
             addon_path.parent,
-
             addon_path.name,
-
         )
 
         return archive.with_suffix(".zip")

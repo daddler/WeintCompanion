@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Callable
+
+from core.paths import Paths
 
 
 @dataclass
@@ -28,14 +29,11 @@ class Logger:
         # Log-Datei
         #
 
-        self.log_dir = Path("cache/logs")
-        self.log_dir.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+        self.log_dir = Paths.logs()
 
         self.log_file = (
-            self.log_dir / "companion.log"
+            self.log_dir
+            / "companion.log"
         )
 
     # --------------------------------------------------

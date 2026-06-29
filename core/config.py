@@ -1,12 +1,17 @@
 import json
 from pathlib import Path
 
+from core.paths import Paths
+
 
 class Config:
 
     def __init__(self):
 
-        self.file = Path("config.json")
+        self.file = (
+            Paths.config()
+            / "config.json"
+        )
 
         self.data = {
 

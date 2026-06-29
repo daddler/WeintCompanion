@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 from gui.widgets.status_card import StatusCard
+from core.paths import Paths
 
 
 class DashboardCards(QWidget):
@@ -233,7 +234,7 @@ class DashboardCards(QWidget):
 
     def refresh_backup(self):
 
-        backup_dir = Path("cache/backups")
+        backup_dir = Paths.backups()
 
         if not backup_dir.exists():
 
