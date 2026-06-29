@@ -50,8 +50,7 @@ jobs:
         with:
           name: WeintCompanion-Linux
           path: |
-            dist/
-            *.AppImage
+            WeintCompanion-x86_64.AppImage
 
   windows:
 
@@ -115,5 +114,5 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: false
           files: |
-            release/windows/**
-            release/linux/**
+            release/windows/WeintCompanion-Setup.exe
+            release/linux/WeintCompanion-x86_64.AppImage
