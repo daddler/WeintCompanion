@@ -1,5 +1,5 @@
 #define MyAppName "WeintCompanion"
-#define MyAppVersion "0.1.0"
+#define MyAppVersion "0.1.3"
 #define MyAppPublisher "Fabi (daddler2419)"
 #define MyAppExeName "WeintCompanion.exe"
 
@@ -10,7 +10,7 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\WeintCompanion
 DefaultGroupName={#MyAppName}
-OutputDir=dist
+OutputDir=..\dist
 OutputBaseFilename=WeintCompanion-Setup
 Compression=lzma
 SolidCompression=yes
