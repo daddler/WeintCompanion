@@ -5,19 +5,18 @@ import httpx
 
 class Downloader:
 
-    def __init__(self):
+    # --------------------------------------------------
 
-        self.download_dir = Path("cache/downloads")
-        self.download_dir.mkdir(
+    def download(
+        self,
+        url: str,
+        destination: Path,
+    ):
+
+        destination.parent.mkdir(
             parents=True,
             exist_ok=True,
         )
-
-    # --------------------------------------------------
-
-    def download(self, url: str, filename: str):
-
-        destination = self.download_dir / filename
 
         with httpx.stream(
             "GET",

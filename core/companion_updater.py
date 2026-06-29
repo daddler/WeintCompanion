@@ -109,6 +109,26 @@ class CompanionUpdater:
             or f"WeintCompanion-{state.companion_latest_version}"
         )
 
+        #
+        # Zielpfad bestimmen
+        #
+
+        if Runtime.is_linux() and Runtime.is_appimage():
+
+            current = Runtime.current_executable()
+
+            destination = current.with_name(
+                current.name + ".new"
+            )
+
+        else:
+
+            destination = (
+                Path("cache")
+                / "downloads"
+                / filename
+            )
+
         self.manager.logger.info(
             "Lade Companion-Update herunter..."
         )
@@ -117,7 +137,7 @@ class CompanionUpdater:
 
             file = self.manager.downloader.download(
                 state.companion_download_url,
-                filename,
+                destination,
             )
 
         except Exception as exc:

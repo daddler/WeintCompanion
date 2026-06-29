@@ -30,13 +30,13 @@ done
 echo "Aktualisiere WeintCompanion..."
 
 #
-# Neue Version über die alte kopieren
+# Alte Version ersetzen
 #
 
-cp -f "{downloaded_appimage}" "{current_appimage}"
+mv -f "{downloaded_appimage}" "{current_appimage}"
 
 if [ $? -ne 0 ]; then
-    echo "Fehler beim Kopieren."
+    echo "Fehler beim Ersetzen der AppImage."
     exit 1
 fi
 
@@ -45,12 +45,6 @@ fi
 #
 
 chmod +x "{current_appimage}"
-
-#
-# Temporären Download löschen
-#
-
-rm -f "{downloaded_appimage}"
 
 #
 # Neue Version starten
