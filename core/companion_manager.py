@@ -24,6 +24,7 @@ class CompanionManager:
         self.github = GitHubUpdater(
             owner="daddler",
             repo="WeintCodex",
+            asset_filter=".zip",
         )
         self.downloader = Downloader()
         self.backup = BackupManager()

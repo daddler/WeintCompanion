@@ -22,10 +22,12 @@ class GitHubUpdater:
         self,
         owner: str,
         repo: str,
+        asset_filter: str | None = None,
     ):
 
         self.owner = owner
         self.repo = repo
+        self.asset_filter = asset_filter
 
         self.api_url = (
             f"https://api.github.com/repos/"
@@ -54,10 +56,42 @@ class GitHubUpdater:
 
     # --------------------------------------------------
 
+    def _wanted_asset(self):
+
+        #
+        # Expliziter Filter
+        #
+
+        if self.asset_filter:
+
+            return self.asset_filter.lower()
+
+        #
+        # Companion automatisch erkennen
+        #
+
+        system = platform.system()
+
+        if system == "Windows":
+
+            return "setup.exe"
+
+        if system == "Linux":
+
+            return ".appimage"
+
+        if system == "Darwin":
+
+            return ".dmg"
+
+        return None
+
+    # --------------------------------------------------
+
     def get_latest_release(self):
 
         #
-        # Cache verwenden
+        # Cache
         #
 
         if (
@@ -73,10 +107,6 @@ class GitHubUpdater:
 
                 return self._cached_release
 
-        #
-        # GitHub abfragen
-        #
-
         try:
 
             response = self.client.get(
@@ -87,33 +117,15 @@ class GitHubUpdater:
 
             data = response.json()
 
-            asset_name = ""
-            download_url = ""
-
             assets = data.get(
                 "assets",
                 [],
             )
 
-            #
-            # Betriebssystem erkennen
-            #
+            asset_name = ""
+            download_url = ""
 
-            system = platform.system()
-
-            wanted = None
-
-            if system == "Windows":
-
-                wanted = "setup.exe"
-
-            elif system == "Linux":
-
-                wanted = ".appimage"
-
-            elif system == "Darwin":
-
-                wanted = ".dmg"
+            wanted = self._wanted_asset()
 
             #
             # Passendes Asset suchen
@@ -141,7 +153,8 @@ class GitHubUpdater:
                     break
 
             #
-            # Fallback
+            # Fallback:
+            # Falls kein Filter passt, erstes Asset nehmen.
             #
 
             if not download_url and assets:
@@ -157,10 +170,6 @@ class GitHubUpdater:
                     "browser_download_url",
                     "",
                 )
-
-            #
-            # Release erzeugen
-            #
 
             release = GitHubRelease(
 
@@ -190,18 +199,10 @@ class GitHubUpdater:
 
             )
 
-            #
-            # Cache aktualisieren
-            #
-
             self._cached_release = release
             self._last_check = datetime.now()
 
             return release
-
-        #
-        # GitHub Rate Limit
-        #
 
         except httpx.HTTPStatusError as e:
 
@@ -224,10 +225,6 @@ class GitHubUpdater:
                 )
 
             return None
-
-        #
-        # Netzwerkfehler
-        #
 
         except Exception as e:
 
