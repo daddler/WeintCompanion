@@ -19,6 +19,7 @@ class Sidebar(QFrame):
         super().__init__()
 
         self.manager = manager
+
         self.setObjectName("sidebar")
         self.setFixedWidth(280)
 
@@ -70,12 +71,18 @@ class Sidebar(QFrame):
 
         layout.addWidget(subtitle)
 
-        version = QLabel(f"Version {VERSION}")
+        #
+        # Companion-Version
+        #
 
-        version.setObjectName("subtitle")
-        version.setAlignment(Qt.AlignCenter)
+        self.version_label = QLabel(
+            f"Version {VERSION}"
+        )
 
-        layout.addWidget(version)
+        self.version_label.setObjectName("subtitle")
+        self.version_label.setAlignment(Qt.AlignCenter)
+
+        layout.addWidget(self.version_label)
 
         layout.addSpacing(20)
 
@@ -130,11 +137,17 @@ class Sidebar(QFrame):
             14,
         )
 
-        title = QLabel("🟢 Companion bereit")
-        title.setObjectName("cardTitle")
+        status_title = QLabel(
+            "🟢 Companion bereit"
+        )
 
-        version = QLabel("Version 0.1.0")
-        version.setObjectName("subtitle")
+        status_title.setObjectName("cardTitle")
+
+        self.status_version = QLabel(
+            f"Version {VERSION}"
+        )
+
+        self.status_version.setObjectName("subtitle")
 
         self.addon = QLabel(
             "📦 WeintCodex\nWird geprüft..."
@@ -142,8 +155,8 @@ class Sidebar(QFrame):
 
         self.addon.setObjectName("subtitle")
 
-        status_layout.addWidget(title)
-        status_layout.addWidget(version)
+        status_layout.addWidget(status_title)
+        status_layout.addWidget(self.status_version)
 
         status_layout.addSpacing(8)
 
@@ -155,7 +168,9 @@ class Sidebar(QFrame):
         # Footer
         #
 
-        footer = QLabel("© Bis einer weint")
+        footer = QLabel(
+            "© Bis einer weint"
+        )
 
         footer.setAlignment(Qt.AlignCenter)
 
@@ -185,9 +200,27 @@ class Sidebar(QFrame):
 
         self.pageChanged.emit(index)
 
+    # ---------------------------------------------------------
+
     def refresh(self):
 
         state = self.manager.state
+
+        #
+        # Companion-Version aktualisieren
+        #
+
+        self.version_label.setText(
+            f"Version {VERSION}"
+        )
+
+        self.status_version.setText(
+            f"Version {VERSION}"
+        )
+
+        #
+        # Addon
+        #
 
         if state.addon_found:
 
