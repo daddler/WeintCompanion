@@ -92,10 +92,32 @@ class DashboardPage(QWidget):
 
             state = self.manager.state
 
+            #
+            # Companion aktualisieren
+            #
+
+            if self.hero.mode == "companion_update":
+
+                self.manager.logger.info(
+                    "Companion-Update wird gestartet..."
+                )
+
+                self.manager.companion_updater.install_update()
+
+                return
+
+            #
+            # WoW fehlt
+            #
+
             if not state.wow_found:
 
                 self.choose_classic_folder()
                 return
+
+            #
+            # Addon installieren / aktualisieren
+            #
 
             if state.addon_found:
 

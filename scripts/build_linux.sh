@@ -12,6 +12,7 @@ echo "Bereinige alte Builds..."
 
 rm -rf build
 rm -rf dist
+rm -rf AppDir
 
 echo "Starte PyInstaller..."
 
@@ -19,9 +20,21 @@ pyinstaller WeintCompanion.spec
 
 echo ""
 echo "========================================"
-echo " Build abgeschlossen!"
+echo " PyInstaller erfolgreich"
 echo "========================================"
 echo ""
 
+if command -v linuxdeploy >/dev/null 2>&1; then
+
+    echo "linuxdeploy gefunden."
+
+else
+
+    echo "linuxdeploy nicht installiert."
+    echo "AppImage wird übersprungen."
+
+fi
+
+echo ""
 echo "Ausgabe befindet sich unter:"
 echo "dist/WeintCompanion"

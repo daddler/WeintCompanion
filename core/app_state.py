@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.version import VERSION
+
 
 @dataclass
 class AppState:
@@ -26,7 +28,7 @@ class AppState:
     addon_version: str = "-"
 
     # --------------------------------------------------
-    # GitHub
+    # GitHub (Addon)
     # --------------------------------------------------
 
     github_version: str = "-"
@@ -42,7 +44,21 @@ class AppState:
     github_published: str = ""
 
     # --------------------------------------------------
-    # Update
+    # Addon Update
     # --------------------------------------------------
 
     update_available: bool = False
+
+    # --------------------------------------------------
+    # Companion
+    # --------------------------------------------------
+
+    companion_version: str = VERSION
+
+    companion_latest_version: str = VERSION
+
+    companion_download_url: str = ""
+
+    companion_asset_name: str = ""
+
+    companion_update_available: bool = False

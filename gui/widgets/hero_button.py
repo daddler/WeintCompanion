@@ -147,10 +147,36 @@ class HeroButton(QFrame):
             )
 
             return
+        
+        #
+        # Companion Update verfügbar
+        #
+
+        if state.companion_update_available:
+
+            self.mode = "companion_update"
+
+            self.title.setText(
+                "Weint Companion"
+            )
+
+            self.status.setText(
+                f"Version {state.companion_latest_version} verfügbar."
+            )
+
+            self.button.setText(
+                "⬇ Weint Companion aktualisieren"
+            )
+
+            return
 
         #
         # Aktuell
         #
+
+        self.title.setText(
+            "WeintCodex"
+        )
 
         self.mode = "current"
 

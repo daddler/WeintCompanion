@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
 
 from gui.widgets.navigation_item import NavigationItem
 from core.resources import Resources
+from core.version import VERSION
 
 
 class Sidebar(QFrame):
@@ -69,7 +70,7 @@ class Sidebar(QFrame):
 
         layout.addWidget(subtitle)
 
-        version = QLabel("Version 1.0.0")
+        version = QLabel(f"Version {VERSION}")
 
         version.setObjectName("subtitle")
         version.setAlignment(Qt.AlignCenter)

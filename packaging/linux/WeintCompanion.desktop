@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=WeintCompanion
+Comment=WeintCompanion für WeintCodex
+Exec=WeintCompanion
+Icon=icon
+Categories=Game;
+Terminal=false
+StartupNotify=true

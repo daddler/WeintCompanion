@@ -1,5 +1,5 @@
-#define MyAppName "Weint Companion"
-#define MyAppVersion "1.0.0"
+#define MyAppName "WeintCompanion"
+#define MyAppVersion "0.1.0"
 #define MyAppPublisher "Fabi (daddler2419)"
 #define MyAppExeName "WeintCompanion.exe"
 
@@ -8,7 +8,7 @@ AppId={{F88D18D2-1D31-4D69-9E56-9EAA4E4E4F21}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\Weint Companion
+DefaultDirName={autopf}\WeintCompanion
 DefaultGroupName={#MyAppName}
 OutputDir=dist
 OutputBaseFilename=WeintCompanion-Setup

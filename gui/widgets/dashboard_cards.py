@@ -55,8 +55,8 @@ class DashboardCards(QWidget):
         #
 
         self.github = StatusCard(
-            "🌐",
-            "GitHub",
+            "🔄",
+            "Updates",
             "Nicht geprüft",
             "-",
         )
@@ -152,32 +152,81 @@ class DashboardCards(QWidget):
 
         state = self.manager.state
 
-        if state.github_version == "-":
+        #
+        # GitHub nicht erreichbar
+        #
+
+        if (
+            state.github_version == "-"
+            and
+            state.companion_latest_version == "-"
+        ):
 
             self.github.set_status(
-                "⚪ Noch nicht geprüft"
+                "⚪ GitHub nicht erreichbar"
             )
 
+            self.github.set_details("-")
+
+            return
+
+        #
+        # Verfügbare Updates sammeln
+        #
+
+        updates = []
+
+        if state.companion_update_available:
+
+            updates.append(
+                f"🖥 Companion → {state.companion_latest_version}"
+            )
+
+        if state.update_available:
+
+            updates.append(
+                f"📦 WeintCodex → {state.github_version}"
+            )
+
+        #
+        # Updates vorhanden
+        #
+
+        if updates:
+
+            count = len(updates)
+
+            if count == 1:
+
+                self.github.set_status(
+                    "🟡 1 Update verfügbar"
+                )
+
+            else:
+
+                self.github.set_status(
+                    f"🟡 {count} Updates verfügbar"
+                )
+
             self.github.set_details(
-                "-"
+                "\n".join(updates)
             )
 
             return
 
-        if state.update_available:
+        #
+        # Alles aktuell
+        #
 
-            self.github.set_status(
-                "🟡 Update verfügbar"
-            )
-
-        else:
-
-            self.github.set_status(
-                "🟢 Aktuell"
-            )
+        self.github.set_status(
+            "🟢 Alles aktuell"
+        )
 
         self.github.set_details(
-            f"Version {state.github_version}"
+            "\n".join([
+                f"🖥 Companion ✓ {state.companion_version}",
+                f"📦 WeintCodex ✓ {state.github_version}",
+            ])
         )
 
     # --------------------------------------------------

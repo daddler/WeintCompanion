@@ -9,6 +9,8 @@ from core.github_updater import GitHubUpdater
 from core.installer import Installer
 from core.logger import Logger
 from core.installer_workflow import InstallerWorkflow
+from core.companion_updater import CompanionUpdater
+from core.launcher import Launcher
 
 
 class CompanionManager:
@@ -19,11 +21,16 @@ class CompanionManager:
 
         self.config = Config()
 
-        self.github = GitHubUpdater()
+        self.github = GitHubUpdater(
+            owner="daddler",
+            repo="WeintCodex",
+        )
         self.downloader = Downloader()
         self.backup = BackupManager()
         self.installer = Installer()
         self.workflow = InstallerWorkflow(self)
+        self.companion_updater = CompanionUpdater(self)
+        self.launcher = Launcher()
         
         # Zentrale Logger-Instanz
         self.logger = Logger()
@@ -200,5 +207,6 @@ class CompanionManager:
         self.detect_wow()
         self.detect_addon()
         self.check_github()
+        self.companion_updater.check_for_update()
 
     

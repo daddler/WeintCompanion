@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import platform
 
 import httpx
 
@@ -17,12 +18,19 @@ class GitHubRelease:
 
 class GitHubUpdater:
 
-    API_URL = (
-        "https://api.github.com/repos/"
-        "daddler/WeintCodex/releases/latest"
-    )
+    def __init__(
+        self,
+        owner: str,
+        repo: str,
+    ):
 
-    def __init__(self):
+        self.owner = owner
+        self.repo = repo
+
+        self.api_url = (
+            f"https://api.github.com/repos/"
+            f"{owner}/{repo}/releases/latest"
+        )
 
         self.client = httpx.Client(
             follow_redirects=True,
@@ -72,7 +80,7 @@ class GitHubUpdater:
         try:
 
             response = self.client.get(
-                self.API_URL
+                self.api_url
             )
 
             response.raise_for_status()
@@ -82,27 +90,48 @@ class GitHubUpdater:
             asset_name = ""
             download_url = ""
 
-            for asset in data.get(
+            assets = data.get(
                 "assets",
                 [],
-            ):
+            )
+
+            #
+            # Betriebssystem erkennen
+            #
+
+            system = platform.system()
+
+            wanted = None
+
+            if system == "Windows":
+
+                wanted = "setup.exe"
+
+            elif system == "Linux":
+
+                wanted = ".appimage"
+
+            elif system == "Darwin":
+
+                wanted = ".dmg"
+
+            #
+            # Passendes Asset suchen
+            #
+
+            for asset in assets:
 
                 name = asset.get(
                     "name",
                     "",
-                )
+                ).lower()
 
-                if (
-                    name.lower().startswith(
-                        "weintcodex"
-                    )
-                    and
-                    name.lower().endswith(
-                        ".zip"
-                    )
-                ):
+                if wanted and wanted in name:
 
-                    asset_name = name
+                    asset_name = asset.get(
+                        "name",
+                        "",
+                    )
 
                     download_url = asset.get(
                         "browser_download_url",
@@ -110,6 +139,28 @@ class GitHubUpdater:
                     )
 
                     break
+
+            #
+            # Fallback
+            #
+
+            if not download_url and assets:
+
+                asset = assets[0]
+
+                asset_name = asset.get(
+                    "name",
+                    "",
+                )
+
+                download_url = asset.get(
+                    "browser_download_url",
+                    "",
+                )
+
+            #
+            # Release erzeugen
+            #
 
             release = GitHubRelease(
 
@@ -158,6 +209,12 @@ class GitHubUpdater:
 
                 print(
                     "GitHub API Rate Limit erreicht."
+                )
+
+            elif e.response.status_code == 404:
+
+                print(
+                    f"Kein Release für {self.repo} gefunden."
                 )
 
             else:

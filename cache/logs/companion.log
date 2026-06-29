@@ -2,3 +2,34 @@
 [15:45:45] SUCCESS  WeintCodex ist aktuell.
 [15:53:26] SUCCESS  WeintCodex ist aktuell.
 [15:57:43] SUCCESS  WeintCodex ist aktuell.
+[20:08:16] SUCCESS  WeintCodex ist aktuell.
+[20:09:18] INFO     Addon-Installation wird gestartet...
+[20:09:18] INFO     Lade WeintCodex herunter...
+[20:09:18] SUCCESS  Download abgeschlossen.
+[20:09:18] INFO     Installiere WeintCodex...
+[20:09:19] SUCCESS  Installation abgeschlossen.
+[20:09:19] SUCCESS  WeintCodex ist aktuell.
+[20:09:19] SUCCESS  Installation abgeschlossen.
+[20:09:51] INFO     Neue Version gefunden (v0.9.6.1).
+[20:10:21] INFO     Addon-Aktualisierung wird gestartet...
+[20:10:21] INFO     Lade WeintCodex herunter...
+[20:10:21] SUCCESS  Download abgeschlossen.
+[20:10:21] INFO     Erstelle Backup...
+[20:10:22] SUCCESS  Backup erstellt: WeintCodex_2026-06-28_20-10-21.zip
+[20:10:22] INFO     Installiere WeintCodex...
+[20:10:22] SUCCESS  Installation abgeschlossen.
+[20:10:22] SUCCESS  WeintCodex ist aktuell.
+[20:10:22] SUCCESS  Installation abgeschlossen.
+[20:10:59] INFO     Prüfe Synchronisationsvoraussetzungen...
+[20:10:59] SUCCESS  Prüfung abgeschlossen.
+[20:11:01] INFO     Starte Synchronisationstest...
+[20:11:01] SUCCESS  Synchronisationstest erfolgreich.
+[20:12:28] SUCCESS  1 Download(s) gelöscht.
+[20:12:30] SUCCESS  1 Backup(s) gelöscht.
+[13:43:00] SUCCESS  WeintCodex ist aktuell.
+[13:52:07] SUCCESS  WeintCodex ist aktuell.
+[13:52:07] ERROR    Companion konnte nicht auf Updates geprüft werden.
+[14:10:21] SUCCESS  WeintCodex ist aktuell.
+[14:10:21] ERROR    Companion konnte nicht auf Updates geprüft werden.
+[14:41:28] SUCCESS  WeintCodex ist aktuell.
+[14:41:28] ERROR    Companion konnte nicht auf Updates geprüft werden.
