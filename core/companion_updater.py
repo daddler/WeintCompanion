@@ -1,6 +1,8 @@
 from pathlib import Path
 
 from core.github_updater import GitHubUpdater
+from core.linux_updater import LinuxUpdater
+from core.runtime import Runtime
 from core.version import VERSION
 
 
@@ -14,6 +16,8 @@ class CompanionUpdater:
             owner="daddler",
             repo="WeintCompanion",
         )
+
+        self.linux = LinuxUpdater()
 
     # --------------------------------------------------
 
@@ -53,17 +57,9 @@ class CompanionUpdater:
 
             return
 
-        #
-        # Releaseinformationen übernehmen
-        #
-
         state.companion_latest_version = release.version
         state.companion_download_url = release.download_url
         state.companion_asset_name = release.asset_name
-
-        #
-        # Version vergleichen
-        #
 
         current = self.normalize(VERSION)
         latest = self.normalize(release.version)
@@ -149,20 +145,53 @@ class CompanionUpdater:
         if file is None:
             return False
 
-        self.manager.logger.info(
-            "Starte Installer..."
-        )
-
         try:
 
-            self.manager.launcher.launch_and_exit(file)
+            #
+            # Linux (AppImage)
+            #
+
+            if Runtime.is_linux() and Runtime.is_appimage():
+
+                current = Runtime.current_executable()
+
+                self.manager.logger.info(
+                    "Erstelle Linux-Update..."
+                )
+
+                script = self.linux.create_update_script(
+                    downloaded_appimage=file,
+                    current_appimage=current,
+                )
+
+                self.manager.logger.info(
+                    "Starte Update-Skript..."
+                )
+
+                self.manager.launcher.launch_and_exit(
+                    script
+                )
+
+                return True
+
+            #
+            # Windows / macOS
+            #
+
+            self.manager.logger.info(
+                "Starte Installer..."
+            )
+
+            self.manager.launcher.launch_and_exit(
+                file
+            )
+
+            return True
 
         except Exception as exc:
 
             self.manager.logger.error(
-                f"Installer konnte nicht gestartet werden: {exc}"
+                f"Update konnte nicht gestartet werden: {exc}"
             )
 
             return False
-
-        return True
