@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from core.paths import Paths
 from core.workflow_result import WorkflowResult
 
 
@@ -41,6 +42,15 @@ class InstallerWorkflow:
         )
 
         #
+        # Download-Ziel
+        #
+
+        destination = (
+            Paths.downloads()
+            / filename
+        )
+
+        #
         # Download
         #
 
@@ -52,7 +62,7 @@ class InstallerWorkflow:
 
             zip_file = self.manager.downloader.download(
                 state.github_download_url,
-                filename,
+                destination,
             )
 
         except Exception as exc:
