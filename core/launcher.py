@@ -1,6 +1,9 @@
 from pathlib import Path
+import os
 import platform
+import stat
 import subprocess
+
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication
 
@@ -25,8 +28,6 @@ class Launcher:
 
         if system == "Windows":
 
-            import os
-
             os.startfile(file)
 
             return
@@ -36,6 +37,19 @@ class Launcher:
         #
 
         if system == "Linux":
+
+            #
+            # Datei ausführbar machen
+            #
+
+            current_mode = file.stat().st_mode
+
+            file.chmod(
+                current_mode
+                | stat.S_IXUSR
+                | stat.S_IXGRP
+                | stat.S_IXOTH
+            )
 
             subprocess.Popen(
                 [str(file)],
