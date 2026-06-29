@@ -17,11 +17,15 @@ f"""#!/bin/bash
 
 set -e
 
+echo "Warte bis WeintCompanion beendet wurde..."
+
 #
-# Kurz warten bis Companion beendet wurde
+# Warten bis die gestartete AppImage nicht mehr läuft
 #
 
-sleep 2
+while pgrep -f "{current_appimage}" >/dev/null; do
+    sleep 0.2
+done
 
 echo "Aktualisiere WeintCompanion..."
 
@@ -31,6 +35,11 @@ echo "Aktualisiere WeintCompanion..."
 
 cp -f "{downloaded_appimage}" "{current_appimage}"
 
+if [ $? -ne 0 ]; then
+    echo "Fehler beim Kopieren."
+    exit 1
+fi
+
 #
 # Ausführbar machen
 #
@@ -38,7 +47,7 @@ cp -f "{downloaded_appimage}" "{current_appimage}"
 chmod +x "{current_appimage}"
 
 #
-# Download löschen
+# Temporären Download löschen
 #
 
 rm -f "{downloaded_appimage}"
@@ -50,7 +59,7 @@ rm -f "{downloaded_appimage}"
 "{current_appimage}" &
 
 #
-# Script löschen
+# Update-Skript entfernen
 #
 
 rm -f "$0"
