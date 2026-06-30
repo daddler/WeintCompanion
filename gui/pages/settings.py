@@ -277,7 +277,7 @@ class SettingsPage(QWidget):
         # Backups
         #
 
-        backup_dir = Path("cache/backups")
+        backup_dir = Paths.backups()
 
         if backup_dir.exists():
 

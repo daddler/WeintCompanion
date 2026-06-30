@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QVBoxLayout,
@@ -13,6 +14,8 @@ from gui.widgets.log_widget import LogWidget
 
 
 class DashboardPage(QWidget):
+
+    pageRequested = Signal(int)
 
     def __init__(self, manager):
         super().__init__()
@@ -38,6 +41,9 @@ class DashboardPage(QWidget):
         self.cards = DashboardCards(manager)
         self.cards.folderRequested.connect(
             self.choose_classic_folder
+        )
+        self.cards.pageRequested.connect(
+            self.pageRequested.emit
         )
 
         layout.addWidget(self.cards)

@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QGridLayout,
@@ -13,6 +11,7 @@ from core.paths import Paths
 class DashboardCards(QWidget):
 
     folderRequested = Signal()
+    pageRequested = Signal(int)
 
     def __init__(self, manager):
         super().__init__()
@@ -40,6 +39,10 @@ class DashboardCards(QWidget):
             self.folderRequested.emit
         )
 
+        self.wow.clicked.connect(
+            lambda: self.pageRequested.emit(3)
+        )
+
         #
         # WeintCodex
         #
@@ -49,6 +52,10 @@ class DashboardCards(QWidget):
             "WeintCodex",
             "Nicht installiert",
             "Version: -",
+        )
+
+        self.addon.clicked.connect(
+            lambda: self.pageRequested.emit(1)
         )
 
         #
@@ -62,6 +69,10 @@ class DashboardCards(QWidget):
             "-",
         )
 
+        self.github.clicked.connect(
+            lambda: self.pageRequested.emit(1)
+        )
+
         #
         # Backups
         #
@@ -71,6 +82,10 @@ class DashboardCards(QWidget):
             "Backups",
             "Keine Informationen",
             "-",
+        )
+
+        self.backup.clicked.connect(
+            lambda: self.pageRequested.emit(3)
         )
 
         layout.addWidget(self.wow, 0, 0)
@@ -97,6 +112,8 @@ class DashboardCards(QWidget):
 
         if state.wow_found:
 
+            self.wow.set_state("normal")
+
             self.wow.set_status(
                 "🟢 Installation gefunden"
             )
@@ -109,9 +126,13 @@ class DashboardCards(QWidget):
                 short = str(state.wow_path)
 
             self.wow.set_details(short)
-            self.wow.set_tooltip(str(state.wow_path))
+            self.wow.set_tooltip(
+                str(state.wow_path)
+            )
 
         else:
+
+            self.wow.set_state("error")
 
             self.wow.set_status(
                 "🔴 Nicht gefunden"
@@ -129,6 +150,8 @@ class DashboardCards(QWidget):
 
         if state.addon_found:
 
+            self.addon.set_state("normal")
+
             self.addon.set_status(
                 "🟢 Installiert"
             )
@@ -138,6 +161,8 @@ class DashboardCards(QWidget):
             )
 
         else:
+
+            self.addon.set_state("error")
 
             self.addon.set_status(
                 "🔴 Nicht installiert"
@@ -163,6 +188,8 @@ class DashboardCards(QWidget):
             state.companion_latest_version == "-"
         ):
 
+            self.github.set_state("error")
+
             self.github.set_status(
                 "⚪ GitHub nicht erreichbar"
             )
@@ -172,7 +199,7 @@ class DashboardCards(QWidget):
             return
 
         #
-        # Verfügbare Updates sammeln
+        # Updates sammeln
         #
 
         updates = []
@@ -194,6 +221,8 @@ class DashboardCards(QWidget):
         #
 
         if updates:
+
+            self.github.set_state("warning")
 
             count = len(updates)
 
@@ -219,6 +248,8 @@ class DashboardCards(QWidget):
         # Alles aktuell
         #
 
+        self.github.set_state("normal")
+
         self.github.set_status(
             "🟢 Alles aktuell"
         )
@@ -238,6 +269,8 @@ class DashboardCards(QWidget):
 
         if not backup_dir.exists():
 
+            self.backup.set_state("normal")
+
             self.backup.set_status(
                 "⚪ Keine Backups"
             )
@@ -246,9 +279,14 @@ class DashboardCards(QWidget):
 
             return
 
-        backups = list(backup_dir.iterdir())
+        backups = [
+            f for f in backup_dir.iterdir()
+            if f.is_file()
+        ]
 
         if not backups:
+
+            self.backup.set_state("normal")
 
             self.backup.set_status(
                 "⚪ Keine Backups"
@@ -262,6 +300,8 @@ class DashboardCards(QWidget):
             backups,
             key=lambda p: p.stat().st_mtime,
         )
+
+        self.backup.set_state("normal")
 
         self.backup.set_status(
             f"🟢 {len(backups)} vorhanden"

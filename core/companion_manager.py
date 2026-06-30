@@ -11,6 +11,8 @@ from core.logger import Logger
 from core.installer_workflow import InstallerWorkflow
 from core.companion_updater import CompanionUpdater
 from core.launcher import Launcher
+from addon.sync_reader import SyncReader
+from core.sync_manager import SyncManager
 
 
 class CompanionManager:
@@ -20,6 +22,9 @@ class CompanionManager:
         self.state = AppState()
 
         self.config = Config()
+
+        # Zentrale Logger-Instanz
+        self.logger = Logger()
 
         self.github = GitHubUpdater(
             owner="daddler",
@@ -32,10 +37,8 @@ class CompanionManager:
         self.workflow = InstallerWorkflow(self)
         self.companion_updater = CompanionUpdater(self)
         self.launcher = Launcher()
+        self.sync = SyncManager(self)
         
-        # Zentrale Logger-Instanz
-        self.logger = Logger()
-
     # --------------------------------------------------
     # Initialisierung
     # --------------------------------------------------
@@ -102,6 +105,36 @@ class CompanionManager:
         self.state.addon_version = (
             reader.get_version() or "-"
         )
+
+        #
+        # Companion Queue prüfen
+        #
+
+        sync = SyncReader(
+            self.state.wow_path
+        )
+
+        if sync.exists():
+
+            count = sync.queue_size()
+
+            if count:
+
+                self.logger.info(
+                    f"Companion: {count} Nachricht(en) in der Warteschlange."
+                )
+
+            else:
+
+                self.logger.success(
+                    "Companion: Warteschlange leer."
+                )
+
+        else:
+
+            self.logger.info(
+                "Companion: Keine SavedVariables gefunden."
+            )
 
     # --------------------------------------------------
     # GitHub
@@ -209,5 +242,6 @@ class CompanionManager:
         self.detect_addon()
         self.check_github()
         self.companion_updater.check_for_update()
+        self.sync.process()
 
     

@@ -104,6 +104,10 @@ class MainWindow(QMainWindow):
             self.change_page
         )
 
+        self.dashboard.pageRequested.connect(
+            self.change_page
+        )
+
     # --------------------------------------------------
 
     def wrap_page(self, widget):
@@ -130,6 +134,18 @@ class MainWindow(QMainWindow):
     # --------------------------------------------------
 
     def change_page(self, index):
+
+        #
+        # Sidebar aktualisieren
+        #
+
+        for i, item in enumerate(self.sidebar.items):
+
+            item.setActive(i == index)
+
+        #
+        # Seite wechseln
+        #
 
         self.pages.setCurrentIndex(index)
 

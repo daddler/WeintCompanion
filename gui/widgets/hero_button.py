@@ -99,7 +99,7 @@ class HeroButton(QFrame):
         #
 
         if not state.wow_found:
-
+            
             self.mode = "select"
 
             self.status.setText(
