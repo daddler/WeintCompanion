@@ -1,73 +1,60 @@
 from pathlib import Path
+import shutil
 import stat
 
 
 class LinuxUpdater:
 
-    def create_update_script(
+    def prepare(
         self,
         downloaded_appimage: Path,
         current_appimage: Path,
     ) -> Path:
 
-        script = downloaded_appimage.parent / "update.sh"
+        updater_source = (
+            Path(__file__).resolve().parent.parent
+            / "packaging"
+            / "linux"
+            / "updater.sh"
+        )
 
-        script.write_text(
-f"""#!/bin/bash
+        if not updater_source.exists():
+            raise FileNotFoundError(
+                f"Updater nicht gefunden: {updater_source}"
+            )
 
-set -e
-
-LOG="{downloaded_appimage.parent}/update.log"
-
-echo "==============================" > "$LOG"
-echo "WeintCompanion Updater" >> "$LOG"
-echo "$(date)" >> "$LOG"
-echo "==============================" >> "$LOG"
-
-echo "Warte auf das Beenden der Anwendung..." | tee -a "$LOG"
-
-#
-# Der Companion beendet sich selbst nach dem Start
-# des Update-Skripts. Ein kurzer Puffer reicht aus.
-#
-
-sleep 2
-
-echo "Ersetze AppImage..." | tee -a "$LOG"
-
-mv -f "{downloaded_appimage}" "{current_appimage}"
-
-echo "Setze Ausführungsrechte..." | tee -a "$LOG"
-
-chmod +x "{current_appimage}"
-
-echo "Starte neue Version..." | tee -a "$LOG"
-
-nohup "{current_appimage}" >/dev/null 2>&1 &
-
-echo "Update erfolgreich abgeschlossen." | tee -a "$LOG"
-
-#
-# Update-Skript entfernen
-#
-
-rm -f "$0"
-
-""",
-            encoding="utf-8",
+        updater_target = (
+            current_appimage.parent
+            / "update.sh"
         )
 
         #
-        # Script ausführbar machen
+        # Alte Version entfernen
         #
 
-        mode = script.stat().st_mode
+        if updater_target.exists():
+            updater_target.unlink()
 
-        script.chmod(
+        #
+        # Neuen Updater kopieren
+        #
+
+        shutil.copy2(
+            updater_source,
+            updater_target,
+        )
+
+        #
+        # Ausführbar machen
+        #
+
+        mode = updater_target.stat().st_mode
+
+        updater_target.chmod(
             mode
             | stat.S_IXUSR
             | stat.S_IXGRP
             | stat.S_IXOTH
         )
 
-        return script
+        return updater_target

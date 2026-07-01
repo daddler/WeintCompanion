@@ -1,14 +1,13 @@
 from pathlib import Path
+import os
+import subprocess
+
+from PySide6.QtWidgets import QApplication
 
 from core.github_updater import GitHubUpdater
 from core.linux_updater import LinuxUpdater
 from core.runtime import Runtime
 from core.version import VERSION
-
-import subprocess
-
-from PySide6.QtCore import QTimer
-from PySide6.QtWidgets import QApplication
 
 
 class CompanionUpdater:
@@ -115,7 +114,8 @@ class CompanionUpdater:
         )
 
         #
-        # Zielpfad bestimmen
+        # Linux-AppImage:
+        # Download direkt neben die aktuelle AppImage
         #
 
         if Runtime.is_linux() and Runtime.is_appimage():
@@ -125,6 +125,10 @@ class CompanionUpdater:
             destination = current.with_name(
                 current.name + ".new"
             )
+
+        #
+        # Windows / Entwicklung
+        #
 
         else:
 
@@ -181,32 +185,27 @@ class CompanionUpdater:
                 current = Runtime.current_executable()
 
                 self.manager.logger.info(
-                    "Erstelle Linux-Update..."
+                    "Bereite Linux-Update vor..."
                 )
 
-                script = self.linux.create_update_script(
+                script = self.linux.prepare(
                     downloaded_appimage=file,
                     current_appimage=current,
                 )
 
-                self.manager.logger.info(
-                    "Starte Update-Skript..."
-                )
-                #
-                # Polling vor dem Update beenden
-                #
-
                 self.manager.stop_auto_sync()
 
                 subprocess.Popen(
-                    ["/bin/bash", str(script)],
+                    [
+                        str(script),
+                        str(current),
+                        str(file),
+                        str(os.getpid()),
+                    ],
                     start_new_session=True,
                 )
 
-                QTimer.singleShot(
-                    1000,
-                    QApplication.quit,
-                )
+                QApplication.quit()
 
                 return True
 
@@ -218,11 +217,8 @@ class CompanionUpdater:
                 "Starte Installer..."
             )
 
-            #
-            # Polling vor dem Update beenden
-            #
+            self.manager.stop_auto_sync()
 
-            self.manager.stop_auto_sync()    
             self.manager.launcher.launch_and_exit(
                 file
             )
