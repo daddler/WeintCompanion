@@ -5,6 +5,11 @@ from core.linux_updater import LinuxUpdater
 from core.runtime import Runtime
 from core.version import VERSION
 
+import subprocess
+
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QApplication
+
 
 class CompanionUpdater:
 
@@ -193,8 +198,14 @@ class CompanionUpdater:
 
                 self.manager.stop_auto_sync()
 
-                self.manager.launcher.launch_and_exit(
-                    script
+                subprocess.Popen(
+                    ["/bin/bash", str(script)],
+                    start_new_session=True,
+                )
+
+                QTimer.singleShot(
+                    1000,
+                    QApplication.quit,
                 )
 
                 return True
