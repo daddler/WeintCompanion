@@ -13,6 +13,7 @@ from core.companion_updater import CompanionUpdater
 from core.launcher import Launcher
 from addon.sync_reader import SyncReader
 from core.sync_manager import SyncManager
+from PySide6.QtCore import QTimer
 
 
 class CompanionManager:
@@ -38,6 +39,11 @@ class CompanionManager:
         self.companion_updater = CompanionUpdater(self)
         self.launcher = Launcher()
         self.sync = SyncManager(self)
+        self.sync_timer = QTimer()
+
+        self.sync_timer.timeout.connect(
+            self.run_auto_sync
+        )
         
     # --------------------------------------------------
     # Initialisierung
@@ -46,6 +52,46 @@ class CompanionManager:
     def initialize(self):
 
         self.full_refresh()
+
+        self.start_auto_sync()
+
+    # --------------------------------------------------
+    # Automatische Synchronisation
+    # --------------------------------------------------
+
+    def start_auto_sync(self):
+
+        if not self.config.data.get(
+            "auto_sync",
+            True,
+        ):
+
+            self.logger.info(
+                "Automatische Synchronisation deaktiviert."
+            )
+
+            return
+
+        interval = self.config.data.get(
+            "sync_interval",
+            5,
+        )
+
+        #
+        # Sekunden -> Millisekunden
+        #
+
+        self.sync_timer.start(
+            interval * 1000
+        )
+
+        self.logger.success(
+            f"Automatische Synchronisation aktiviert ({interval} Sekunde(n))."
+        )
+
+    def run_auto_sync(self):
+
+        self.sync.process()
 
     # --------------------------------------------------
     # Classic Installation

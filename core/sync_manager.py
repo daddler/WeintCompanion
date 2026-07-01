@@ -61,14 +61,14 @@ class SyncManager:
 
             if success:
 
-                self.manager.logger.success(
-                    f"Nachricht #{message['id']} erfolgreich gesendet."
+                self.reader.remove_message(
+                    message["id"]
                 )
+                print(self.reader.read())
 
-                #
-                # TODO:
-                # Nachricht aus der Queue entfernen
-                #
+                self.manager.logger.success(
+                    f"Nachricht #{message['id']} verarbeitet."
+                )
 
             else:
 

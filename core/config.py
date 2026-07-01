@@ -17,6 +17,16 @@ class Config:
 
             "classic_path": "",
 
+            #
+            # Allgemeine Einstellungen
+            #
+
+            "check_updates": True,
+
+            "auto_sync": True,
+
+            "sync_interval": 5,
+
         }
 
         self.load()
@@ -42,6 +52,30 @@ class Config:
                 self.data.update(
                     json.load(f)
                 )
+                #
+                # Fehlende Einstellungen ergänzen
+                #
+
+                changed = False
+
+                defaults = {
+
+                    "check_updates": True,
+                    "auto_sync": True,
+                    "sync_interval": 5,
+
+                }
+
+                for key, value in defaults.items():
+
+                    if key not in self.data:
+
+                        self.data[key] = value
+                        changed = True
+
+                if changed:
+
+                    self.save()
 
         except Exception:
 

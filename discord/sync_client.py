@@ -5,7 +5,7 @@ class SyncClient:
 
     def __init__(self):
 
-        self.url = "http://127.0.0.1:8765/sync"
+        self.url = "https://weintcodex-a1d.b.jrnm.app/sync"
 
     # --------------------------------------------------
 

@@ -210,3 +210,92 @@ class SyncReader:
     def queue_size(self):
 
         return len(self.get_messages())
+
+    # --------------------------------------------------
+    # Nachricht entfernen
+    # --------------------------------------------------
+
+    def remove_message(self, message_id):
+
+        file = self.get_file()
+
+        if file is None:
+            return False
+
+        messages = self.get_messages()
+
+        #
+        # Nachricht entfernen
+        #
+
+        messages = [
+            message
+            for message in messages
+            if message["id"] != message_id
+        ]
+
+        #
+        # lastId aus der bestehenden Datei übernehmen
+        #
+
+        last_id = 0
+
+        for line in self.read().splitlines():
+
+            line = line.strip()
+
+            if line.startswith('["lastId"]'):
+
+                last_id = int(
+                    line.split("=")[1]
+                    .strip()
+                    .rstrip(",")
+                )
+
+                break
+
+        #
+        # Lua-Datei neu erzeugen
+        #
+
+        lines = []
+
+        lines.append("WeintCompanionDB = {")
+        lines.append('["version"] = 1,')
+        lines.append(f'["lastId"] = {last_id},')
+        lines.append('["queue"] = {')
+
+        for message in messages:
+
+            payload = (
+                message["payload"]
+                .replace("\\", "\\\\")
+                .replace('"', '\\"')
+            )
+
+            lines.extend([
+
+                "{",
+
+                f'["created"] = {message["created"]},',
+                f'["type"] = "{message["type"]}",',
+                f'["version"] = {message["version"]},',
+                f'["payload"] = "{payload}",',
+                f'["id"] = {message["id"]},',
+
+                "},",
+
+            ])
+
+        lines.append("},")
+        lines.append("}")
+
+        file.write_text(
+
+            "\n".join(lines),
+
+            encoding="utf-8",
+
+        )
+
+        return True

@@ -70,8 +70,9 @@ class SettingsPage(QWidget):
         )
 
         self.interval = QSpinBox()
-        self.interval.setRange(1, 60)
-        self.interval.setSuffix(" Minuten")
+        self.interval.setRange(2, 300)
+        self.interval.setValue(5)
+        self.interval.setSuffix(" Sekunden")
 
         interval_layout.addWidget(self.interval)
         interval_layout.addStretch()
@@ -233,7 +234,7 @@ class SettingsPage(QWidget):
         self.sync_check.setChecked(
             config.data.get(
                 "auto_sync",
-                False,
+                True,
             )
         )
 
