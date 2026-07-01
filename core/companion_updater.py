@@ -187,6 +187,11 @@ class CompanionUpdater:
                 self.manager.logger.info(
                     "Starte Update-Skript..."
                 )
+                #
+                # Polling vor dem Update beenden
+                #
+
+                self.manager.stop_auto_sync()
 
                 self.manager.launcher.launch_and_exit(
                     script
@@ -202,6 +207,11 @@ class CompanionUpdater:
                 "Starte Installer..."
             )
 
+            #
+            # Polling vor dem Update beenden
+            #
+
+            self.manager.stop_auto_sync()    
             self.manager.launcher.launch_and_exit(
                 file
             )

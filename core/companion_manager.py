@@ -94,6 +94,20 @@ class CompanionManager:
         self.sync.process()
 
     # --------------------------------------------------
+    # Automatische Synchronisation stoppen
+    # --------------------------------------------------
+
+    def stop_auto_sync(self):
+
+        if self.sync_timer.isActive():
+
+            self.sync_timer.stop()
+
+            self.logger.info(
+                "Automatische Synchronisation gestoppt."
+            )
+
+    # --------------------------------------------------
     # Classic Installation
     # --------------------------------------------------
 
