@@ -1,6 +1,7 @@
 from pathlib import Path
 import shutil
 import stat
+import sys
 
 
 class LinuxUpdater:
@@ -11,14 +12,27 @@ class LinuxUpdater:
         current_appimage: Path,
     ) -> Path:
 
+        #
+        # Im PyInstaller-Build liegen Ressourcen unter _MEIPASS
+        #
+
+        if getattr(sys, "frozen", False):
+
+            base = Path(sys._MEIPASS)
+
+        else:
+
+            base = Path(__file__).resolve().parent.parent
+
         updater_source = (
-            Path(__file__).resolve().parent.parent
+            base
             / "packaging"
             / "linux"
             / "updater.sh"
         )
 
         if not updater_source.exists():
+
             raise FileNotFoundError(
                 f"Updater nicht gefunden: {updater_source}"
             )
@@ -28,25 +42,14 @@ class LinuxUpdater:
             / "update.sh"
         )
 
-        #
-        # Alte Version entfernen
-        #
-
         if updater_target.exists():
-            updater_target.unlink()
 
-        #
-        # Neuen Updater kopieren
-        #
+            updater_target.unlink()
 
         shutil.copy2(
             updater_source,
             updater_target,
         )
-
-        #
-        # Ausführbar machen
-        #
 
         mode = updater_target.stat().st_mode
 
