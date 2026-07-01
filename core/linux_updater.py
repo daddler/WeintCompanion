@@ -17,40 +17,35 @@ f"""#!/bin/bash
 
 set -e
 
-echo "Warte bis WeintCompanion beendet wurde..."
+LOG="{downloaded_appimage.parent}/update.log"
+
+echo "==============================" > "$LOG"
+echo "WeintCompanion Updater" >> "$LOG"
+echo "$(date)" >> "$LOG"
+echo "==============================" >> "$LOG"
+
+echo "Warte auf das Beenden der Anwendung..." | tee -a "$LOG"
 
 #
-# Warten bis die gestartete AppImage nicht mehr läuft
+# Der Companion beendet sich selbst nach dem Start
+# des Update-Skripts. Ein kurzer Puffer reicht aus.
 #
 
-while pgrep -f "{current_appimage}" >/dev/null; do
-    sleep 0.2
-done
+sleep 2
 
-echo "Aktualisiere WeintCompanion..."
-
-#
-# Alte Version ersetzen
-#
+echo "Ersetze AppImage..." | tee -a "$LOG"
 
 mv -f "{downloaded_appimage}" "{current_appimage}"
 
-if [ $? -ne 0 ]; then
-    echo "Fehler beim Ersetzen der AppImage."
-    exit 1
-fi
-
-#
-# Ausführbar machen
-#
+echo "Setze Ausführungsrechte..." | tee -a "$LOG"
 
 chmod +x "{current_appimage}"
 
-#
-# Neue Version starten
-#
+echo "Starte neue Version..." | tee -a "$LOG"
 
-"{current_appimage}" &
+nohup "{current_appimage}" >/dev/null 2>&1 &
+
+echo "Update erfolgreich abgeschlossen." | tee -a "$LOG"
 
 #
 # Update-Skript entfernen

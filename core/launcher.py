@@ -90,6 +90,6 @@ class Launcher:
         #
 
         QTimer.singleShot(
-            250,
+            1000,
             QApplication.quit,
         )
