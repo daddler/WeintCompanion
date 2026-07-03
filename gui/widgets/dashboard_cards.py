@@ -18,10 +18,18 @@ class DashboardCards(QWidget):
 
         self.manager = manager
 
-        layout = QGridLayout(self)
+        self.layout = QGridLayout(self)
 
-        layout.setHorizontalSpacing(20)
-        layout.setVerticalSpacing(20)
+        self.layout.setContentsMargins(
+            0,
+            0,
+            0,
+            0,
+        )
+
+        self.layout.setHorizontalSpacing(18)
+
+        self.layout.setVerticalSpacing(0)
 
         #
         # WoW
@@ -88,10 +96,48 @@ class DashboardCards(QWidget):
             lambda: self.pageRequested.emit(3)
         )
 
-        layout.addWidget(self.wow, 0, 0)
-        layout.addWidget(self.addon, 0, 1)
-        layout.addWidget(self.github, 1, 0)
-        layout.addWidget(self.backup, 1, 1)
+        #
+        # Einheitliche Kartenhöhe
+        #
+
+        for card in (
+            self.addon,
+            self.github,
+            self.backup,
+            self.wow,
+        ):
+            card.setFixedHeight(180)
+
+        self.layout.addWidget(
+            self.addon,
+            0,
+            0,
+        )
+
+        self.layout.addWidget(
+            self.github,
+            0,
+            1,
+        )
+
+        self.layout.addWidget(
+            self.backup,
+            0,
+            2,
+        )
+
+        self.layout.addWidget(
+            self.wow,
+            0,
+            3,
+        )
+
+        for column in range(4):
+
+            self.layout.setColumnStretch(
+                column,
+                1,
+            )
 
         self.refresh()
 

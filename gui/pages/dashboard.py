@@ -6,12 +6,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-
-from gui.widgets.dashboard_header import DashboardHeader
 from gui.widgets.dashboard_cards import DashboardCards
-from gui.widgets.hero_button import HeroButton
 from gui.widgets.log_widget import LogWidget
-
+from gui.widgets.hero_banner import HeroBanner
 
 class DashboardPage(QWidget):
 
@@ -28,11 +25,11 @@ class DashboardPage(QWidget):
         layout.setSpacing(22)
 
         #
-        # Header
+        # Hero Banner
         #
 
-        self.header = DashboardHeader()
-        layout.addWidget(self.header)
+        self.hero = HeroBanner()
+        layout.addWidget(self.hero)
 
         #
         # Statuskarten
@@ -47,18 +44,6 @@ class DashboardPage(QWidget):
         )
 
         layout.addWidget(self.cards)
-
-        #
-        # Hero Button
-        #
-
-        self.hero = HeroButton()
-
-        self.hero.installRequested.connect(
-            self.install_or_update
-        )
-
-        layout.addWidget(self.hero)
 
         #
         # Log Widget
@@ -84,7 +69,7 @@ class DashboardPage(QWidget):
 
         self.cards.refresh()
 
-        self.hero.refresh(
+        self.hero.updateFromState(
             self.manager.state
         )
 

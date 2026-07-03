@@ -47,7 +47,7 @@ class Resources:
     def banner():
 
         return Resources.path(
-            "assets/companion_banner.png"
+            "assets/hero_banner.png"
         )
 
     @staticmethod

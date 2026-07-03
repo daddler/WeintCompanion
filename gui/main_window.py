@@ -1,14 +1,21 @@
+from __future__ import annotations
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
-    QHBoxLayout,
-    QMainWindow,
-    QScrollArea,
-    QStackedWidget,
     QWidget,
+    QFrame,
+    QHBoxLayout,
+    QVBoxLayout,
+    QMainWindow,
+    QStackedWidget,
+    QScrollArea,
 )
 
 from core.companion_manager import CompanionManager
+from core.resources import Resources
+
+from gui.theme.metrics import Metrics
 
 from gui.widgets.sidebar import Sidebar
 
@@ -17,84 +24,176 @@ from gui.pages.addon import AddonPage
 from gui.pages.sync import SyncPage
 from gui.pages.settings import SettingsPage
 from gui.pages.logs import LogsPage
-from core.resources import Resources
 
 
 class MainWindow(QMainWindow):
 
     def __init__(self):
+
         super().__init__()
 
         #
+        # --------------------------------------------------
         # Fenster
+        # --------------------------------------------------
         #
 
-        self.setWindowTitle("Weint Companion")
-        self.resize(1200, 750)
-        self.setMinimumSize(1050, 680)
+        self.setWindowTitle("WeintCompanion")
+
+        self.resize(
+            Metrics.WINDOW_MIN_WIDTH,
+            Metrics.WINDOW_MIN_HEIGHT,
+        )
+
+        self.setMinimumSize(
+            Metrics.WINDOW_MIN_WIDTH,
+            Metrics.WINDOW_MIN_HEIGHT,
+        )
 
         self.setWindowIcon(
             QIcon(Resources.icon())
         )
 
         #
-        # Zentraler CompanionManager
+        # --------------------------------------------------
+        # Companion Manager
+        # --------------------------------------------------
         #
 
         self.manager = CompanionManager()
+
         self.manager.initialize()
 
         #
+        # --------------------------------------------------
         # Root Widget
+        # --------------------------------------------------
         #
 
         root = QWidget()
+
         self.setCentralWidget(root)
 
-        layout = QHBoxLayout(root)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        self.root_layout = QHBoxLayout(root)
+
+        self.root_layout.setContentsMargins(
+            16,
+            16,
+            16,
+            16,
+        )
+
+        self.root_layout.setSpacing(18)
 
         #
+        # --------------------------------------------------
         # Sidebar
+        # --------------------------------------------------
         #
 
-        self.sidebar = Sidebar(self.manager)
-        layout.addWidget(self.sidebar)
+        self.sidebar = Sidebar(
+            self.manager
+        )
+
+        self.root_layout.addWidget(
+            self.sidebar
+        )
 
         #
+        # --------------------------------------------------
+        # Content Container
+        # --------------------------------------------------
+        #
+
+        self.content = QFrame()
+
+        self.content.setObjectName(
+            "contentContainer"
+        )
+
+        self.content_layout = QVBoxLayout(
+            self.content
+        )
+
+        self.content_layout.setContentsMargins(
+            0,
+            0,
+            0,
+            0,
+        )
+
+        self.content_layout.setSpacing(0)
+
+        self.root_layout.addWidget(
+            self.content,
+            1,
+        )
+
+        #
+        # --------------------------------------------------
         # Seiten
+        # --------------------------------------------------
         #
 
         self.pages = QStackedWidget()
 
-        self.dashboard = DashboardPage(self.manager)
-        self.addon = AddonPage(self.manager)
-        self.sync = SyncPage(self.manager)
-        self.settings = SettingsPage(self.manager)
-        self.logs = LogsPage(self.manager)
+        self.content_layout.addWidget(
+            self.pages
+        )
+
+        self.dashboard = DashboardPage(
+            self.manager
+        )
+
+        self.addon = AddonPage(
+            self.manager
+        )
+
+        self.sync = SyncPage(
+            self.manager
+        )
+
+        self.settings = SettingsPage(
+            self.manager
+        )
+
+        self.logs = LogsPage(
+            self.manager
+        )
+
+        #
+        # ScrollContainer
+        #
 
         self.pages.addWidget(
-            self.wrap_page(self.dashboard)
+            self.wrap_page(
+                self.dashboard
+            )
         )
 
         self.pages.addWidget(
-            self.wrap_page(self.addon)
+            self.wrap_page(
+                self.addon
+            )
         )
 
         self.pages.addWidget(
-            self.wrap_page(self.sync)
+            self.wrap_page(
+                self.sync
+            )
         )
 
         self.pages.addWidget(
-            self.wrap_page(self.settings)
+            self.wrap_page(
+                self.settings
+            )
         )
 
         self.pages.addWidget(
-            self.wrap_page(self.logs)
+            self.wrap_page(
+                self.logs
+            )
         )
-
-        layout.addWidget(self.pages)
 
         #
         # Navigation
@@ -108,6 +207,14 @@ class MainWindow(QMainWindow):
             self.change_page
         )
 
+        #
+        # Startseite
+        #
+
+        self.change_page(0)
+
+    # --------------------------------------------------
+    # Scroll Wrapper
     # --------------------------------------------------
 
     def wrap_page(self, widget):
@@ -115,6 +222,7 @@ class MainWindow(QMainWindow):
         scroll = QScrollArea()
 
         scroll.setWidget(widget)
+
         scroll.setWidgetResizable(True)
 
         scroll.setFrameShape(
@@ -129,11 +237,27 @@ class MainWindow(QMainWindow):
             Qt.ScrollBarAsNeeded
         )
 
+        scroll.setStyleSheet("""
+        QScrollArea{
+
+            background:transparent;
+
+            border:none;
+        }
+
+        QWidget{
+
+            background:transparent;
+        }
+        """)
+
         return scroll
 
     # --------------------------------------------------
+    # Navigation
+    # --------------------------------------------------
 
-    def change_page(self, index):
+    def change_page(self, index: int):
 
         #
         # Sidebar aktualisieren
@@ -150,15 +274,60 @@ class MainWindow(QMainWindow):
         self.pages.setCurrentIndex(index)
 
         #
-        # Seite aktualisieren
+        # Aktuelle Seite holen
         #
 
-        scroll = self.pages.currentWidget()
+        current = self.pages.currentWidget()
 
-        page = scroll.widget()
+        if current is None:
+            return
+
+        page = current.widget()
+
+        #
+        # Refresh
+        #
 
         if hasattr(page, "refresh"):
 
             page.refresh()
 
+        #
+        # Sidebar ebenfalls aktualisieren
+        #
+
         self.sidebar.refresh()
+
+    # --------------------------------------------------
+    # Resize
+    # --------------------------------------------------
+
+    def resizeEvent(self, event):
+
+        super().resizeEvent(event)
+
+        #
+        # Platz für spätere Responsive-Anpassungen
+        #
+
+        if self.width() < 1280:
+
+            self.root_layout.setContentsMargins(
+                10,
+                10,
+                10,
+                10,
+            )
+
+            self.root_layout.setSpacing(12)
+
+        else:
+
+            self.root_layout.setContentsMargins(
+                16,
+                16,
+                16,
+                16,
+            )
+
+            self.root_layout.setSpacing(18)

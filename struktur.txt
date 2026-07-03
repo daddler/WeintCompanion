@@ -1,0 +1,104 @@
+[ 406]  .
+├── [  86]  addon
+│   ├── [1.9K]  finder.py
+│   ├── [1.3K]  reader.py
+│   └── [5.9K]  sync_reader.py
+├── [ 318]  app.py
+├── [ 332]  assets
+│   ├── [105K]  companion_banner.ico
+│   ├── [2.1M]  companion_banner.png
+│   ├── [128K]  home.ico
+│   ├── [2.2M]  home.png
+│   ├── [ 17K]  icon.ico
+│   ├── [3.7K]  icon.png
+│   ├── [264K]  logo.ico
+│   ├── [2.1M]  logo.png
+│   ├── [149K]  logs.ico
+│   ├── [2.5M]  logs.png
+│   ├── [139K]  package.ico
+│   ├── [2.3M]  package.png
+│   ├── [137K]  settings.ico
+│   ├── [2.3M]  settings.png
+│   ├── [145K]  sync.ico
+│   └── [2.4M]  sync.png
+├── [ 102]  config.example.json
+├── [ 183]  config.json
+├── [   0]  config.py
+├── [ 592]  core
+│   ├── [1.4K]  app_state.py
+│   ├── [ 765]  backup.py
+│   ├── [7.3K]  companion_manager.py
+│   ├── [5.3K]  companion_updater.py
+│   ├── [2.3K]  config.py
+│   ├── [ 657]  downloader.py
+│   ├── [4.5K]  github_updater.py
+│   ├── [1.9K]  installer.py
+│   ├── [3.0K]  installer_workflow.py
+│   ├── [ 189]  install_state.py
+│   ├── [2.8K]  launcher.py
+│   ├── [1.2K]  linux_updater.py
+│   ├── [2.5K]  logger.py
+│   ├── [2.3K]  paths.py
+│   ├── [ 785]  platform.py
+│   ├── [1.6K]  resources.py
+│   ├── [1.4K]  runtime.py
+│   ├── [1.5K]  sync_manager.py
+│   ├── [ 707]  update_runner.py
+│   ├── [  17]  version.py
+│   └── [ 117]  workflow_result.py
+├── [  50]  discord
+│   └── [ 509]  sync_client.py
+├── [  18]  .github
+│   └── [  18]  workflows
+│       └── [2.7K]  build.yml
+├── [ 271]  .gitignore
+├── [ 150]  gui
+│   ├── [   0]  assets
+│   ├── [  46]  controllers
+│   │   └── [   0]  dashboard_controller.py
+│   ├── [  46]  effects
+│   │   └── [ 605]  attention.py
+│   ├── [3.2K]  main_window.py
+│   ├── [ 112]  pages
+│   │   ├── [7.2K]  addon.py
+│   │   ├── [3.7K]  dashboard.py
+│   │   ├── [2.8K]  logs.py
+│   │   ├── [9.6K]  settings.py
+│   │   └── [6.1K]  sync.py
+│   ├── [5.0K]  styles.py
+│   ├── [ 112]  theme
+│   │   ├── [1.3K]  colors.py
+│   │   ├── [ 782]  metrics.py
+│   │   ├── [2.9K]  stylesheet.py
+│   │   └── [ 425]  typography.py
+│   └── [ 392]  widgets
+│       ├── [   0]  action_button.py
+│       ├── [6.2K]  dashboard_cards.py
+│       ├── [2.1K]  dashboard_header.py
+│       ├── [3.3K]  hero_banner.py
+│       ├── [4.3K]  hero_button.py
+│       ├── [   0]  info_card.py
+│       ├── [   0]  live_log.py
+│       ├── [2.0K]  log_widget.py
+│       ├── [2.6K]  navigation_item.py
+│       ├── [   0]  section_title.py
+│       ├── [4.6K]  sidebar.py
+│       ├── [5.6K]  status_card.py
+│       └── [   0]  top_bar.py
+├── [  36]  packaging
+│   ├── [1.1K]  installer.iss
+│   └── [  76]  linux
+│       ├── [  92]  AppRun
+│       ├── [1.0K]  updater.sh
+│       └── [ 172]  WeintCompanion.desktop
+├── [3.4K]  README.md
+├── [ 359]  requirements.txt
+├── [  96]  scripts
+│   ├── [ 904]  build_appimage.sh
+│   ├── [ 698]  build_linux.sh
+│   └── [ 638]  build_windows.ps1
+├── [   0]  struktur.txt
+├── [   0]  updater.py
+└── [ 960]  WeintCompanion.spec
+
+17 directories, 85 files
