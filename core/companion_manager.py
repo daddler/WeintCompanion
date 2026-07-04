@@ -14,6 +14,7 @@ from core.launcher import Launcher
 from addon.sync_reader import SyncReader
 from core.sync_manager import SyncManager
 from PySide6.QtCore import QTimer
+from core.discord_status import DiscordStatus
 
 
 class CompanionManager:
@@ -39,6 +40,7 @@ class CompanionManager:
         self.companion_updater = CompanionUpdater(self)
         self.launcher = Launcher()
         self.sync = SyncManager(self)
+        self.discord = DiscordStatus()
         self.sync_timer = QTimer()
 
         self.sync_timer.timeout.connect(
@@ -264,6 +266,39 @@ class CompanionManager:
             )
 
     # --------------------------------------------------
+    # Discord
+    # --------------------------------------------------
+
+    def check_discord(self):
+
+        data = self.discord.fetch()
+
+        if data is None:
+
+            self.state.discord_connected = False
+            self.state.discord_name = "-"
+            self.state.discord_guilds = 0
+            self.state.discord_latency = None
+
+            return
+
+        if not data.get("online", False):
+
+            self.state.discord_connected = False
+            self.state.discord_name = "-"
+            self.state.discord_guilds = 0
+            self.state.discord_latency = None
+
+            return
+
+        bot = data.get("bot", {})
+
+        self.state.discord_connected = True
+        self.state.discord_name = bot.get("name", "-")
+        self.state.discord_guilds = bot.get("guilds", 0)
+        self.state.discord_latency = bot.get("latency")
+
+    # --------------------------------------------------
     # Installation / Update
     # --------------------------------------------------
 
@@ -301,6 +336,7 @@ class CompanionManager:
         self.detect_wow()
         self.detect_addon()
         self.check_github()
+        self.check_discord()
         self.companion_updater.check_for_update()
         self.sync.process()
 

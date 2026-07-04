@@ -62,3 +62,15 @@ class AppState:
     companion_asset_name: str = ""
 
     companion_update_available: bool = False
+
+    # --------------------------------------------------
+    # Discord Bot
+    # --------------------------------------------------
+
+    discord_connected: bool = False
+
+    discord_name: str = "-"
+
+    discord_guilds: int = 0
+
+    discord_latency: int | None = None

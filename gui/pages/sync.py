@@ -1,10 +1,13 @@
 from PySide6.QtWidgets import (
     QLabel,
-    QPushButton,
     QVBoxLayout,
+    QHBoxLayout,
+    QGridLayout,
     QWidget,
 )
 
+from gui.widgets.hero_banner import HeroButton
+from gui.widgets.section_card import SectionCard
 from gui.widgets.log_widget import LogWidget
 from gui.widgets.status_card import StatusCard
 
@@ -37,11 +40,9 @@ class SyncPage(QWidget):
         layout.addWidget(title)
         layout.addWidget(subtitle)
 
-        #
         # --------------------------------------------------
-        # Status
+        # Statuskarten
         # --------------------------------------------------
-        #
 
         self.status_card = StatusCard(
             "🔄",
@@ -50,28 +51,12 @@ class SyncPage(QWidget):
             "Noch keine Prüfung durchgeführt.",
         )
 
-        layout.addWidget(self.status_card)
-
-        #
-        # --------------------------------------------------
-        # World of Warcraft
-        # --------------------------------------------------
-        #
-
         self.wow_card = StatusCard(
             "🎮",
             "World of Warcraft",
             "-",
             "-",
         )
-
-        layout.addWidget(self.wow_card)
-
-        #
-        # --------------------------------------------------
-        # WeintCodex
-        # --------------------------------------------------
-        #
 
         self.addon_card = StatusCard(
             "📦",
@@ -80,37 +65,48 @@ class SyncPage(QWidget):
             "-",
         )
 
-        layout.addWidget(self.addon_card)
-
-        #
-        # --------------------------------------------------
-        # Discord
-        # --------------------------------------------------
-        #
-
         self.discord_card = StatusCard(
             "💬",
             "Discord Bot",
-            "Nicht verbunden",
-            "Diese Funktion wird später ergänzt.",
+            "-",
+            "-",
         )
 
-        layout.addWidget(self.discord_card)
+        cards = QGridLayout()
 
-        #
-        # --------------------------------------------------
-        # Companion
-        # --------------------------------------------------
-        #
+        cards.setHorizontalSpacing(18)
+        cards.setVerticalSpacing(18)
 
-        self.companion_card = StatusCard(
-            "🖥",
-            "WeintCompanion",
-            "Bereit",
-            "Synchronisationsdienst verfügbar.",
+        cards.addWidget(
+            self.status_card,
+            0,
+            0,
         )
 
-        layout.addWidget(self.companion_card)
+        cards.addWidget(
+            self.wow_card,
+            0,
+            1,
+        )
+
+        cards.addWidget(
+            self.addon_card,
+            0,
+            2,
+        )
+
+        cards.addWidget(
+            self.discord_card,
+            1,
+            0,
+            1,
+            3,
+        )
+
+        for column in range(3):
+            cards.setColumnStretch(column, 1)
+
+        layout.addLayout(cards)
 
         #
         # --------------------------------------------------
@@ -118,16 +114,28 @@ class SyncPage(QWidget):
         # --------------------------------------------------
         #
 
-        self.sync_button = QPushButton(
-            "🔄 Synchronisation testen"
+        # --------------------------------------------------
+        # Aktionen
+        # --------------------------------------------------
+
+        self.connection_button = HeroButton(
+            "Verbindung prüfen",
+            primary=False,
         )
 
-        self.connection_button = QPushButton(
-            "🔎 Verbindung prüfen"
+        self.sync_button = HeroButton(
+            "Synchronisation testen",
+            primary=True,
         )
 
-        layout.addWidget(self.sync_button)
-        layout.addWidget(self.connection_button)
+        button_row = QHBoxLayout()
+        button_row.setSpacing(14)
+
+        button_row.addWidget(self.connection_button)
+        button_row.addWidget(self.sync_button)
+        button_row.addStretch()
+
+        layout.addLayout(button_row)
 
         #
         # --------------------------------------------------
@@ -135,11 +143,15 @@ class SyncPage(QWidget):
         # --------------------------------------------------
         #
 
-        self.logs = LogWidget(
-            manager.logger
+        self.logs = LogWidget(manager.logger)
+
+        log_card = SectionCard(
+            "📜 Live-Protokoll"
         )
 
-        layout.addWidget(self.logs)
+        log_card.addWidget(self.logs)
+
+        layout.addWidget(log_card)
 
         layout.addStretch()
 
@@ -160,6 +172,8 @@ class SyncPage(QWidget):
     # --------------------------------------------------
 
     def refresh(self):
+
+        self.manager.full_refresh()
 
         state = self.manager.state
 
@@ -208,6 +222,47 @@ class SyncPage(QWidget):
             )
 
             self.addon_card.set_details("-")
+
+        #
+        # Discord Bot
+        #
+
+        if state.discord_connected:
+
+            self.discord_card.set_state(
+                "normal"
+            )
+
+            self.discord_card.set_status(
+                "🟢 Online"
+            )
+
+            self.discord_card.set_value(
+                state.discord_name
+            )
+
+            self.discord_card.set_details(
+                "\n".join([
+                    f"Server: {state.discord_guilds}",
+                    f"Ping: {state.discord_latency} ms",
+                ])
+            )
+
+        else:
+
+            self.discord_card.set_state(
+                "error"
+            )
+
+            self.discord_card.set_status(
+                "🔴 Offline"
+            )
+
+            self.discord_card.set_value("")
+
+            self.discord_card.set_details(
+                "Bot konnte nicht erreicht werden."
+            )
 
     # --------------------------------------------------
 

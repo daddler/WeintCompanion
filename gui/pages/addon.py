@@ -1,13 +1,15 @@
 from PySide6.QtWidgets import (
     QLabel,
-    QPushButton,
     QTextEdit,
     QVBoxLayout,
+    QHBoxLayout,
     QWidget,
+    QGridLayout,
 )
-
+from gui.widgets.hero_banner import HeroButton
 from gui.widgets.status_card import StatusCard
 from core.platform import open_folder
+from gui.widgets.section_card import SectionCard
 
 
 class AddonPage(QWidget):
@@ -16,7 +18,7 @@ class AddonPage(QWidget):
         super().__init__()
 
         self.manager = manager
-        
+
         layout = QVBoxLayout(self)
         layout.setSpacing(18)
 
@@ -24,12 +26,27 @@ class AddonPage(QWidget):
         # Titel
         # --------------------------------------------------
 
-        title = QLabel("Addonverwaltung")
+        title = QLabel("📦 Addonverwaltung")
         title.setObjectName("title")
         layout.addWidget(title)
 
+        subtitle = QLabel(
+            "Installiere, aktualisiere und verwalte dein WeintCodex-Addon."
+        )
+
+        subtitle.setStyleSheet("""
+        QLabel{
+            color:#AEB4C2;
+            font-size:14px;
+            background:transparent;
+        }
+        """)
+
+        layout.addWidget(subtitle)
+        layout.addSpacing(8)
+
         # --------------------------------------------------
-        # Installierte Version
+        # Statuskarten
         # --------------------------------------------------
 
         self.installed_card = StatusCard(
@@ -39,24 +56,12 @@ class AddonPage(QWidget):
             details="-",
         )
 
-        layout.addWidget(self.installed_card)
-
-        # --------------------------------------------------
-        # GitHub
-        # --------------------------------------------------
-
         self.github_card = StatusCard(
             icon="🌐",
             title="GitHub Release",
             status="-",
             details="-",
         )
-
-        layout.addWidget(self.github_card)
-
-        # --------------------------------------------------
-        # Installationsordner
-        # --------------------------------------------------
 
         self.path_card = StatusCard(
             icon="📂",
@@ -66,46 +71,122 @@ class AddonPage(QWidget):
             button_text="Ordner öffnen",
         )
 
-        layout.addWidget(self.path_card)
+        self.path_card.set_value("")
+
+        cards = QGridLayout()
+
+        cards.setHorizontalSpacing(18)
+        cards.setVerticalSpacing(18)
+
+        cards.addWidget(self.installed_card, 0, 0)
+        cards.addWidget(self.github_card, 0, 1)
+        cards.addWidget(self.path_card, 0, 2)
+
+        for column in range(3):
+            cards.setColumnStretch(column, 1)
+
+        layout.addLayout(cards)
 
         # --------------------------------------------------
         # Aktionen
         # --------------------------------------------------
 
-        self.check_button = QPushButton("🔄 Erneut prüfen")
-        self.update_button = QPushButton("⬇ Addon installieren")
+        self.check_button = HeroButton(
+            "Erneut prüfen",
+            primary=False,
+        )
 
-        layout.addWidget(self.check_button)
-        layout.addWidget(self.update_button)
+        self.update_button = HeroButton(
+            "Addon installieren",
+            primary=True,
+        )
+
+        button_row = QHBoxLayout()
+        button_row.setSpacing(14)
+
+        button_row.addWidget(self.check_button)
+        button_row.addWidget(self.update_button)
+        button_row.addStretch()
+
+        layout.addLayout(button_row)
 
         # --------------------------------------------------
         # Changelog
         # --------------------------------------------------
 
-        changelog_title = QLabel("Changelog")
-        changelog_title.setObjectName("cardTitle")
-        layout.addWidget(changelog_title)
-
         self.changelog = QTextEdit()
         self.changelog.setReadOnly(True)
+        self.changelog.setMinimumHeight(130)
 
-        layout.addWidget(self.changelog)
+        self.changelog.setStyleSheet("""
+        QTextEdit{
+            background:transparent;
+            border:none;
+            color:#D7DBE3;
+            padding:0px;
+            font-size:13px;
+        }
+        """)
 
-        #
+        changelog_card = SectionCard(
+            "📝 Changelog"
+        )
+
+        changelog_card.addWidget(
+            self.changelog
+        )
+
+        # --------------------------------------------------
         # Installationsprotokoll
-        #
-
-        log_title = QLabel("Installationsprotokoll")
-        log_title.setObjectName("cardTitle")
-
-        layout.addWidget(log_title)
+        # --------------------------------------------------
 
         self.log = QTextEdit()
         self.log.setReadOnly(True)
+        self.log.setMinimumHeight(130)
 
-        layout.addWidget(self.log)
+        self.log.setStyleSheet("""
+        QTextEdit{
+            background:transparent;
+            border:none;
+            color:#D7DBE3;
+            padding:0px;
+            font-size:13px;
+        }
+        """)
 
-        layout.addStretch()
+        log_card = SectionCard(
+            "📜 Installationsprotokoll"
+        )
+
+        log_card.addWidget(
+            self.log
+        )
+
+        # --------------------------------------------------
+        # Changelog + Log nebeneinander
+        # --------------------------------------------------
+
+        logs = QGridLayout()
+
+        logs.setHorizontalSpacing(18)
+        logs.setVerticalSpacing(0)
+
+        logs.addWidget(
+            changelog_card,
+            0,
+            0,
+        )
+
+        logs.addWidget(
+            log_card,
+            0,
+            1,
+        )
+
+        logs.setColumnStretch(0, 1)
+        logs.setColumnStretch(1, 1)
+
+        layout.addLayout(logs)
 
         # --------------------------------------------------
         # Signale
@@ -143,8 +224,12 @@ class AddonPage(QWidget):
                 "🟢 Installiert"
             )
 
+            self.installed_card.set_value(
+                state.addon_version
+            )
+
             self.installed_card.set_details(
-                f"Version {state.addon_version}"
+                "Installierte Version"
             )
 
             self.path_card.set_status(
@@ -157,12 +242,18 @@ class AddonPage(QWidget):
 
         else:
 
+            self.installed_card.set_state("error")
             self.installed_card.set_status(
                 "🔴 Nicht installiert"
             )
 
-            self.installed_card.set_details("-")
+            self.installed_card.set_value("-")
 
+            self.installed_card.set_details(
+                "Nicht installiert"
+            )
+
+            self.path_card.set_state("error")
             self.path_card.set_status(
                 "🔴 Nicht gefunden"
             )
@@ -177,18 +268,26 @@ class AddonPage(QWidget):
 
             if state.update_available:
 
+                self.github_card.set_state("warning")
+
                 self.github_card.set_status(
                     "🟡 Update verfügbar"
                 )
 
             else:
 
+                self.github_card.set_state("normal")
+
                 self.github_card.set_status(
                     "🟢 Aktuell"
                 )
 
+            self.github_card.set_value(
+                state.github_version
+            )
+
             self.github_card.set_details(
-                f"Version {state.github_version}"
+                "Neueste GitHub-Version"
             )
 
             self.changelog.setPlainText(
@@ -197,8 +296,17 @@ class AddonPage(QWidget):
 
         else:
 
+            self.github_card.set_state("error")
+
             self.github_card.set_status(
-                "⚪ Nicht geprüft"
+                "🔴 GitHub nicht erreichbar"
+            )
+            self.github_card.set_value(
+                state.github_version
+            )
+
+            self.github_card.set_details(
+                "Neueste GitHub-Version"
             )
 
             self.github_card.set_details("-")

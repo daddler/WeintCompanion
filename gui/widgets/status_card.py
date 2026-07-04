@@ -758,6 +758,62 @@ class StatusCard(QFrame):
         }}
         """)
 
+        if badge == "ONLINE":
+
+            self.icon_container.setStyleSheet("""
+            QFrame{
+                background:qlineargradient(
+                    x1:0,y1:0,x2:1,y2:1,
+                    stop:0 rgba(67,192,122,55),
+                    stop:1 rgba(67,192,122,20)
+                );
+                border:1px solid rgba(67,192,122,90);
+                border-radius:16px;
+            }
+            """)
+
+        elif badge == "UPDATE":
+
+            self.icon_container.setStyleSheet("""
+            QFrame{
+                background:qlineargradient(
+                    x1:0,y1:0,x2:1,y2:1,
+                    stop:0 rgba(212,175,55,55),
+                    stop:1 rgba(212,175,55,18)
+                );
+                border:1px solid rgba(212,175,55,90);
+                border-radius:16px;
+            }
+            """)
+
+        elif badge == "OFFLINE":
+
+            self.icon_container.setStyleSheet("""
+            QFrame{
+                background:qlineargradient(
+                    x1:0,y1:0,x2:1,y2:1,
+                    stop:0 rgba(235,90,90,55),
+                    stop:1 rgba(235,90,90,18)
+                );
+                border:1px solid rgba(235,90,90,90);
+                border-radius:16px;
+            }
+            """)
+
+        else:
+
+            self.icon_container.setStyleSheet("""
+            QFrame{
+                background:qlineargradient(
+                    x1:0,y1:0,x2:1,y2:1,
+                    stop:0 rgba(80,145,255,45),
+                    stop:1 rgba(80,145,255,15)
+                );
+                border:1px solid rgba(80,145,255,80);
+                border-radius:16px;
+            }
+            """)
+
     # --------------------------------------------------
     # Value
     # --------------------------------------------------

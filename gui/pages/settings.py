@@ -2,16 +2,17 @@ from pathlib import Path
 
 from PySide6.QtWidgets import (
     QFileDialog,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
-    QPushButton,
     QCheckBox,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
+
+from gui.widgets.hero_banner import HeroButton
+from gui.widgets.section_card import SectionCard
 from core.paths import Paths
 
 
@@ -25,17 +26,15 @@ class SettingsPage(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(18)
 
-        #
         # --------------------------------------------------
         # Titel
         # --------------------------------------------------
-        #
 
-        title = QLabel("Einstellungen")
+        title = QLabel("⚙ Einstellungen")
         title.setObjectName("title")
 
         subtitle = QLabel(
-            "Verwalte allgemeine Einstellungen sowie Speicher und Installationspfade."
+            "Verwalte WeintCompanion, Synchronisation und lokale Speicherorte."
         )
         subtitle.setObjectName("subtitle")
         subtitle.setWordWrap(True)
@@ -44,141 +43,318 @@ class SettingsPage(QWidget):
         layout.addWidget(subtitle)
 
         #
-        # --------------------------------------------------
+        # ==================================================
         # Allgemein
-        # --------------------------------------------------
+        # ==================================================
         #
 
-        general = QGroupBox("Allgemein")
-        general_layout = QVBoxLayout(general)
+        general = SectionCard("⚙ Allgemeine Einstellungen")
+
+        general_layout = QVBoxLayout()
+        general_layout.setSpacing(14)
 
         self.update_check = QCheckBox(
             "Beim Start nach Updates suchen"
         )
 
         self.sync_check = QCheckBox(
-            "Automatisch synchronisieren"
+            "Automatische Synchronisation aktivieren"
         )
 
-        general_layout.addWidget(self.update_check)
-        general_layout.addWidget(self.sync_check)
+        general_layout.addWidget(
+            self.update_check
+        )
 
-        interval_layout = QHBoxLayout()
+        general_layout.addWidget(
+            self.sync_check
+        )
 
-        interval_layout.addWidget(
-            QLabel("Synchronisationsintervall:")
+        interval_row = QHBoxLayout()
+
+        interval_row.addWidget(
+            QLabel("Synchronisationsintervall")
         )
 
         self.interval = QSpinBox()
+
         self.interval.setRange(2, 300)
-        self.interval.setValue(5)
+
         self.interval.setSuffix(" Sekunden")
 
-        interval_layout.addWidget(self.interval)
-        interval_layout.addStretch()
+        interval_row.addStretch()
 
-        general_layout.addLayout(interval_layout)
+        interval_row.addWidget(
+            self.interval
+        )
 
-        layout.addWidget(general)
+        general_layout.addLayout(
+            interval_row
+        )
+
+        general.addLayout(
+            general_layout
+        )
+
+        layout.addWidget(
+            general
+        )
 
         #
-        # --------------------------------------------------
+        # ==================================================
         # World of Warcraft
-        # --------------------------------------------------
+        # ==================================================
         #
 
-        wow = QGroupBox("World of Warcraft")
+        wow = SectionCard(
+            "🎮 World of Warcraft"
+        )
 
-        wow_layout = QVBoxLayout(wow)
+        wow_layout = QVBoxLayout()
+        wow_layout.setSpacing(12)
+
+        #
+        # Status
+        #
+
+        self.path_status = QLabel(
+            "🟢 Classic gefunden"
+        )
+
+        self.path_status.setStyleSheet("""
+        QLabel{
+            color:#78D879;
+            font-size:14px;
+            font-weight:700;
+            background:transparent;
+        }
+        """)
+
+        wow_layout.addWidget(
+            self.path_status
+        )
+
+        #
+        # Installationspfad
+        #
 
         self.path_label = QLabel("-")
 
-        wow_layout.addWidget(self.path_label)
+        self.path_label.setWordWrap(True)
 
-        self.change_button = QPushButton(
-            "📂 Classic-Ordner auswählen"
+        self.path_label.setStyleSheet("""
+        QLabel{
+            color:#AEB4C2;
+            font-size:13px;
+            background:transparent;
+        }
+        """)
+
+        wow_layout.addWidget(
+            self.path_label
         )
 
-        wow_layout.addWidget(self.change_button)
+        #
+        # Button
+        #
 
-        layout.addWidget(wow)
+        button_row = QHBoxLayout()
+
+        button_row.addStretch()
+
+        self.change_button = HeroButton(
+            "Classic-Ordner auswählen",
+            primary=False,
+        )
+
+        button_row.addWidget(
+            self.change_button
+        )
+
+        wow_layout.addLayout(
+            button_row
+        )
+
+        wow.addLayout(
+            wow_layout
+        )
+
+        layout.addWidget(
+            wow
+        )
 
         #
-        # --------------------------------------------------
+        # ==================================================
         # Speicherverwaltung
-        # --------------------------------------------------
+        # ==================================================
         #
 
-        storage = QGroupBox("Speicherverwaltung")
+        storage = SectionCard("💾 Speicherverwaltung")
 
-        storage_layout = QVBoxLayout(storage)
+        storage_layout = QVBoxLayout()
+        storage_layout.setSpacing(18)
 
         #
         # Downloads
         #
 
+        download_row = QHBoxLayout()
+        download_row.setSpacing(20)
+
+        download_info = QVBoxLayout()
+        download_info.setSpacing(4)
+
+        download_title = QLabel("📥 Downloads")
+
+        download_title.setStyleSheet("""
+        QLabel{
+            color:white;
+            font-size:15px;
+            font-weight:700;
+            background:transparent;
+        }
+        """)
+
         self.download_label = QLabel("-")
 
-        storage_layout.addWidget(
-            QLabel("Downloads")
+        self.download_label.setStyleSheet("""
+        QLabel{
+            color:#AEB4C2;
+            font-size:13px;
+            background:transparent;
+        }
+        """)
+
+        download_info.addWidget(download_title)
+        download_info.addWidget(self.download_label)
+
+        download_row.addLayout(download_info)
+
+        download_row.addStretch()
+
+        self.clear_downloads = HeroButton(
+            "Downloads löschen",
+            primary=False,
         )
 
-        storage_layout.addWidget(
-            self.download_label
-        )
-
-        self.clear_downloads = QPushButton(
-            "🗑 Downloads löschen"
-        )
-
-        storage_layout.addWidget(
+        download_row.addWidget(
             self.clear_downloads
         )
+
+        storage_layout.addLayout(
+            download_row
+        )
+
+        #
+        # Trennlinie
+        #
+
+        line = QLabel()
+
+        line.setFixedHeight(1)
+
+        line.setStyleSheet("""
+        QLabel{
+            background:#343945;
+        }
+        """)
+
+        storage_layout.addWidget(line)
 
         #
         # Backups
         #
 
+        backup_row = QHBoxLayout()
+        backup_row.setSpacing(20)
+
+        backup_info = QVBoxLayout()
+        backup_info.setSpacing(4)
+
+        backup_title = QLabel("💾 Backups")
+
+        backup_title.setStyleSheet("""
+        QLabel{
+            color:white;
+            font-size:15px;
+            font-weight:700;
+            background:transparent;
+        }
+        """)
+
         self.backup_label = QLabel("-")
 
-        storage_layout.addSpacing(10)
+        self.backup_label.setStyleSheet("""
+        QLabel{
+            color:#AEB4C2;
+            font-size:13px;
+            background:transparent;
+        }
+        """)
 
-        storage_layout.addWidget(
-            QLabel("Backups")
+        backup_info.addWidget(
+            backup_title
         )
 
-        storage_layout.addWidget(
+        backup_info.addWidget(
             self.backup_label
         )
 
-        self.clear_backups = QPushButton(
-            "🗑 Backups löschen"
+        backup_row.addLayout(
+            backup_info
         )
 
-        storage_layout.addWidget(
+        backup_row.addStretch()
+
+        self.clear_backups = HeroButton(
+            "Backups löschen",
+            primary=False,
+        )
+
+        backup_row.addWidget(
             self.clear_backups
         )
 
-        layout.addWidget(storage)
-
-        #
-        # --------------------------------------------------
-        # Speichern
-        # --------------------------------------------------
-        #
-
-        self.save_button = QPushButton(
-            "💾 Einstellungen speichern"
+        storage_layout.addLayout(
+            backup_row
         )
 
-        layout.addWidget(self.save_button)
+        storage.addLayout(
+            storage_layout
+        )
+
+        layout.addWidget(
+            storage
+        )
+
+        #
+        # ==================================================
+        # Speichern
+        # ==================================================
+        #
+
+        button_row = QHBoxLayout()
+
+        self.save_button = HeroButton(
+            "Einstellungen speichern",
+            primary=True,
+        )
+
+        button_row.addStretch()
+
+        button_row.addWidget(
+            self.save_button
+        )
+
+        layout.addLayout(
+            button_row
+        )
 
         layout.addStretch()
 
         #
-        # --------------------------------------------------
+        # ==================================================
         # Signale
-        # --------------------------------------------------
+        # ==================================================
         #
 
         self.change_button.clicked.connect(
@@ -214,10 +390,41 @@ class SettingsPage(QWidget):
         path = config.get_classic_path()
 
         if path:
-            self.path_label.setText(str(path))
-        else:
+
+            self.path_status.setText(
+                "🟢 Classic gefunden"
+            )
+
+            self.path_status.setStyleSheet("""
+            QLabel{
+                color:#78D879;
+                font-size:14px;
+                font-weight:700;
+                background:transparent;
+            }
+            """)
+
             self.path_label.setText(
-                "Kein Classic-Pfad ausgewählt."
+                str(path)
+            )
+
+        else:
+
+            self.path_status.setText(
+                "🔴 Kein Classic-Pfad ausgewählt"
+            )
+
+            self.path_status.setStyleSheet("""
+            QLabel{
+                color:#F28C8C;
+                font-size:14px;
+                font-weight:700;
+                background:transparent;
+            }
+            """)
+
+            self.path_label.setText(
+                "Bitte wähle deinen World of Warcraft Classic-Ordner aus."
             )
 
         #
@@ -251,28 +458,37 @@ class SettingsPage(QWidget):
 
         download_dir = Paths.downloads()
 
+        download_count = 0
+
         if download_dir.exists():
 
-            files = [
-                f for f in download_dir.iterdir()
-                if f.is_file()
-            ]
-
-            self.download_label.setText(
-                f"{len(files)} Datei(en)"
+            download_count = sum(
+                1
+                for file in download_dir.iterdir()
+                if file.is_file()
             )
 
-            self.clear_downloads.setEnabled(
-                len(files) > 0
+        if download_count == 0:
+
+            self.download_label.setText(
+                "Keine Downloads im Cache"
+            )
+
+        elif download_count == 1:
+
+            self.download_label.setText(
+                "1 Datei im Download-Cache"
             )
 
         else:
 
             self.download_label.setText(
-                "0 Dateien"
+                f"{download_count} Dateien im Download-Cache"
             )
 
-            self.clear_downloads.setEnabled(False)
+        self.clear_downloads.setEnabled(
+            download_count > 0
+        )
 
         #
         # Backups
@@ -280,28 +496,37 @@ class SettingsPage(QWidget):
 
         backup_dir = Paths.backups()
 
+        backup_count = 0
+
         if backup_dir.exists():
 
-            files = [
-                f for f in backup_dir.iterdir()
-                if f.is_file()
-            ]
-
-            self.backup_label.setText(
-                f"{len(files)} Sicherung(en)"
+            backup_count = sum(
+                1
+                for file in backup_dir.iterdir()
+                if file.is_file()
             )
 
-            self.clear_backups.setEnabled(
-                len(files) > 0
+        if backup_count == 0:
+
+            self.backup_label.setText(
+                "Keine Backups vorhanden"
+            )
+
+        elif backup_count == 1:
+
+            self.backup_label.setText(
+                "1 Backup vorhanden"
             )
 
         else:
 
             self.backup_label.setText(
-                "0 Sicherungen"
+                f"{backup_count} Backups vorhanden"
             )
 
-            self.clear_backups.setEnabled(False)
+        self.clear_backups.setEnabled(
+            backup_count > 0
+        )
 
     # --------------------------------------------------
     # WoW-Ordner auswählen
