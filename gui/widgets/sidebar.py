@@ -13,10 +13,8 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QFrame,
     QLabel,
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
     QSizePolicy,
+    QVBoxLayout,
 )
 
 from gui.widgets.navigation_item import NavigationItem
@@ -24,6 +22,7 @@ from core.resources import Resources
 from core.version import VERSION
 
 
+SIDEBAR_WIDTH = 305
 SIDEBAR_RADIUS = 26
 
 
@@ -37,7 +36,11 @@ class Sidebar(QFrame):
 
         self.manager = manager
 
-        self.setFixedWidth(305)
+        self.setObjectName("Sidebar")
+
+        self.setFixedWidth(
+            SIDEBAR_WIDTH
+        )
 
         self.setSizePolicy(
             QSizePolicy.Fixed,
@@ -45,7 +48,7 @@ class Sidebar(QFrame):
         )
 
         #
-        # Root
+        # Root Layout
         #
 
         self.root = QVBoxLayout(self)
@@ -60,16 +63,43 @@ class Sidebar(QFrame):
         self.root.setSpacing(18)
 
         #
-        # -------------------------------------------------
-        # Header
-        # -------------------------------------------------
+        # Bereiche
         #
+
+        self.build_header()
+
+        self.build_navigation()
+
+        self.build_status()
+
+        self.build_footer()
+
+        #
+        # Initialisieren
+        #
+
+        self.refresh()
+
+        if self.items:
+
+            self.items[0].setActive(True)
+
+    # ---------------------------------------------------------
+    # Header
+    # ---------------------------------------------------------
+
+    def build_header(self):
 
         header = QVBoxLayout()
 
-        header.setSpacing(8)
+        header.setContentsMargins(
+            0,
+            4,
+            0,
+            0,
+        )
 
-        self.root.addLayout(header)
+        header.setSpacing(8)
 
         #
         # Logo
@@ -77,9 +107,13 @@ class Sidebar(QFrame):
 
         self.logo = QLabel()
 
-        self.logo.setAlignment(Qt.AlignCenter)
+        self.logo.setAlignment(
+            Qt.AlignCenter
+        )
 
-        pix = QPixmap(Resources.logo())
+        pix = QPixmap(
+            Resources.logo()
+        )
 
         if not pix.isNull():
 
@@ -87,9 +121,8 @@ class Sidebar(QFrame):
 
                 pix.scaled(
 
-                    126,
-
-                    126,
+                    170,
+                    170,
 
                     Qt.KeepAspectRatio,
 
@@ -99,61 +132,66 @@ class Sidebar(QFrame):
 
             )
 
-        header.addWidget(self.logo)
+        header.addWidget(
+            self.logo,
+            alignment=Qt.AlignCenter,
+        )
 
         #
         # Titel
         #
 
-        self.title = QLabel(
+        title = QLabel(
             "WeintCompanion"
         )
 
-        self.title.setAlignment(
+        title.setAlignment(
             Qt.AlignCenter
         )
 
-        self.title.setStyleSheet("""
+        title.setObjectName(
+            "sidebarTitle"
+        )
+
+        title.setStyleSheet("""
         QLabel{
 
             color:white;
 
-            font-size:22px;
+            font-size:21px;
 
             font-weight:800;
-
-            letter-spacing:0.4px;
 
             background:transparent;
         }
         """)
 
-        header.addWidget(self.title)
+        header.addWidget(title)
 
         #
         # Badge
         #
 
-        self.badge = QLabel(
-            "MoP CLASSIC"
+        badge = QLabel(
+            "MISTS OF PANDARIA CLASSIC"
         )
 
-        self.badge.setAlignment(
+        badge.setAlignment(
             Qt.AlignCenter
         )
 
-        self.badge.setFixedHeight(28)
+        badge.setFixedHeight(
+            28
+        )
 
-        self.badge.setFixedWidth(118)
-
-        self.badge.setStyleSheet("""
+        badge.setStyleSheet("""
         QLabel{
 
             background:rgba(214,176,77,18);
 
             color:#E6C86B;
 
-            border:1px solid rgba(214,176,77,55);
+            border:1px solid rgba(214,176,77,45);
 
             border-radius:14px;
 
@@ -161,12 +199,14 @@ class Sidebar(QFrame):
 
             font-weight:700;
 
-            letter-spacing:0.8px;
+            padding-left:14px;
+
+            padding-right:14px;
         }
         """)
 
         header.addWidget(
-            self.badge,
+            badge,
             alignment=Qt.AlignCenter,
         )
 
@@ -174,34 +214,42 @@ class Sidebar(QFrame):
         # Version
         #
 
-        self.version_label = QLabel(
+        self.version = QLabel(
             f"Version {VERSION}"
         )
 
-        self.version_label.setAlignment(
+        self.version.setAlignment(
             Qt.AlignCenter
         )
 
-        self.version_label.setStyleSheet("""
+        self.version.setStyleSheet("""
         QLabel{
 
-            color:#8F97A6;
-
-            background:transparent;
+            color:#8E96A4;
 
             font-size:12px;
+
+            background:transparent;
         }
         """)
 
         header.addWidget(
-            self.version_label
+            self.version
         )
 
-        self.root.addSpacing(20)
+        self.root.addLayout(
+            header
+        )
 
-        #
-        # Navigation
-        #
+        self.root.addSpacing(
+            18
+        )
+    
+    # ---------------------------------------------------------
+    # Navigation
+    # ---------------------------------------------------------
+
+    def build_navigation(self):
 
         self.navigation = QVBoxLayout()
 
@@ -212,7 +260,9 @@ class Sidebar(QFrame):
             0,
         )
 
-        self.navigation.setSpacing(6)
+        self.navigation.setSpacing(
+            8
+        )
 
         self.root.addLayout(
             self.navigation
@@ -222,162 +272,258 @@ class Sidebar(QFrame):
 
         pages = [
 
-            (Resources.home(), "Dashboard"),
-
-            (Resources.package(), "WeintCodex"),
-
-            (Resources.sync(), "Synchronisation"),
-
-            (Resources.settings(), "Einstellungen"),
-
-            (Resources.logs(), "Logs"),
+            ("🏠", "Dashboard"),
+            ("📦", "WeintCodex"),
+            ("🔄", "Synchronisation"),
+            ("⚙", "Einstellungen"),
+            ("📜", "Logs"),
 
         ]
 
-                #
-        # Navigation
-        #
-
         for index, (icon, text) in enumerate(pages):
 
-            item = NavigationItem(icon, text)
+            item = NavigationItem(
+                icon,
+                text,
+            )
+
+            #
+            # NavigationItem.clicked besitzt
+            # keine Parameter.
+            #
 
             item.clicked.connect(
                 lambda i=index: self.change_page(i)
             )
 
-            self.navigation.addWidget(item)
+            self.navigation.addWidget(
+                item
+            )
 
-            self.items.append(item)
-
-        self.navigation.addStretch()
+            self.items.append(
+                item
+            )
 
         #
-        # -------------------------------------------------
-        # Status Card
-        # -------------------------------------------------
+        # Trennlinie
         #
+
+        separator = QFrame()
+
+        separator.setFixedHeight(
+            1
+        )
+
+        separator.setStyleSheet("""
+        QFrame{
+
+            background:#323743;
+
+            border:none;
+        }
+        """)
+
+        self.navigation.addSpacing(
+            12
+        )
+
+        self.navigation.addWidget(
+            separator
+        )
+
+        self.navigation.addSpacing(
+            14
+        )
+
+    # ---------------------------------------------------------
+    # Systemstatus
+    # ---------------------------------------------------------
+
+    def build_status(self):
 
         self.status = QFrame()
 
-        self.status.setMinimumHeight(150)
+        self.status.setObjectName(
+            "sidebarStatus"
+        )
 
         self.status.setStyleSheet("""
-        QFrame{
+        QFrame#sidebarStatus{
 
             background:qlineargradient(
                 x1:0,
                 y1:0,
                 x2:0,
                 y2:1,
-                stop:0 #262A33,
-                stop:1 #1B1E25
+                stop:0 #242933,
+                stop:1 #1A1E25
             );
 
-            border:1px solid rgba(255,255,255,18);
+            border:1px solid #383D48;
 
             border-radius:18px;
         }
         """)
 
-        status_layout = QVBoxLayout(self.status)
+        layout = QVBoxLayout(self.status)
 
-        status_layout.setContentsMargins(
+        layout.setContentsMargins(
             18,
             18,
             18,
             18,
         )
 
-        status_layout.setSpacing(8)
+        layout.setSpacing(14)
 
         #
-        # Status Titel
+        # Titel
         #
 
-        status_title = QLabel(
-            "● Companion bereit"
+        title = QLabel(
+            "SYSTEMSTATUS"
         )
 
-        status_title.setStyleSheet("""
+        title.setStyleSheet("""
         QLabel{
 
-            color:#74D98E;
+            color:#C9CFD9;
 
-            font-size:13px;
+            font-size:11px;
 
             font-weight:700;
+
+            letter-spacing:1px;
 
             background:transparent;
         }
         """)
 
-        status_layout.addWidget(status_title)
+        layout.addWidget(title)
 
         #
-        # Version
+        # Companion
         #
 
-        self.status_version = QLabel(
-            f"Version {VERSION}"
-        )
+        self.companion_status = QLabel()
 
-        self.status_version.setStyleSheet("""
+        self.companion_status.setStyleSheet("""
         QLabel{
 
             color:white;
 
-            font-size:22px;
-
-            font-weight:700;
+            font-size:13px;
 
             background:transparent;
         }
         """)
 
-        status_layout.addWidget(
-            self.status_version
+        layout.addWidget(
+            self.companion_status
         )
 
         #
-        # Addon Status
+        # WeintCodex
         #
 
-        self.addon = QLabel(
-            "📦 WeintCodex\nWird geprüft..."
-        )
+        self.addon_status = QLabel()
 
-        self.addon.setWordWrap(True)
-
-        self.addon.setStyleSheet("""
+        self.addon_status.setStyleSheet("""
         QLabel{
 
-            color:#9EA5B3;
+            color:white;
 
-            font-size:12px;
-
-            line-height:18px;
+            font-size:13px;
 
             background:transparent;
         }
         """)
 
-        status_layout.addWidget(
-            self.addon
+        layout.addWidget(
+            self.addon_status
         )
 
-        status_layout.addStretch()
+        #
+        # WoW
+        #
+
+        self.wow_status = QLabel()
+
+        self.wow_status.setStyleSheet("""
+        QLabel{
+
+            color:white;
+
+            font-size:13px;
+
+            background:transparent;
+        }
+        """)
+
+        layout.addWidget(
+            self.wow_status
+        )
+
+        #
+        # Discord
+        #
+
+        self.discord_status = QLabel()
+
+        self.discord_status.setStyleSheet("""
+        QLabel{
+
+            color:white;
+
+            font-size:13px;
+
+            background:transparent;
+        }
+        """)
+
+        layout.addWidget(
+            self.discord_status
+        )
 
         self.root.addWidget(
             self.status
         )
 
         #
-        # Footer
+        # Alles nach oben schieben
         #
 
+        self.root.addStretch()
+
+    # ---------------------------------------------------------
+    # Footer
+    # ---------------------------------------------------------
+
+    def build_footer(self):
+
+        line = QFrame()
+
+        line.setFixedHeight(1)
+
+        line.setStyleSheet("""
+        QFrame{
+
+            background:#323743;
+
+            border:none;
+        }
+        """)
+
+        self.root.addWidget(
+            line
+        )
+
+        self.root.addSpacing(
+            12
+        )
+
         footer = QLabel(
-            "© Bis einer weint"
+            "Powered by Daddler2419"
         )
 
         footer.setAlignment(
@@ -389,7 +535,7 @@ class Sidebar(QFrame):
 
             color:#707785;
 
-            font-size:12px;
+            font-size:11px;
 
             background:transparent;
         }
@@ -399,15 +545,7 @@ class Sidebar(QFrame):
             footer
         )
 
-        #
-        # Dashboard aktiv
-        #
-
-        self.refresh()
-
-        self.items[0].setActive(True)
-
-        # ---------------------------------------------------------
+    # ---------------------------------------------------------
     # Paint
     # ---------------------------------------------------------
 
@@ -438,29 +576,29 @@ class Sidebar(QFrame):
         # Hintergrund
         #
 
-        gradient = QLinearGradient(
+        background = QLinearGradient(
             rect.topLeft(),
             rect.bottomLeft(),
         )
 
-        gradient.setColorAt(
+        background.setColorAt(
             0,
             QColor("#23262F"),
         )
 
-        gradient.setColorAt(
+        background.setColorAt(
             0.45,
-            QColor("#1B1E26"),
+            QColor("#1B1F27"),
         )
 
-        gradient.setColorAt(
+        background.setColorAt(
             1,
             QColor("#15181E"),
         )
 
         painter.fillPath(
             path,
-            gradient,
+            background,
         )
 
         #
@@ -468,15 +606,20 @@ class Sidebar(QFrame):
         #
 
         glow = QLinearGradient(
+
             rect.left(),
+
             rect.top(),
+
             rect.left() + 260,
-            rect.top() + 200,
+
+            rect.top() + 180,
+
         )
 
         glow.setColorAt(
             0,
-            QColor(212, 175, 55, 28),
+            QColor(212, 175, 55, 24),
         )
 
         glow.setColorAt(
@@ -494,8 +637,11 @@ class Sidebar(QFrame):
         #
 
         border = QLinearGradient(
+
             rect.topLeft(),
+
             rect.bottomRight(),
+
         )
 
         border.setColorAt(
@@ -505,7 +651,7 @@ class Sidebar(QFrame):
 
         border.setColorAt(
             0.5,
-            QColor("#3C3F49"),
+            QColor("#3A3E47"),
         )
 
         border.setColorAt(
@@ -514,16 +660,22 @@ class Sidebar(QFrame):
         )
 
         painter.setPen(
+
             QPen(
                 border,
-                1.4,
+                1.3,
             )
+
         )
 
         painter.drawRoundedRect(
+
             rect,
+
             SIDEBAR_RADIUS,
+
             SIDEBAR_RADIUS,
+
         )
 
         painter.end()
@@ -550,22 +702,82 @@ class Sidebar(QFrame):
 
         state = self.manager.state
 
-        self.version_label.setText(
-            f"Version {VERSION}"
+        #
+        # Version
+        #
+
+        self.version.setText(
+            f"Version {state.companion_version}"
         )
 
-        self.status_version.setText(
-            f"Version {VERSION}"
-        )
+        #
+        # Companion
+        #
+
+        if state.companion_update_available:
+
+            self.companion_status.setText(
+                f"🟡 Companion   v{VERSION}\nUpdate verfügbar"
+            )
+
+        else:
+
+            self.companion_status.setText(
+                f"🟢 Companion   v{VERSION}"
+            )
+
+        #
+        # World of Warcraft
+        #
+
+        if state.wow_found:
+
+            self.wow_status.setText(
+                "🎮 World of Warcraft\nClassic gefunden"
+            )
+
+        else:
+
+            self.wow_status.setText(
+                "🎮 World of Warcraft\nNicht gefunden"
+            )
+
+        #
+        # WeintCodex
+        #
 
         if state.addon_found:
 
-            self.addon.setText(
+            self.addon_status.setText(
                 f"📦 WeintCodex\nVersion {state.addon_version}"
             )
 
         else:
 
-            self.addon.setText(
+            self.addon_status.setText(
                 "📦 WeintCodex\nNicht installiert"
+            )
+
+        #
+        # Discord
+        #
+
+        if state.discord_connected:
+
+            if state.discord_latency is not None:
+
+                self.discord_status.setText(
+                    f"💬 Discord Bot\n{state.discord_name}\n{state.discord_latency} ms"
+                )
+
+            else:
+
+                self.discord_status.setText(
+                    f"💬 Discord Bot\n{state.discord_name}"
+                )
+
+        else:
+
+            self.discord_status.setText(
+                "💬 Discord Bot\nOffline"
             )

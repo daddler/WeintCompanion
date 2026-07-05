@@ -4,7 +4,6 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QCursor,
-    QIcon,
     QLinearGradient,
     QPainter,
     QPainterPath,
@@ -25,7 +24,7 @@ class NavigationItem(QFrame):
 
     clicked = Signal()
 
-    def __init__(self, icon_path: str, text: str):
+    def __init__(self, symbol: str, text: str):
 
         super().__init__()
 
@@ -83,23 +82,25 @@ class NavigationItem(QFrame):
         )
 
         #
-        # Icon
+        # Symbol
         #
 
-        self.icon = QLabel()
+        self.icon = QLabel(symbol)
 
-        icon = QIcon(icon_path)
+        self.icon.setAlignment(Qt.AlignCenter)
 
-        self.icon.setPixmap(
-            icon.pixmap(
-                22,
-                22,
-            )
-        )
+        self.icon.setFixedWidth(24)
 
         self.icon.setStyleSheet("""
         QLabel{
+
+            color:#D8B85C;
+
             background:transparent;
+
+            font-size:18px;
+
+            font-weight:700;
         }
         """)
 
