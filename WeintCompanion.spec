@@ -7,6 +7,7 @@ a = Analysis(
     datas=[
         ("assets", "assets"),
         ("packaging/linux/updater.sh", "packaging/linux"),
+        ["resources/icons", "resources/icons"]
     ],
     hiddenimports=[
         "PySide6.QtCore",
