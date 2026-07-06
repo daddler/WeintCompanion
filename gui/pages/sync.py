@@ -10,6 +10,7 @@ from gui.widgets.hero_banner import HeroButton
 from gui.widgets.section_card import SectionCard
 from gui.widgets.log_widget import LogWidget
 from gui.widgets.status_card import StatusCard
+from core.resources import Resources
 
 
 class SyncPage(QWidget):
@@ -45,28 +46,28 @@ class SyncPage(QWidget):
         # --------------------------------------------------
 
         self.status_card = StatusCard(
-            "🔄",
+            Resources.sync(),
             "Synchronisation",
             "Bereit",
             "Noch keine Prüfung durchgeführt.",
         )
 
         self.wow_card = StatusCard(
-            "🎮",
+            Resources.game(),
             "World of Warcraft",
             "-",
             "-",
         )
 
         self.addon_card = StatusCard(
-            "📦",
+            Resources.software(),
             "WeintCodex",
             "-",
             "-",
         )
 
         self.discord_card = StatusCard(
-            "💬",
+            Resources.discord(),
             "Discord Bot",
             "-",
             "-",
@@ -146,7 +147,8 @@ class SyncPage(QWidget):
         self.logs = LogWidget(manager.logger)
 
         log_card = SectionCard(
-            "📜 Live-Protokoll"
+            Resources.logs(),
+            "Live-Protokoll",
         )
 
         log_card.addWidget(self.logs)

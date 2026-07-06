@@ -13,8 +13,8 @@ class Metrics:
     # Fenster
     # -------------------------------------------------
 
-    WINDOW_MIN_WIDTH = 1280
-    WINDOW_MIN_HEIGHT = 760
+    WINDOW_MIN_WIDTH = 1500
+    WINDOW_MIN_HEIGHT = 860
 
     SIDEBAR_WIDTH = 305
 
@@ -49,7 +49,7 @@ class Metrics:
     # Hero
     # -------------------------------------------------
 
-    HERO_HEIGHT = 275
+    HERO_HEIGHT = 560
 
     HERO_BUTTON_HEIGHT = 46
 

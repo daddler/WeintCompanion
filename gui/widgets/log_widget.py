@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
 )
 
 from core.logger import LogEntry
+from core.resources import Resources
+from PySide6.QtSvgWidgets import QSvgWidget
 
 
 CARD_RADIUS = 20
@@ -79,7 +81,12 @@ class LogWidget(QWidget):
         # Titel
         #
 
-        self.title = QLabel("📜 Live-Protokoll")
+        icon = QSvgWidget(Resources.logs())
+        icon.setFixedSize(22, 22)
+
+        header.addWidget(icon)
+
+        self.title = QLabel("Live-Protokoll")
 
         self.title.setStyleSheet("""
         QLabel{
@@ -201,7 +208,7 @@ class LogWidget(QWidget):
             self.add_entry
         )
 
-            # --------------------------------------------------
+    # --------------------------------------------------
     # Paint
     # --------------------------------------------------
 

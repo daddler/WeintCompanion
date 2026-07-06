@@ -272,11 +272,11 @@ class Sidebar(QFrame):
 
         pages = [
 
-            ("🏠", "Dashboard"),
-            ("📦", "WeintCodex"),
-            ("🔄", "Synchronisation"),
-            ("⚙", "Einstellungen"),
-            ("📜", "Logs"),
+            (Resources.dashboard(), "Dashboard"),
+            (Resources.software(), "Software"),
+            (Resources.sync(), "Synchronisation"),
+            (Resources.settings(), "Einstellungen"),
+            (Resources.logs(), "Logs"),
 
         ]
 
@@ -341,6 +341,9 @@ class Sidebar(QFrame):
 
     def build_status(self):
 
+        from PySide6.QtSvgWidgets import QSvgWidget
+        from PySide6.QtWidgets import QHBoxLayout
+
         self.status = QFrame()
 
         self.status.setObjectName(
@@ -380,21 +383,14 @@ class Sidebar(QFrame):
         # Titel
         #
 
-        title = QLabel(
-            "SYSTEMSTATUS"
-        )
+        title = QLabel("SYSTEMSTATUS")
 
         title.setStyleSheet("""
         QLabel{
-
             color:#C9CFD9;
-
             font-size:11px;
-
             font-weight:700;
-
             letter-spacing:1px;
-
             background:transparent;
         }
         """)
@@ -402,99 +398,77 @@ class Sidebar(QFrame):
         layout.addWidget(title)
 
         #
+        # Helfer
+        #
+
+        def create_status_row(icon_path):
+
+            row = QHBoxLayout()
+            row.setSpacing(10)
+
+            icon = QSvgWidget(icon_path)
+            icon.setFixedSize(18, 18)
+
+            label = QLabel()
+
+            label.setStyleSheet("""
+            QLabel{
+                color:white;
+                font-size:13px;
+                background:transparent;
+            }
+            """)
+
+            row.addWidget(icon)
+            row.addWidget(label, 1)
+
+            return row, label
+
+        #
         # Companion
         #
 
-        self.companion_status = QLabel()
-
-        self.companion_status.setStyleSheet("""
-        QLabel{
-
-            color:white;
-
-            font-size:13px;
-
-            background:transparent;
-        }
-        """)
-
-        layout.addWidget(
-            self.companion_status
+        row, self.companion_status = create_status_row(
+            Resources.companion()
         )
+
+        layout.addLayout(row)
 
         #
         # WeintCodex
         #
 
-        self.addon_status = QLabel()
-
-        self.addon_status.setStyleSheet("""
-        QLabel{
-
-            color:white;
-
-            font-size:13px;
-
-            background:transparent;
-        }
-        """)
-
-        layout.addWidget(
-            self.addon_status
+        row, self.addon_status = create_status_row(
+            Resources.software()
         )
+
+        layout.addLayout(row)
 
         #
         # WoW
         #
 
-        self.wow_status = QLabel()
-
-        self.wow_status.setStyleSheet("""
-        QLabel{
-
-            color:white;
-
-            font-size:13px;
-
-            background:transparent;
-        }
-        """)
-
-        layout.addWidget(
-            self.wow_status
+        row, self.wow_status = create_status_row(
+            Resources.game()
         )
+
+        layout.addLayout(row)
 
         #
         # Discord
         #
 
-        self.discord_status = QLabel()
-
-        self.discord_status.setStyleSheet("""
-        QLabel{
-
-            color:white;
-
-            font-size:13px;
-
-            background:transparent;
-        }
-        """)
-
-        layout.addWidget(
-            self.discord_status
+        row, self.discord_status = create_status_row(
+            Resources.discord()
         )
+
+        layout.addLayout(row)
 
         self.root.addWidget(
             self.status
         )
 
-        #
-        # Alles nach oben schieben
-        #
-
         self.root.addStretch()
-
     # ---------------------------------------------------------
     # Footer
     # ---------------------------------------------------------
@@ -717,13 +691,13 @@ class Sidebar(QFrame):
         if state.companion_update_available:
 
             self.companion_status.setText(
-                f"🟡 Companion   v{VERSION}\nUpdate verfügbar"
+                f"Companion  v{VERSION}\nUpdate verfügbar"
             )
 
         else:
 
             self.companion_status.setText(
-                f"🟢 Companion   v{VERSION}"
+                f"Companion  v{VERSION}"
             )
 
         #
@@ -733,13 +707,13 @@ class Sidebar(QFrame):
         if state.wow_found:
 
             self.wow_status.setText(
-                "🎮 World of Warcraft\nClassic gefunden"
+                "World of Warcraft\nClassic gefunden"
             )
 
         else:
 
             self.wow_status.setText(
-                "🎮 World of Warcraft\nNicht gefunden"
+                "World of Warcraft\nNicht gefunden"
             )
 
         #
@@ -749,13 +723,13 @@ class Sidebar(QFrame):
         if state.addon_found:
 
             self.addon_status.setText(
-                f"📦 WeintCodex\nVersion {state.addon_version}"
+                f"WeintCodex\nVersion {state.addon_version}"
             )
 
         else:
 
             self.addon_status.setText(
-                "📦 WeintCodex\nNicht installiert"
+                "WeintCodex\nNicht installiert"
             )
 
         #
@@ -767,17 +741,17 @@ class Sidebar(QFrame):
             if state.discord_latency is not None:
 
                 self.discord_status.setText(
-                    f"💬 Discord Bot\n{state.discord_name}\n{state.discord_latency} ms"
+                    f"Discord Bot\n{state.discord_name}\n{state.discord_latency} ms"
                 )
 
             else:
 
                 self.discord_status.setText(
-                    f"💬 Discord Bot\n{state.discord_name}"
+                    f"Discord Bot\n{state.discord_name}"
                 )
 
         else:
 
             self.discord_status.setText(
-                "💬 Discord Bot\nOffline"
+                "Discord Bot\nOffline"
             )

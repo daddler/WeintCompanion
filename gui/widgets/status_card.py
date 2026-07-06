@@ -28,12 +28,16 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QGraphicsDropShadowEffect,
 )
-
+from PySide6.QtSvgWidgets import QSvgWidget
+from pathlib import Path
 
 CARD_RADIUS = 20
 
 
 class StatusCard(QFrame):
+
+    HERO_MODE = "hero"
+    NORMAL_MODE = "normal"
 
     clicked = Signal()
 
@@ -46,6 +50,8 @@ class StatusCard(QFrame):
         button_text: str = "",
     ):
         super().__init__()
+
+        self._display_mode = self.NORMAL_MODE
 
         self.setObjectName("statusCard")
 
@@ -88,13 +94,9 @@ class StatusCard(QFrame):
 
         shadow = QGraphicsDropShadowEffect(self)
 
-        shadow.setBlurRadius(26)
-
-        shadow.setOffset(0, 10)
-
-        shadow.setColor(
-            QColor(0, 0, 0, 90)
-        )
+        shadow.setBlurRadius(40)
+        shadow.setOffset(0, 16)
+        shadow.setColor(QColor(0,0,0,120))
 
         self.setGraphicsEffect(
             shadow
@@ -134,8 +136,8 @@ class StatusCard(QFrame):
         self.icon_container = QFrame()
 
         self.icon_container.setFixedSize(
-            54,
-            54,
+            50,
+            50,
         )
 
         self.icon_container.setStyleSheet("""
@@ -160,23 +162,18 @@ class StatusCard(QFrame):
             0,
         )
 
-        self.icon_label = QLabel(icon)
+        self.icon_label = QSvgWidget()
 
-        self.icon_label.setAlignment(
-            Qt.AlignCenter
+        self.icon_label.setFixedSize(
+            26,
+            26,
         )
 
-        self.icon_label.setStyleSheet("""
-        QLabel{
-
-            background:transparent;
-
-            font-size:28px;
-        }
-        """)
+        self.set_icon(icon)
 
         icon_layout.addWidget(
-            self.icon_label
+            self.icon_label,
+            alignment=Qt.AlignCenter,
         )
 
         header.addWidget(
@@ -466,17 +463,17 @@ class StatusCard(QFrame):
 
         background.setColorAt(
             0,
-            QColor("#252933"),
+            QColor(36, 41, 51, 215),
         )
 
         background.setColorAt(
             0.55,
-            QColor("#1E2129"),
+            QColor(29, 33, 41, 205),
         )
 
         background.setColorAt(
             1,
-            QColor("#181B22"),
+            QColor(24, 27, 34, 195),
         )
 
         painter.fillPath(
@@ -497,7 +494,7 @@ class StatusCard(QFrame):
 
             glow.setColorAt(
                 0,
-                QColor(139, 92, 246, 35),
+                QColor(175,120,255,55),
             )
 
             glow.setColorAt(
@@ -508,6 +505,33 @@ class StatusCard(QFrame):
             painter.fillPath(
                 path,
                 glow,
+            )
+
+            shine = QLinearGradient(
+                rect.left(),
+                rect.top(),
+                rect.right(),
+                rect.top(),
+            )
+
+            shine.setColorAt(
+                0,
+                QColor(255,255,255,18),
+            )
+
+            shine.setColorAt(
+                0.5,
+                QColor(255,255,255,4),
+            )
+
+            shine.setColorAt(
+                1,
+                QColor(255,255,255,0),
+            )
+
+            painter.fillPath(
+                path,
+                shine,
             )
 
         #
@@ -850,7 +874,8 @@ class StatusCard(QFrame):
 
     def set_icon(self, icon: str):
 
-        self.icon_label.setText(icon)
+        if Path(icon).exists():
+            self.icon_label.load(icon)
 
     # --------------------------------------------------
     # Tooltip
@@ -891,3 +916,30 @@ class StatusCard(QFrame):
     def get_button(self):
 
         return self.button
+
+    def setDisplayMode(self, mode: str):
+
+        self._display_mode = mode
+
+        shadow = self.graphicsEffect()
+
+        if mode == self.HERO_MODE:
+
+            if shadow:
+                shadow.setBlurRadius(8)
+                shadow.setOffset(0, 2)
+
+            self.setStyleSheet("""
+            QFrame#statusCard{
+                background:rgba(28,31,39,150);
+                border:none;
+            }
+            """)
+
+        else:
+
+            if shadow:
+                shadow.setBlurRadius(26)
+                shadow.setOffset(0,10)
+
+            self.setStyleSheet("")

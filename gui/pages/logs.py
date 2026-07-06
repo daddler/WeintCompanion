@@ -5,13 +5,16 @@ import sys
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from core.paths import Paths
 from gui.widgets.log_widget import LogWidget
+
+from core.resources import Resources
+from gui.widgets.hero_banner import HeroButton
+from gui.widgets.section_card import SectionCard
 
 
 class LogsPage(QWidget):
@@ -50,12 +53,14 @@ class LogsPage(QWidget):
 
         toolbar = QHBoxLayout()
 
-        self.clear_button = QPushButton(
-            "🗑 Logs leeren"
+        self.clear_button = HeroButton(
+            "Logs leeren",
+            primary=False,
         )
 
-        self.open_button = QPushButton(
-            "📂 Logdatei öffnen"
+        self.open_button = HeroButton(
+            "Logordner öffnen",
+            primary=False,
         )
 
         toolbar.addWidget(self.clear_button)
@@ -74,7 +79,14 @@ class LogsPage(QWidget):
             self.manager.logger
         )
 
-        layout.addWidget(self.logs)
+        card = SectionCard(
+            Resources.logs(),
+            "Live-Protokoll",
+        )
+
+        card.addWidget(self.logs)
+
+        layout.addWidget(card)
 
         #
         # --------------------------------------------------

@@ -14,7 +14,9 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QSizePolicy,
 )
+from PySide6.QtSvgWidgets import QSvgWidget
 
 
 RADIUS = 16
@@ -24,7 +26,7 @@ class NavigationItem(QFrame):
 
     clicked = Signal()
 
-    def __init__(self, symbol: str, text: str):
+    def __init__(self, icon: str, text: str):
 
         super().__init__()
 
@@ -82,27 +84,20 @@ class NavigationItem(QFrame):
         )
 
         #
-        # Symbol
+        # Icon
         #
 
-        self.icon = QLabel(symbol)
+        self.icon = QSvgWidget(icon)
 
-        self.icon.setAlignment(Qt.AlignCenter)
+        self.icon.setFixedSize(
+            22,
+            22,
+        )
 
-        self.icon.setFixedWidth(24)
-
-        self.icon.setStyleSheet("""
-        QLabel{
-
-            color:#D8B85C;
-
-            background:transparent;
-
-            font-size:18px;
-
-            font-weight:700;
-        }
-        """)
+        self.icon.setSizePolicy(
+            QSizePolicy.Fixed,
+            QSizePolicy.Fixed,
+        )
 
         self.layout.addWidget(
             self.icon
@@ -320,13 +315,6 @@ class NavigationItem(QFrame):
             }
             """)
 
-            self.icon.setStyleSheet("""
-            QLabel{
-
-                background:transparent;
-            }
-            """)
-
         else:
 
             self.indicator.setStyleSheet("""
@@ -346,15 +334,6 @@ class NavigationItem(QFrame):
                 font-size:14px;
 
                 font-weight:600;
-            }
-            """)
-
-            self.icon.setStyleSheet("""
-            QLabel{
-
-                background:transparent;
-
-                opacity:0.75;
             }
             """)
 

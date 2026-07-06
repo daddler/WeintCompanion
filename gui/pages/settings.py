@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 from gui.widgets.hero_banner import HeroButton
 from gui.widgets.section_card import SectionCard
 from core.paths import Paths
+from core.resources import Resources
 
 
 class SettingsPage(QWidget):
@@ -30,7 +31,7 @@ class SettingsPage(QWidget):
         # Titel
         # --------------------------------------------------
 
-        title = QLabel("⚙ Einstellungen")
+        title = QLabel("Einstellungen")
         title.setObjectName("title")
 
         subtitle = QLabel(
@@ -48,7 +49,10 @@ class SettingsPage(QWidget):
         # ==================================================
         #
 
-        general = SectionCard("⚙ Allgemeine Einstellungen")
+        general = SectionCard(
+            Resources.settings(),
+            "Allgemeine Einstellungen",
+        )
 
         general_layout = QVBoxLayout()
         general_layout.setSpacing(14)
@@ -106,7 +110,8 @@ class SettingsPage(QWidget):
         #
 
         wow = SectionCard(
-            "🎮 World of Warcraft"
+            Resources.game(),
+            "World of Warcraft",
         )
 
         wow_layout = QVBoxLayout()
@@ -117,7 +122,7 @@ class SettingsPage(QWidget):
         #
 
         self.path_status = QLabel(
-            "🟢 Classic gefunden"
+            "Classic gefunden"
         )
 
         self.path_status.setStyleSheet("""
@@ -188,7 +193,10 @@ class SettingsPage(QWidget):
         # ==================================================
         #
 
-        storage = SectionCard("💾 Speicherverwaltung")
+        storage = SectionCard(
+            Resources.backup(),
+            "Speicherverwaltung",
+        )
 
         storage_layout = QVBoxLayout()
         storage_layout.setSpacing(18)
@@ -203,7 +211,7 @@ class SettingsPage(QWidget):
         download_info = QVBoxLayout()
         download_info.setSpacing(4)
 
-        download_title = QLabel("📥 Downloads")
+        download_title = QLabel("Downloads")
 
         download_title.setStyleSheet("""
         QLabel{
@@ -270,7 +278,7 @@ class SettingsPage(QWidget):
         backup_info = QVBoxLayout()
         backup_info.setSpacing(4)
 
-        backup_title = QLabel("💾 Backups")
+        backup_title = QLabel("Backups")
 
         backup_title.setStyleSheet("""
         QLabel{
@@ -392,7 +400,7 @@ class SettingsPage(QWidget):
         if path:
 
             self.path_status.setText(
-                "🟢 Classic gefunden"
+                "Classic gefunden"
             )
 
             self.path_status.setStyleSheet("""
@@ -411,7 +419,7 @@ class SettingsPage(QWidget):
         else:
 
             self.path_status.setText(
-                "🔴 Kein Classic-Pfad ausgewählt"
+                "Kein Classic-Pfad ausgewählt"
             )
 
             self.path_status.setStyleSheet("""

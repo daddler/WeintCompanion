@@ -29,6 +29,13 @@ class DashboardPage(QWidget):
         #
 
         self.hero = HeroBanner()
+        self.hero.primaryClicked.connect(
+            self.install_or_update
+        )
+
+        self.hero.secondaryClicked.connect(
+            self.open_addon
+        )
         layout.addWidget(self.hero)
 
         #
@@ -36,14 +43,22 @@ class DashboardPage(QWidget):
         #
 
         self.cards = DashboardCards(manager)
+
         self.cards.folderRequested.connect(
             self.choose_classic_folder
         )
+
         self.cards.pageRequested.connect(
             self.pageRequested.emit
         )
 
-        layout.addWidget(self.cards)
+        #
+        # Karten in den Hero integrieren
+        #
+
+        self.hero.addDashboardCards(
+            self.cards
+        )
 
         #
         # Log Widget
@@ -139,6 +154,12 @@ class DashboardPage(QWidget):
             self.hero.set_busy(False)
 
             self.refresh()
+
+    # --------------------------------------------------
+    
+    def open_addon(self):
+
+        self.pageRequested.emit(1)
 
     # --------------------------------------------------
 

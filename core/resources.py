@@ -61,33 +61,142 @@ class Resources:
     def home():
 
         return Resources.path(
-            "assets/home.png"
+            "resources/icons/dashboard.svg"
         )
 
     @staticmethod
     def package():
 
         return Resources.path(
-            "assets/package.png"
+            "resources/icons/software.svg"
         )
 
     @staticmethod
     def sync():
 
         return Resources.path(
-            "assets/sync.png"
+            "resources/icons/sync.svg"
         )
 
     @staticmethod
     def settings():
 
         return Resources.path(
-            "assets/settings.png"
+            "resources/icons/settings.svg"
         )
 
     @staticmethod
     def logs():
 
         return Resources.path(
-            "assets/logs.png"
+            "resources/icons/logs.svg"
         )
+
+    # --------------------------------------------------
+    # SVG Icons
+    # --------------------------------------------------
+
+    @staticmethod
+    def dashboard():
+
+        return Resources.path(
+            "resources/icons/dashboard.svg"
+        )
+
+    @staticmethod
+    def software():
+
+        return Resources.path(
+            "resources/icons/software.svg"
+        )
+
+    @staticmethod
+    def game():
+
+        return Resources.path(
+            "resources/icons/game.svg"
+        )
+
+    @staticmethod
+    def github():
+
+        return Resources.path(
+            "resources/icons/github.svg"
+        )
+
+    @staticmethod
+    def backup():
+
+        return Resources.path(
+            "resources/icons/backup.svg"
+        )
+
+    @staticmethod
+    def download():
+
+        return Resources.path(
+            "resources/icons/download.svg"
+        )
+
+    @staticmethod
+    def folder():
+
+        return Resources.path(
+            "resources/icons/folder.svg"
+        )
+
+    @staticmethod
+    def discord():
+
+        return Resources.path(
+            "resources/icons/discord.svg"
+        )
+
+    @staticmethod
+    def changelog():
+
+        return Resources.path(
+            "resources/icons/changelog.svg"
+        )
+
+    @staticmethod
+    def trash():
+
+        return Resources.path(
+            "resources/icons/papierkorb.svg"
+        )
+    
+    @staticmethod
+    def settings():
+
+        return Resources.path(
+            "resources/icons/settings.svg"
+        )
+    
+    @staticmethod
+    def sync():
+
+        return Resources.path(
+            "resources/icons/sync.svg"
+        )
+    
+    @staticmethod
+    def logs():
+
+        return Resources.path(
+            "resources/icons/logs.svg"
+        )
+
+    @staticmethod
+    def companion():
+        return Resources.path(
+            "resources/icons/companion.svg"
+        )
+
+    @staticmethod
+    def wow():
+        return Resources.game()
+
+    @staticmethod
+    def addon():
+        return Resources.software()

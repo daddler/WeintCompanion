@@ -1,17 +1,22 @@
 from PySide6.QtCore import Qt
+
+from gui.widgets.status_card import CARD_RADIUS
+
+from PySide6.QtSvgWidgets import QSvgWidget
+
 from PySide6.QtWidgets import (
     QFrame,
     QLabel,
     QVBoxLayout,
+    QHBoxLayout,
 )
-
-from gui.widgets.status_card import CARD_RADIUS
 
 
 class SectionCard(QFrame):
 
     def __init__(
         self,
+        icon: str,
         title: str,
         subtitle: str = "",
     ):
@@ -44,6 +49,22 @@ class SectionCard(QFrame):
         # --------------------------------------------------
         #
 
+        header = QHBoxLayout()
+
+        header.setSpacing(12)
+
+        self.icon = QSvgWidget(icon)
+
+        self.icon.setFixedSize(
+            22,
+            22,
+        )
+
+        header.addWidget(
+            self.icon,
+            alignment=Qt.AlignVCenter,
+        )
+
         self.title = QLabel(title)
 
         self.title.setStyleSheet("""
@@ -56,7 +77,13 @@ class SectionCard(QFrame):
         }
         """)
 
-        self.root.addWidget(self.title)
+        header.addWidget(
+            self.title,
+        )
+
+        header.addStretch()
+
+        self.root.addLayout(header)
 
         #
         # Optionaler Untertitel

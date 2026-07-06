@@ -11,6 +11,7 @@ from gui.widgets.status_card import StatusCard
 from core.platform import open_folder
 from gui.widgets.section_card import SectionCard
 
+from core.resources import Resources
 
 class AddonPage(QWidget):
 
@@ -26,12 +27,12 @@ class AddonPage(QWidget):
         # Titel
         # --------------------------------------------------
 
-        title = QLabel("📦 Addonverwaltung")
+        title = QLabel("📦 Software")
         title.setObjectName("title")
         layout.addWidget(title)
 
         subtitle = QLabel(
-            "Installiere, aktualisiere und verwalte dein WeintCodex-Addon."
+            "Installiere, aktualisiere und verwalte Weintcompanion und WeintCodex."
         )
 
         subtitle.setStyleSheet("""
@@ -50,22 +51,29 @@ class AddonPage(QWidget):
         # --------------------------------------------------
 
         self.installed_card = StatusCard(
-            icon="📦",
-            title="Installierte Version",
+            icon=Resources.software(),
+            title="WeintCodex",
+            status="-",
+            details="-",
+        )
+
+        self.companion_card = StatusCard(
+            icon=Resources.companion(),
+            title="WeintCompanion",
             status="-",
             details="-",
         )
 
         self.github_card = StatusCard(
-            icon="🌐",
-            title="GitHub Release",
+            icon=Resources.github(),
+            title="GitHub",
             status="-",
             details="-",
         )
 
         self.path_card = StatusCard(
-            icon="📂",
-            title="Installationsordner",
+            icon=Resources.folder(),
+            title="Addon-Ordner",
             status="-",
             details="-",
             button_text="Ordner öffnen",
@@ -79,10 +87,11 @@ class AddonPage(QWidget):
         cards.setVerticalSpacing(18)
 
         cards.addWidget(self.installed_card, 0, 0)
-        cards.addWidget(self.github_card, 0, 1)
-        cards.addWidget(self.path_card, 0, 2)
+        cards.addWidget(self.companion_card, 0, 1)
+        cards.addWidget(self.github_card, 0, 2)
+        cards.addWidget(self.path_card, 0, 3)
 
-        for column in range(3):
+        for column in range(4):
             cards.setColumnStretch(column, 1)
 
         layout.addLayout(cards)
@@ -129,7 +138,8 @@ class AddonPage(QWidget):
         """)
 
         changelog_card = SectionCard(
-            "📝 Changelog"
+            Resources.changelog(),
+            "Changelog",
         )
 
         changelog_card.addWidget(
@@ -155,7 +165,8 @@ class AddonPage(QWidget):
         """)
 
         log_card = SectionCard(
-            "📜 Installationsprotokoll"
+            Resources.logs(),
+            "Installationsprotokoll",
         )
 
         log_card.addWidget(
@@ -229,7 +240,7 @@ class AddonPage(QWidget):
             )
 
             self.installed_card.set_details(
-                "Installierte Version"
+                "Version installiert"
             )
 
             self.path_card.set_status(
@@ -259,6 +270,34 @@ class AddonPage(QWidget):
             )
 
             self.path_card.set_details("-")
+
+        #
+        # WeintCompanion
+        #
+
+        if state.companion_update_available:
+
+            self.companion_card.set_state("warning")
+
+            self.companion_card.set_status(
+                "🟡 Update verfügbar"
+            )
+
+        else:
+
+            self.companion_card.set_state("normal")
+
+            self.companion_card.set_status(
+                "🟢 Installiert"
+            )
+
+        self.companion_card.set_value(
+            state.companion_version
+        )
+
+        self.companion_card.set_details(
+            "Version installiert"
+        )
 
         #
         # GitHub

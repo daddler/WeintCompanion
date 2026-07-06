@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 
 from gui.widgets.status_card import StatusCard
 from core.paths import Paths
+from core.resources import Resources
 
 
 class DashboardCards(QWidget):
@@ -27,7 +28,7 @@ class DashboardCards(QWidget):
             0,
         )
 
-        self.layout.setHorizontalSpacing(18)
+        self.layout.setHorizontalSpacing(14)
 
         self.layout.setVerticalSpacing(0)
 
@@ -36,7 +37,7 @@ class DashboardCards(QWidget):
         #
 
         self.wow = StatusCard(
-            "🎮",
+            Resources.game(),
             "World of Warcraft",
             "Nicht gefunden",
             "Pfad: -",
@@ -56,7 +57,7 @@ class DashboardCards(QWidget):
         #
 
         self.addon = StatusCard(
-            "📦",
+            Resources.software(),
             "WeintCodex",
             "Nicht installiert",
             "Version: -",
@@ -71,7 +72,7 @@ class DashboardCards(QWidget):
         #
 
         self.github = StatusCard(
-            "🔄",
+            Resources.github(),
             "Updates",
             "Nicht geprüft",
             "-",
@@ -86,7 +87,7 @@ class DashboardCards(QWidget):
         #
 
         self.backup = StatusCard(
-            "💾",
+            Resources.backup(),
             "Backups",
             "Keine Informationen",
             "-",
@@ -106,7 +107,7 @@ class DashboardCards(QWidget):
             self.backup,
             self.wow,
         ):
-            card.setFixedHeight(180)
+            card.setFixedHeight(155)
 
         self.layout.addWidget(
             self.addon,

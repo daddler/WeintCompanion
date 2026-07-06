@@ -7,6 +7,7 @@ from PySide6.QtCore import (
     Property,
     QEasingCurve,
     QPropertyAnimation,
+    Signal,
 )
 
 from PySide6.QtGui import (
@@ -88,6 +89,19 @@ class HeroButton(QPushButton):
 
         self.setStyleSheet(self._stylesheet(False))
 
+        self._pulse = QPropertyAnimation(
+            self._shadow,
+            b"blurRadius",
+        )
+
+        self._pulse.setStartValue(22)
+        self._pulse.setEndValue(42)
+        self._pulse.setDuration(900)
+        self._pulse.setLoopCount(-1)
+        self._pulse.setEasingCurve(
+            QEasingCurve.InOutSine
+        )
+
     def enterEvent(self, event):
 
         self.setStyleSheet(self._stylesheet(True))
@@ -155,6 +169,18 @@ class HeroButton(QPushButton):
             background:rgba(255,255,255,20);
         }}
         """
+    
+    def startPulse(self):
+
+        if self.primary:
+            self._pulse.start()
+
+
+    def stopPulse(self):
+
+        self._pulse.stop()
+
+        self._shadow.setBlurRadius(30)
 
 
 # ---------------------------------------------------------
@@ -203,6 +229,9 @@ class HeroBadge(QLabel):
 
 class HeroBanner(QWidget):
 
+    primaryClicked = Signal()
+    secondaryClicked = Signal()
+
     def __init__(self):
 
         super().__init__()
@@ -214,9 +243,13 @@ class HeroBanner(QWidget):
             QSizePolicy.Fixed,
         )
 
+        self.mode = "idle"
+
         self.banner = QPixmap(Resources.banner())
 
         self.banner_opacity = 1.0
+
+        
 
         shadow = QGraphicsDropShadowEffect(self)
 
@@ -228,37 +261,60 @@ class HeroBanner(QWidget):
 
         self.setGraphicsEffect(shadow)
 
-        self.root = QHBoxLayout(self)
+        self.root = QVBoxLayout(self)
 
         self.root.setContentsMargins(0, 0, 0, 0)
-
         self.root.setSpacing(0)
 
         self.content = QWidget()
-
         self.content.setAttribute(Qt.WA_TranslucentBackground)
 
         self.root.addWidget(self.content)
 
-        self.main_layout = QHBoxLayout(self.content)
+        #
+        # Gesamtes Hero-Layout
+        #
+
+        self.main_layout = QVBoxLayout(self.content)
 
         self.main_layout.setContentsMargins(
-            36,
+            32,
             24,
-            36,
+            32,
             24,
         )
 
-        self.main_layout.setSpacing(30)
+        self.main_layout.setSpacing(26)
+
+        #
+        # Oberer Bereich
+        #
+
+        self.top_layout = QHBoxLayout()
+
+        self.top_layout.setSpacing(32)
+
+        self.main_layout.addLayout(self.top_layout)
+
+        #
+        # Linke Spalte
+        #
 
         self.left = QVBoxLayout()
 
         self.left.setSpacing(6)
 
-        self.main_layout.addLayout(
+        self.top_layout.addLayout(
             self.left,
-            1,
+            3,
         )
+
+        #
+        # Rechte Seite bleibt frei.
+        # Das Banner wird weiterhin im paintEvent gezeichnet.
+        #
+
+        self.top_layout.addStretch(2)
 
         self.badge = HeroBadge()
 
@@ -364,7 +420,7 @@ class HeroBanner(QWidget):
         #
         # Buttons
         #
-        self.left.addSpacing(18)
+        self.left.addSpacing(10)
 
         button_row = QHBoxLayout()
 
@@ -380,6 +436,14 @@ class HeroBanner(QWidget):
             primary=False,
         )
 
+        self.install_button.clicked.connect(
+            self.primaryClicked.emit
+        )
+
+        self.secondary_button.clicked.connect(
+            self.secondaryClicked.emit
+        )
+
         button_row.addWidget(self.install_button)
 
         button_row.addWidget(self.secondary_button)
@@ -387,7 +451,40 @@ class HeroBanner(QWidget):
         button_row.addStretch()
 
         self.left.addLayout(button_row)
+        #
+        # Unterer Abstand
+        #
+
         self.left.addStretch()
+
+        #
+        # --------------------------------------------------
+        # Dashboard Cards
+        # --------------------------------------------------
+        #
+
+        self.cards_container = QWidget()
+
+        self.cards_container.setAttribute(
+            Qt.WA_TranslucentBackground
+        )
+
+        self.cards_layout = QHBoxLayout(
+            self.cards_container
+        )
+
+        self.cards_layout.setContentsMargins(
+            0,
+            0,
+            0,
+            0,
+        )
+
+        self.cards_layout.setSpacing(18)
+
+        self.main_layout.addWidget(
+            self.cards_container
+        )
 
 
     # --------------------------------------------------
@@ -843,6 +940,14 @@ class HeroBanner(QWidget):
         self.resizeEvent(None)
 
     # --------------------------------------------------
+    # Dashboard Cards
+    # --------------------------------------------------
+
+    def addDashboardCards(self, widget):
+
+        self.cards_layout.addWidget(widget)
+
+    # --------------------------------------------------
     # Buttons
     # --------------------------------------------------
 
@@ -940,10 +1045,16 @@ class HeroBanner(QWidget):
 
         if state.companion_update_available:
 
+            self.mode = "companion_update"
+
             self.setStatus(
                 "⬤ Companion-Update verfügbar",
                 "orange",
             )
+
+            self.install_button.show()
+
+            self.install_button.startPulse()
 
             self.setPrimaryButtonText(
                 "Companion aktualisieren"
@@ -961,17 +1072,19 @@ class HeroBanner(QWidget):
 
         if state.update_available:
 
+            self.mode = "addon_update"
+
             self.setStatus(
                 "⬤ Addon-Update verfügbar",
                 "orange",
             )
 
-            self.setPrimaryButtonText(
-                "Jetzt aktualisieren"
-            )
+            self.install_button.show()
 
-            self.setSecondaryButtonText(
-                "Addon öffnen"
+            self.install_button.startPulse()
+
+            self.setPrimaryButtonText(
+                "WeintCodex aktualisieren"
             )
 
             return
@@ -1007,17 +1120,19 @@ class HeroBanner(QWidget):
 
         if not state.addon_found:
 
+            self.mode = "install"
+
             self.setStatus(
                 "⬤ Addon nicht installiert",
                 "orange",
             )
 
-            self.setPrimaryButtonText(
-                "Jetzt installieren"
-            )
+            self.install_button.show()
 
-            self.setSecondaryButtonText(
-                "Addon öffnen"
+            self.install_button.startPulse()
+
+            self.setPrimaryButtonText(
+                "WeintCodex installieren"
             )
 
             return
@@ -1028,17 +1143,19 @@ class HeroBanner(QWidget):
 
         if not state.wow_found:
 
+            self.mode = "choose_folder"
+
             self.setStatus(
                 "⬤ WoW-Verzeichnis wählen",
                 "blue",
             )
 
+            self.install_button.show()
+
+            self.install_button.startPulse()
+
             self.setPrimaryButtonText(
                 "Ordner auswählen"
-            )
-
-            self.setSecondaryButtonText(
-                "Addon öffnen"
             )
 
             return
@@ -1052,9 +1169,11 @@ class HeroBanner(QWidget):
             "green",
         )
 
-        self.setPrimaryButtonText(
-            "Jetzt aktualisieren"
-        )
+        self.mode = "idle"
+
+        self.install_button.hide()
+
+        self.install_button.stopPulse()
 
         self.setSecondaryButtonText(
             "Addon öffnen"
@@ -1066,3 +1185,19 @@ class HeroBanner(QWidget):
             message,
             "red",
         )
+
+    def set_busy(self, busy: bool):
+
+        self.install_button.setEnabled(
+            not busy
+        )
+
+        self.secondary_button.setEnabled(
+            not busy
+        )
+
+        if busy:
+
+            self.install_button.setText(
+                "Bitte warten..."
+            )
