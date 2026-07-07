@@ -6,12 +6,18 @@ CURRENT="$1"
 NEW="$2"
 PID="$3"
 
+if [ -z "$CURRENT" ] || [ -z "$NEW" ] || [ -z "$PID" ]; then
+    echo "FEHLER: Parameter fehlen!"
+    echo "Args: $@"
+    exit 1
+fi
+
 DIR="$(dirname "$CURRENT")"
 
 SCRIPT="$DIR/update.sh"
 LOG="$DIR/update.log"
 
-exec >"$LOG" 2>&1
+exec >>"$LOG" 2>&1
 
 echo "========================================"
 echo " WeintCompanion Linux Updater"
