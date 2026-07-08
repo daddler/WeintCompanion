@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QObject, Signal
 from PySide6.QtGui import (
     QColor,
     QPainter,
@@ -23,6 +23,10 @@ from PySide6.QtWidgets import (
 from core.logger import LogEntry
 from core.resources import Resources
 from PySide6.QtSvgWidgets import QSvgWidget
+
+
+class _LogBridge(QObject):
+    new_entry = Signal(object)
 
 
 CARD_RADIUS = 20
@@ -195,17 +199,24 @@ class LogWidget(QWidget):
         )
 
         #
+        # Thread-sicherer Bridge für Logger-Events
+        #
+
+        self._bridge = _LogBridge(self)
+        self._bridge.new_entry.connect(self._do_add_entry)
+
+        #
         # History laden
         #
 
         self.refresh()
 
         #
-        # Logger abonnieren
+        # Logger abonnieren (thread-sicher via Signal)
         #
 
         self.logger.subscribe(
-            self.add_entry
+            self._bridge.new_entry.emit
         )
 
     # --------------------------------------------------
@@ -339,13 +350,13 @@ class LogWidget(QWidget):
 
         for entry in self.logger.entries():
 
-            self.add_entry(entry)
+            self._do_add_entry(entry)
 
     # --------------------------------------------------
-    # Add Entry
+    # Add Entry (immer im Hauptthread via Bridge)
     # --------------------------------------------------
 
-    def add_entry(self, entry: LogEntry):
+    def _do_add_entry(self, entry: LogEntry):
 
         timestamp = entry.timestamp.strftime(
             "%H:%M:%S"
@@ -480,7 +491,7 @@ class LogWidget(QWidget):
     def closeEvent(self, event):
 
         self.logger.unsubscribe(
-            self.add_entry
+            self._bridge.new_entry.emit
         )
 
         super().closeEvent(event)

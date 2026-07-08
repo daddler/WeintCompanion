@@ -1,3 +1,5 @@
+import threading
+
 from addon.finder import WoWFinder
 from addon.reader import AddonReader
 
@@ -25,7 +27,6 @@ class CompanionManager:
 
         self.config = Config()
 
-        # Zentrale Logger-Instanz
         self.logger = Logger()
 
         self.github = GitHubUpdater(
@@ -46,16 +47,48 @@ class CompanionManager:
         self.sync_timer.timeout.connect(
             self.run_auto_sync
         )
-        
+
+        self._sync_busy = False
+        self._sync_lock = threading.Lock()
+
     # --------------------------------------------------
     # Initialisierung
     # --------------------------------------------------
 
     def initialize(self):
 
+        #
+        # full_refresh verzögert starten, damit das Fenster
+        # zuerst gerendert wird und der Qt-Hauptthread frei bleibt
+        #
+
+        QTimer.singleShot(
+            100,
+            self._initialize_async,
+        )
+
+    def _initialize_async(self):
+
+        thread = threading.Thread(
+            target=self._initialize_worker,
+            daemon=True,
+            name="InitThread",
+        )
+
+        thread.start()
+
+    def _initialize_worker(self):
+
         self.full_refresh()
 
-        self.start_auto_sync()
+        #
+        # Auto-Sync im Hauptthread starten (QTimer muss im Hauptthread laufen)
+        #
+
+        QTimer.singleShot(
+            0,
+            self.start_auto_sync,
+        )
 
     # --------------------------------------------------
     # Automatische Synchronisation
@@ -93,7 +126,37 @@ class CompanionManager:
 
     def run_auto_sync(self):
 
-        self.sync.process()
+        #
+        # Verhindert, dass ein neuer Sync startet,
+        # während der vorherige noch läuft
+        #
+
+        with self._sync_lock:
+
+            if self._sync_busy:
+                return
+
+            self._sync_busy = True
+
+        thread = threading.Thread(
+            target=self._run_sync_worker,
+            daemon=True,
+            name="SyncThread",
+        )
+
+        thread.start()
+
+    def _run_sync_worker(self):
+
+        try:
+
+            self.sync.process()
+
+        finally:
+
+            with self._sync_lock:
+
+                self._sync_busy = False
 
     # --------------------------------------------------
     # Automatische Synchronisation stoppen
