@@ -1,5 +1,5 @@
 #define MyAppName "WeintCompanion"
-#define MyAppVersion "0.5.0"
+#define MyAppVersion "0.5.1"
 #define MyAppPublisher "Fabi (daddler2419)"
 #define MyAppExeName "WeintCompanion.exe"
 
@@ -19,6 +19,13 @@ ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=lowest
 
 SetupIconFile=..\assets\icon.ico
+
+; Erkennt laufende WeintCompanion-Instanzen automatisch
+; (Windows Restart Manager) und fragt, ob sie geschlossen
+; werden sollen, statt gesperrte Dateien stillschweigend
+; zu überspringen.
+CloseApplications=yes
+RestartApplications=no
 
 [Languages]
 Name: "german"; MessagesFile: "compiler:Languages\German.isl"

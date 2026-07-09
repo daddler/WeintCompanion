@@ -58,6 +58,7 @@ chmod +x "$CURRENT"
 echo "Starte neue Version..."
 
 nohup "$CURRENT" >/dev/null 2>&1 &
+NEWPID=$!
 
 #
 # Kurz warten
@@ -68,8 +69,15 @@ sleep 2
 #
 # Prüfen ob sie wirklich läuft
 #
+# Hinweis: "pgrep -f $CURRENT" ist bei AppImages unzuverlässig,
+# da der eigentliche Prozess intern oft aus einem gemounteten
+# Pfad (/tmp/.mount_XXXX/...) läuft und nicht mehr den
+# ursprünglichen AppImage-Pfad in der Kommandozeile führt.
+# Daher wird stattdessen direkt die PID des gestarteten
+# Hintergrundprozesses geprüft.
+#
 
-if pgrep -f "$CURRENT" >/dev/null
+if kill -0 "$NEWPID" 2>/dev/null || pgrep -f "$CURRENT" >/dev/null
 then
 
     echo "Neue Version erfolgreich gestartet."

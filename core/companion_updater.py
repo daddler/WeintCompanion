@@ -1,11 +1,13 @@
 from pathlib import Path
 import os
+import shutil
 import subprocess
 
 from PySide6.QtWidgets import QApplication
 
 from core.github_updater import GitHubUpdater
 from core.linux_updater import LinuxUpdater
+from core.windows_updater import WindowsUpdater
 from core.runtime import Runtime
 from core.version import VERSION
 
@@ -22,6 +24,7 @@ class CompanionUpdater:
         )
 
         self.linux = LinuxUpdater()
+        self.windows = WindowsUpdater()
 
     # --------------------------------------------------
 
@@ -164,6 +167,117 @@ class CompanionUpdater:
         return Path(file)
 
     # --------------------------------------------------
+    # Prozess von der eigenen systemd-Scope loslösen
+    # --------------------------------------------------
+
+    def _spawn_detached(self, args):
+        """
+        Startet das Updater-Skript so, dass es das Beenden von
+        WeintCompanion überlebt.
+
+        Hintergrund:
+        Auf modernen Linux-Desktops (GNOME/KDE unter Fedora,
+        openSUSE, CachyOS, ...) wird eine per Doppelklick oder
+        aus dem Dateimanager gestartete AppImage häufig in einer
+        eigenen transienten systemd-Scope ausgeführt
+        ("app-...AppImage@....service").
+        Beendet sich der Hauptprozess (hier über QApplication.quit()),
+        beendet systemd standardmäßig (KillMode=control-group) die
+        GESAMTE Cgroup - inklusive aller Kindprozesse. Das betrifft
+        auch das Updater-Skript, selbst wenn es über
+        start_new_session=True in eine eigene Sitzung gestartet wurde,
+        denn eine neue Session ändert nichts an der Cgroup-Zugehörigkeit.
+
+        Ergebnis: Der Updater wird zusammen mit WeintCompanion
+        abgeschossen, bevor er die neue Version installieren kann -
+        der Update-Button "funktioniert" scheinbar nicht.
+
+        Lösung: Ist "systemd-run" verfügbar, wird der Updater in
+        eine eigene, unabhängige transiente Scope ausgelagert
+        (--user --scope), die das Beenden von WeintCompanion übersteht.
+        """
+
+        systemd_run = shutil.which("systemd-run")
+
+        if systemd_run:
+
+            try:
+
+                subprocess.Popen(
+                    [
+                        systemd_run,
+                        "--user",
+                        "--scope",
+                        "--collect",
+                        "--quiet",
+                        "--",
+                    ]
+                    + args,
+                    start_new_session=True,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+
+                return
+
+            except Exception as exc:
+
+                self.manager.logger.warning(
+                    f"systemd-run fehlgeschlagen, nutze Fallback: {exc}"
+                )
+
+        #
+        # Fallback ohne systemd (z. B. andere Init-Systeme)
+        #
+
+        subprocess.Popen(
+            args,
+            start_new_session=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # --------------------------------------------------
+    # Windows-Waiter starten (unabhängig vom eigenen Prozess)
+    # --------------------------------------------------
+
+    def _spawn_windows_waiter(self, script):
+        """
+        Startet das Wartescript unsichtbar (kein Konsolenfenster)
+        und komplett unabhängig von WeintCompanion, damit es auch
+        nach dem Beenden von WeintCompanion weiterläuft.
+        """
+
+        creationflags = 0
+
+        creationflags |= getattr(
+            subprocess,
+            "CREATE_NO_WINDOW",
+            0,
+        )
+
+        creationflags |= getattr(
+            subprocess,
+            "DETACHED_PROCESS",
+            0,
+        )
+
+        subprocess.Popen(
+            [
+                "cmd",
+                "/c",
+                str(script),
+            ],
+            creationflags=creationflags,
+            close_fds=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # --------------------------------------------------
     # Update starten
     # --------------------------------------------------
 
@@ -195,14 +309,13 @@ class CompanionUpdater:
 
                 self.manager.stop_auto_sync()
 
-                subprocess.Popen(
+                self._spawn_detached(
                     [
                         str(script),
                         str(current),
                         str(file),
                         str(os.getpid()),
-                    ],
-                    start_new_session=True,
+                    ]
                 )
 
                 QApplication.quit()
@@ -210,7 +323,30 @@ class CompanionUpdater:
                 return True
 
             #
-            # Windows / macOS
+            # Windows
+            #
+
+            if Runtime.is_windows():
+
+                self.manager.logger.info(
+                    "Bereite Windows-Update vor..."
+                )
+
+                script = self.windows.prepare(
+                    installer=file,
+                    pid=os.getpid(),
+                )
+
+                self.manager.stop_auto_sync()
+
+                self._spawn_windows_waiter(script)
+
+                QApplication.quit()
+
+                return True
+
+            #
+            # macOS
             #
 
             self.manager.logger.info(
