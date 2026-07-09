@@ -51,6 +51,46 @@ except Exception:
 
 
 # --------------------------------------------------
+# Qt-Plugin-Diagnose (QT_DEBUG_PLUGINS)
+# --------------------------------------------------
+# Beobachtung: Bei manchen Nutzern (auch auf echtem Wayland,
+# XDG_SESSION_TYPE=wayland) wählt Qt trotzdem von sich aus die
+# "xcb"-Plattform, OBWOHL wir xcb gar nicht mehr erzwingen. Das
+# bedeutet: Qt versucht das native "wayland"-Plugin zu laden,
+# scheitert dabei aber leise (z. B. weil eine System-Bibliothek
+# wie libwayland-client/libxkbcommon-Version nicht passt) und
+# fällt automatisch auf xcb zurück - ganz ohne dass wir das aus
+# Python heraus sehen oder beeinflussen.
+#
+# QT_DEBUG_PLUGINS=1 lässt Qt genau protokollieren, welche
+# Plattform-Plugins es findet, prüft und warum ein Plugin
+# abgelehnt wird. Diese Ausgabe geht direkt auf stderr (C++-Ebene,
+# nicht über unseren Python-Logger), daher leiten wir stderr für
+# die Laufzeit der App zusätzlich in eine eigene Log-Datei um.
+
+try:
+
+    os.environ.setdefault("QT_DEBUG_PLUGINS", "1")
+
+    _qt_plugin_log_path = _crash_log_dir / "qt-plugins.log"
+
+    _qt_plugin_log_file = open(
+        _qt_plugin_log_path,
+        "w",
+        encoding="utf-8",
+    )
+
+    _original_stderr_fd = os.dup(2)
+
+    os.dup2(_qt_plugin_log_file.fileno(), 2)
+
+except Exception:
+
+    # Diagnose darf niemals den App-Start verhindern.
+    pass
+
+
+# --------------------------------------------------
 # Linux Wayland Fix
 # --------------------------------------------------
 # Einige Wayland-Systeme (z. B. Fedora) verursachen
@@ -114,6 +154,27 @@ from gui.theme.stylesheet import APP_STYLE
 def main():
 
     app = QApplication(sys.argv)
+
+    # Die Plattform-Wahl ist zu diesem Zeitpunkt bereits getroffen -
+    # stderr wieder normal verbinden, damit spätere Laufzeitfehler
+    # weiterhin im Terminal/Log sichtbar sind und nicht dauerhaft in
+    # qt-plugins.log verschwinden.
+    try:
+
+        os.dup2(_original_stderr_fd, 2)
+
+        os.close(_original_stderr_fd)
+
+        _qt_plugin_log_file.close()
+
+        print(
+            "[WeintCompanion] Qt-Plugin-Debug-Log: "
+            f"{_qt_plugin_log_path}"
+        )
+
+    except Exception:
+
+        pass
 
     # Optional: Ausgabe des verwendeten Qt-Backends
     print(f"[WeintCompanion] Qt Platform: {QGuiApplication.platformName()}")
