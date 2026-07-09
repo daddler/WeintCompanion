@@ -195,40 +195,81 @@ class CompanionUpdater:
         Lösung: Ist "systemd-run" verfügbar, wird der Updater in
         eine eigene, unabhängige transiente Scope ausgelagert
         (--user --scope), die das Beenden von WeintCompanion übersteht.
+
+        WICHTIG: systemd-run wird NUR verwendet, wenn wir auch
+        wirklich in einer solchen Scope laufen UND eine
+        funktionierende D-Bus-User-Session vorhanden ist. Auf
+        schlankeren Setups (z. B. i3, Sway, Hyprland - häufig auf
+        CachyOS) läuft die App oft gar nicht in einer Scope und/oder
+        die D-Bus-Session-Umgebung ist für den Startkontext nicht
+        vollständig gesetzt. In diesem Fall würde systemd-run im
+        Hintergrund lautlos fehlschlagen (z. B. "Failed to create
+        bus connection") - das Updater-Skript würde dann NIE
+        ausgeführt, obwohl unser Python-Code keinen Fehler bemerkt
+        (der Fehler passiert asynchron im schon gestarteten
+        Kindprozess). Deshalb wird hier vorher aktiv geprüft, ob
+        der Einsatz überhaupt nötig und sicher möglich ist - sonst
+        wird direkt der normale, bewährte Fallback genutzt.
         """
 
-        systemd_run = shutil.which("systemd-run")
+        if self._running_in_systemd_scope() and self._has_dbus_session():
 
-        if systemd_run:
+            systemd_run = shutil.which("systemd-run")
 
-            try:
+            if systemd_run:
 
-                subprocess.Popen(
-                    [
-                        systemd_run,
-                        "--user",
-                        "--scope",
-                        "--collect",
-                        "--quiet",
-                        "--",
-                    ]
-                    + args,
-                    start_new_session=True,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
+                try:
 
-                return
+                    #
+                    # WICHTIG für Debugging:
+                    # systemd-run kann asynchron fehlschlagen
+                    # (z. B. "Failed to create bus connection"),
+                    # ohne dass unser Popen()-Aufruf hier einen
+                    # Fehler wirft. Deshalb wird die Ausgabe in
+                    # eine Log-Datei neben der AppImage geschrieben,
+                    # statt sie mit DEVNULL zu verwerfen - so lässt
+                    # sich ein stiller Fehlschlag im Nachhinein
+                    # nachvollziehen.
+                    #
 
-            except Exception as exc:
+                    debug_log_path = (
+                        Path(args[1]).parent
+                        / "systemd-run-debug.log"
+                    )
 
-                self.manager.logger.warning(
-                    f"systemd-run fehlgeschlagen, nutze Fallback: {exc}"
-                )
+                    debug_log = open(
+                        debug_log_path,
+                        "w",
+                        encoding="utf-8",
+                    )
+
+                    subprocess.Popen(
+                        [
+                            systemd_run,
+                            "--user",
+                            "--scope",
+                            "--collect",
+                            "--",
+                        ]
+                        + args,
+                        start_new_session=True,
+                        stdin=subprocess.DEVNULL,
+                        stdout=debug_log,
+                        stderr=debug_log,
+                    )
+
+                    return
+
+                except Exception as exc:
+
+                    self.manager.logger.warning(
+                        f"systemd-run fehlgeschlagen, nutze Fallback: {exc}"
+                    )
 
         #
-        # Fallback ohne systemd (z. B. andere Init-Systeme)
+        # Normaler Fallback (kein Desktop-Scope, kein systemd
+        # oder keine D-Bus-Session - z. B. i3, Sway, Hyprland,
+        # oder direkter Start über ein Terminal)
         #
 
         subprocess.Popen(
@@ -237,6 +278,50 @@ class CompanionUpdater:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+        )
+
+    # --------------------------------------------------
+
+    @staticmethod
+    def _running_in_systemd_scope() -> bool:
+        """
+        Prüft, ob der aktuelle Prozess innerhalb einer
+        transienten systemd-Scope läuft (typisch für Apps, die
+        über GNOME/KDE per Doppelklick/Dateimanager gestartet
+        wurden). Nur dann besteht überhaupt das Risiko, dass
+        systemd beim Beenden die komplette Cgroup mitsamt dem
+        Updater-Prozess killt.
+        """
+
+        try:
+
+            cgroup_file = Path("/proc/self/cgroup")
+
+            if not cgroup_file.exists():
+
+                return False
+
+            content = cgroup_file.read_text()
+
+            return ".scope" in content
+
+        except Exception:
+
+            return False
+
+    # --------------------------------------------------
+
+    @staticmethod
+    def _has_dbus_session() -> bool:
+        """
+        Prüft, ob eine funktionierende D-Bus-User-Session
+        Umgebung vorhanden ist. systemd-run benötigt diese, um
+        mit dem systemd --user Manager zu kommunizieren.
+        """
+
+        return bool(
+            os.environ.get("DBUS_SESSION_BUS_ADDRESS")
+            or os.environ.get("XDG_RUNTIME_DIR")
         )
 
     # --------------------------------------------------
