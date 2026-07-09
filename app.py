@@ -91,38 +91,31 @@ except Exception:
 
 
 # --------------------------------------------------
-# Linux Wayland Fix
+# Linux Plattform-Wahl
 # --------------------------------------------------
-# Einige Wayland-Systeme (z. B. Fedora) verursachen
-# Darstellungsfehler mit Qt (Transparenz/Ghosting).
-# In diesem Fall wird automatisch XWayland (xcb) genutzt.
+# ERKENNTNIS (07/2026): Unsere bisherige Logik hat
+# den xcb/XI2-Absturzschutz nur aktiviert, wenn WIR SELBST anhand
+# von XDG_SESSION_TYPE erkannt haben, dass eine Wayland-Sitzung
+# läuft. Das ist unzuverlässig: Qt kann - unabhängig von unserer
+# Erkennung - bei jedem Start selbst auf xcb zurückfallen (z. B.
+# wenn WAYLAND_DISPLAY im Prozesskontext nicht sichtbar ist, was
+# bei AppImages/bestimmten Startwegen vorkommt), OHNE dass unsere
+# Bedingung das mitbekommt. In diesem Fall griff unser SEGV-Schutz
+# (QT_XCB_NO_XI2) gar nicht - und genau das hat den
+# ursprünglichen libxkbcommon/Qt6XcbQpa-Crash reproduziert, obwohl
+# der Fix längst im Code stand.
 #
-# WICHTIG: Dieser Workaround ist ein zweischneidiges Schwert.
-# Er behebt zwar das ursprüngliche Ghosting bei transparenten
-# Widgets, aber das zusätzliche QT_XCB_NO_XI2=1 (siehe unten) ist
-# selbst ein inoffizieller Hack, der auf manchen Distros/Treiber-
-# Kombis neue, andere Abstürze verursacht hat (Nutzerbericht,
-# CachyOS/KDE, 07/2026).
-#
-# Deshalb ist xcb NICHT mehr der Standard. Das Ghosting-Problem
-# wird stattdessen direkt an der Quelle behoben (siehe
-# gui/widgets/navigation_item.py und gui/widgets/hero_banner.py:
-# vollständige Repaints statt Teil-Repaints bei transparenten
-# Widgets). xcb bleibt nur noch als manueller Notfall-Fallback
-# erhalten, falls das Ghosting bei jemandem doch wieder auftritt:
-#
-#   WEINT_FORCE_XCB_WORKAROUND=1   -> xcb + XI2-Fix aktivieren
-#                                       (altes Verhalten)
-#   WEINT_FORCE_XI2=1               -> zusammen mit obigem: xcb
-#                                       aktiv, aber XI2 NICHT
-#                                       deaktivieren
+# LÖSUNG: Statt selbst zu raten, ob xcb genutzt wird, geben wir
+# Qt eine Fallback-Liste vor ("wayland;xcb") - Qt versucht dann
+# selbst zuerst nativ Wayland zu laden und fällt nur bei Bedarf
+# automatisch auf xcb zurück. Und der SEGV-Schutz (QT_XCB_NO_XI2)
+# wird IMMER gesetzt, unabhängig davon, ob/warum xcb am Ende
+# genutzt wird - er ist unter Wayland ein no-op und schützt unter
+# xcb in jedem Fall, egal wie Qt dort gelandet ist.
 
-if (
-    platform.system() == "Linux"
-    and os.environ.get("XDG_SESSION_TYPE") == "wayland"
-    and os.environ.get("WEINT_FORCE_XCB_WORKAROUND") == "1"
-):
-    os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+if platform.system() == "Linux":
+
+    os.environ.setdefault("QT_QPA_PLATFORM", "wayland;xcb")
 
     # --------------------------------------------------
     # Absturz-Fix: SEGV in libxkbcommon (Qt6XcbQpa)
@@ -138,7 +131,12 @@ if (
     #
     # Deaktiviert man XI2, nutzt Qt stattdessen die klassischen
     # X11-Core-Events für Tastatur/Maus - der fehlerhafte Codepfad
-    # wird dadurch komplett umgangen.
+    # wird dadurch komplett umgangen. Betrifft NUR xcb, ist unter
+    # nativem Wayland wirkungslos.
+    #
+    # WEINT_FORCE_XI2=1 erlaubt betroffenen Nutzern, XI2 gezielt
+    # wieder zu aktivieren, falls dieser Fix bei ihnen selbst neue
+    # Probleme verursacht (Einzelbericht CachyOS/KDE, 07/2026).
     if os.environ.get("WEINT_FORCE_XI2") != "1":
 
         os.environ.setdefault("QT_XCB_NO_XI2", "1")
