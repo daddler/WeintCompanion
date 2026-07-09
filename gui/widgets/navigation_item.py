@@ -32,6 +32,16 @@ class NavigationItem(QFrame):
 
         self.setAttribute(Qt.WA_TranslucentBackground)
 
+        # Manche Wayland-Compositor (z. B. GNOME/Mutter) tracken nur
+        # teilweise "beschädigte" Bildbereiche beim Neuzeichnen. Bei
+        # transparenten Widgets kann das dazu führen, dass alte Pixel
+        # stehen bleiben ("Ghosting"), weil Qt nicht immer die volle
+        # Fläche als geändert markiert. WA_NoSystemBackground stellt
+        # sicher, dass Qt bei jedem update() konsequent den gesamten
+        # Widget-Bereich neu zeichnet, statt auf ein automatisches
+        # Hintergrund-Clearing zu vertrauen.
+        self.setAttribute(Qt.WA_NoSystemBackground, True)
+
         self.setStyleSheet("""
         QFrame{
             background:transparent;

@@ -269,6 +269,11 @@ class HeroBanner(QWidget):
         self.content = QWidget()
         self.content.setAttribute(Qt.WA_TranslucentBackground)
 
+        # Siehe Kommentar in gui/widgets/navigation_item.py: verhindert
+        # Ghosting bei transparenten Widgets auf manchen Wayland-
+        # Compositorn, indem Qt konsequent vollständig neu zeichnet.
+        self.content.setAttribute(Qt.WA_NoSystemBackground, True)
+
         self.root.addWidget(self.content)
 
         #
@@ -467,6 +472,13 @@ class HeroBanner(QWidget):
 
         self.cards_container.setAttribute(
             Qt.WA_TranslucentBackground
+        )
+
+        # Siehe Kommentar in gui/widgets/navigation_item.py: verhindert
+        # Ghosting bei transparenten Widgets auf manchen Wayland-
+        # Compositorn, indem Qt konsequent vollständig neu zeichnet.
+        self.cards_container.setAttribute(
+            Qt.WA_NoSystemBackground, True
         )
 
         self.cards_layout = QHBoxLayout(

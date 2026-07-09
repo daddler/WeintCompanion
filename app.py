@@ -58,26 +58,29 @@ except Exception:
 # In diesem Fall wird automatisch XWayland (xcb) genutzt.
 #
 # WICHTIG: Dieser Workaround ist ein zweischneidiges Schwert.
-# Er behebt zwar Darstellungsfehler auf manchen Systemen, aber
-# das zusätzliche QT_XCB_NO_XI2=1 (siehe unten) ist selbst ein
-# inoffizieller Hack, der auf manchen Distros/Treiber-Kombis neue,
-# andere Abstürze verursachen kann (so beobachtet nach Einführung
-# dieses Fixes). Deshalb lässt sich das Verhalten jetzt über eine
-# Umgebungsvariable steuern, ohne den Code anfassen zu müssen:
+# Er behebt zwar das ursprüngliche Ghosting bei transparenten
+# Widgets, aber das zusätzliche QT_XCB_NO_XI2=1 (siehe unten) ist
+# selbst ein inoffizieller Hack, der auf manchen Distros/Treiber-
+# Kombis neue, andere Abstürze verursacht hat (Nutzerbericht,
+# CachyOS/KDE, 07/2026).
 #
-#   WEINT_DISABLE_XCB_WORKAROUND=1   -> Workaround komplett aus
-#                                        (natives Wayland nutzen)
-#   WEINT_FORCE_XI2=1                -> xcb bleibt aktiv, aber
-#                                        XI2 wird NICHT deaktiviert
+# Deshalb ist xcb NICHT mehr der Standard. Das Ghosting-Problem
+# wird stattdessen direkt an der Quelle behoben (siehe
+# gui/widgets/navigation_item.py und gui/widgets/hero_banner.py:
+# vollständige Repaints statt Teil-Repaints bei transparenten
+# Widgets). xcb bleibt nur noch als manueller Notfall-Fallback
+# erhalten, falls das Ghosting bei jemandem doch wieder auftritt:
 #
-# So kann ein betroffener Nutzer selbst testen, welche der beiden
-# Maßnahmen bei ihm tatsächlich die Ursache ist, ohne dass wir
-# blind weitere Kombinationen ausprobieren müssen.
+#   WEINT_FORCE_XCB_WORKAROUND=1   -> xcb + XI2-Fix aktivieren
+#                                       (altes Verhalten)
+#   WEINT_FORCE_XI2=1               -> zusammen mit obigem: xcb
+#                                       aktiv, aber XI2 NICHT
+#                                       deaktivieren
 
 if (
     platform.system() == "Linux"
     and os.environ.get("XDG_SESSION_TYPE") == "wayland"
-    and os.environ.get("WEINT_DISABLE_XCB_WORKAROUND") != "1"
+    and os.environ.get("WEINT_FORCE_XCB_WORKAROUND") == "1"
 ):
     os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
 
