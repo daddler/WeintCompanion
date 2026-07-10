@@ -7,41 +7,44 @@ from PySide6.QtWidgets import QPushButton
 from core.resources import Resources
 
 #
-# Discord "Blurple" - verbunden - und ein neutraler Grauton -
-# nicht verbunden -, damit der Zustand auf einen Blick erkennbar ist.
+# Discord "Blurple" (#5865F2, die offizielle Markenfarbe) durchgehend
+# als Hintergrund - so wie Discords eigene "Mit Discord verbinden"-
+# Buttons. Der Verbindungsstatus wird stattdessen über einen kleinen
+# Präsenz-Punkt (grün/grau, wie Discords Online-Indikator) und den
+# Text unterschieden, nicht über eine andere Grundfarbe.
 #
 
-CONNECTED_STYLE = """
-QPushButton{
-    background:rgba(88,101,242,35);
-    color:#C9CDFB;
-    border:1px solid rgba(88,101,242,120);
+BASE_STYLE = """
+QPushButton{{
+    background:{bg};
+    color:#FFFFFF;
+    border:none;
     border-radius:16px;
-    padding-left:14px;
+    padding-left:12px;
     padding-right:14px;
     font-size:12px;
     font-weight:700;
-}
-QPushButton:hover{
-    background:rgba(88,101,242,55);
-}
+    text-align:left;
+}}
+QPushButton:hover{{
+    background:{bg_hover};
+}}
+QPushButton:pressed{{
+    background:{bg_pressed};
+}}
 """
 
-DISCONNECTED_STYLE = """
-QPushButton{
-    background:rgba(255,255,255,10);
-    color:#AEB4C2;
-    border:1px solid rgba(255,255,255,30);
-    border-radius:16px;
-    padding-left:14px;
-    padding-right:14px;
-    font-size:12px;
-    font-weight:700;
-}
-QPushButton:hover{
-    background:rgba(255,255,255,20);
-}
-"""
+CONNECTED_STYLE = BASE_STYLE.format(
+    bg="#5865F2",
+    bg_hover="#6A75F5",
+    bg_pressed="#4752C4",
+)
+
+DISCONNECTED_STYLE = BASE_STYLE.format(
+    bg="#454B54",
+    bg_hover="#50565F",
+    bg_pressed="#3A3F47",
+)
 
 
 class DiscordStatusButton(QPushButton):
@@ -60,14 +63,14 @@ class DiscordStatusButton(QPushButton):
         self.setCursor(Qt.PointingHandCursor)
 
         self.setIcon(
-            QIcon(Resources.discord())
+            QIcon(Resources.discord_mark())
         )
 
-        self.setIconSize(QSize(16, 16))
+        self.setIconSize(QSize(18, 18))
 
-        self.setFixedHeight(32)
+        self.setFixedHeight(34)
 
-        self.setFlat(True)
+        self.setMinimumWidth(120)
 
         #
         # Lokale Datei ist billig zu lesen - ein einfacher Timer
@@ -112,7 +115,7 @@ class DiscordStatusButton(QPushButton):
         else:
 
             self.setText(
-                "  Nicht verbunden"
+                "  Discord verbinden"
             )
 
             self.setStyleSheet(

@@ -153,6 +153,19 @@ class Resources:
         )
 
     @staticmethod
+    def discord_mark():
+        """
+        Das tatsächliche Discord-Logo (Clyde-Mark) - anders als
+        Resources.discord() (generisches Chat-Icon), für Stellen, an
+        denen die Marke selbst erkennbar sein soll (z. B. der
+        Verbindungsstatus-Button).
+        """
+
+        return Resources.path(
+            "resources/icons/discord_mark.svg"
+        )
+
+    @staticmethod
     def changelog():
 
         return Resources.path(

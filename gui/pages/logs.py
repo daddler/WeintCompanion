@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.paths import Paths
+from core.runtime import Runtime
 from gui.widgets.log_widget import LogWidget
 
 from core.resources import Resources
@@ -128,8 +129,16 @@ class LogsPage(QWidget):
 
         if sys.platform.startswith("linux"):
 
+            #
+            # xdg-open ist meist selbst ein Shellskript - ohne
+            # bereinigte Umgebung erbt es das AppImage-eigene
+            # LD_LIBRARY_PATH und crasht lautlos (siehe
+            # Runtime.clean_subprocess_env()).
+            #
+
             subprocess.Popen(
-                ["xdg-open", str(folder)]
+                ["xdg-open", str(folder)],
+                env=Runtime.clean_subprocess_env(),
             )
 
         elif sys.platform == "win32":

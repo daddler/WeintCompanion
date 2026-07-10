@@ -3,6 +3,8 @@ import platform
 import subprocess
 from pathlib import Path
 
+from core.runtime import Runtime
+
 
 def is_windows() -> bool:
     return platform.system() == "Windows"
@@ -34,8 +36,16 @@ def open_folder(path):
 
         elif is_linux():
 
+            #
+            # xdg-open ist meist selbst ein Shellskript - ohne
+            # bereinigte Umgebung erbt es das AppImage-eigene
+            # LD_LIBRARY_PATH und crasht lautlos (siehe
+            # Runtime.clean_subprocess_env()).
+            #
+
             subprocess.Popen(
-                ["xdg-open", str(path)]
+                ["xdg-open", str(path)],
+                env=Runtime.clean_subprocess_env(),
             )
 
         elif is_macos():
