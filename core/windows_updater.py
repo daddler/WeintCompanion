@@ -29,6 +29,15 @@ class WindowsUpdater:
         pid: int,
     ) -> Path:
 
+        #
+        # /VERYSILENT + /SUPPRESSMSGBOXES + /NORESTART: Ohne diese
+        # Flags öffnet sich der volle Inno-Setup-Wizard, durch den der
+        # Nutzer manuell klicken muss - startet dieses Fenster im
+        # Hintergrund oder wird schlicht übersehen, sieht das Update
+        # aus wie "es passiert nichts". Der Installer relauncht die App
+        # danach selbst (siehe installer.iss, [Run]-Sektion).
+        #
+
         script = (
             "@echo off\r\n"
             ":wait\r\n"
@@ -37,7 +46,7 @@ class WindowsUpdater:
             "    timeout /t 1 /nobreak >NUL\r\n"
             "    goto wait\r\n"
             ")\r\n"
-            f'start "" "{installer}"\r\n'
+            f'start "" "{installer}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART\r\n'
             'del "%~f0"\r\n'
         )
 

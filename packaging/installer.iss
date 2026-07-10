@@ -1,5 +1,5 @@
 #define MyAppName "WeintCompanion"
-#define MyAppVersion "0.5.8"
+#define MyAppVersion "0.5.9"
 #define MyAppPublisher "Fabi (daddler2419)"
 #define MyAppExeName "WeintCompanion.exe"
 
@@ -41,4 +41,7 @@ Name: "{group}\Weint Companion"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\Weint Companion"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Weint Companion starten"; Flags: nowait postinstall skipifsilent
+; Kein "skipifsilent": Der Auto-Updater ruft den Installer mit
+; /VERYSILENT auf und erwartet, dass WeintCompanion danach automatisch
+; neu startet - genau wie beim Linux-Updater.
+Filename: "{app}\{#MyAppExeName}"; Description: "Weint Companion starten"; Flags: nowait postinstall

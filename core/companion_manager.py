@@ -79,16 +79,36 @@ class CompanionManager:
 
     def _initialize_worker(self):
 
-        self.full_refresh()
-
         #
-        # Auto-Sync im Hauptthread starten (QTimer muss im Hauptthread laufen)
+        # full_refresh() darf den Start von Auto-Sync niemals verhindern:
+        # Ohne dieses try/except würde eine einzelne fehlgeschlagene
+        # Anfrage (Netzwerk-Hänger, Discord/GitHub down, defekte
+        # SavedVariables, ...) diesen Thread lautlos beenden - in einer
+        # AppImage/EXE ohne sichtbares Terminal sieht das für Nutzer wie
+        # ein Absturz aus, obwohl nur dieser Hintergrund-Thread stirbt
+        # und Auto-Sync danach nie mehr anläuft.
         #
 
-        QTimer.singleShot(
-            0,
-            self.start_auto_sync,
-        )
+        try:
+
+            self.full_refresh()
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"Initialisierung fehlgeschlagen: {exc}"
+            )
+
+        finally:
+
+            #
+            # Auto-Sync im Hauptthread starten (QTimer muss im Hauptthread laufen)
+            #
+
+            QTimer.singleShot(
+                0,
+                self.start_auto_sync,
+            )
 
     # --------------------------------------------------
     # Automatische Synchronisation
@@ -151,6 +171,12 @@ class CompanionManager:
         try:
 
             self.sync.process()
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"Sync fehlgeschlagen: {exc}"
+            )
 
         finally:
 

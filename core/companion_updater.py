@@ -49,6 +49,8 @@ class CompanionUpdater:
 
         state = self.manager.state
 
+        self._warn_if_previous_update_incomplete()
+
         release = self.github.get_latest_release()
 
         if release is None:
@@ -85,6 +87,37 @@ class CompanionUpdater:
 
             self.manager.logger.success(
                 "Companion ist aktuell."
+            )
+
+    # --------------------------------------------------
+    # Vorheriges Update prüfen
+    # --------------------------------------------------
+
+    def _warn_if_previous_update_incomplete(self):
+        """
+        Erkennt ein Update, das zuletzt nicht zu Ende lief (z. B. weil
+        der Updater-Prozess durch eine systemd-Scope mit abgeschossen
+        wurde, siehe _spawn_detached). In diesem Fall liegt neben der
+        AppImage noch eine ".new"-Datei, die nie umbenannt wurde. Ohne
+        diese Prüfung bemerkt der Nutzer das nur daran, dass "einfach
+        nichts passiert" ist - hier wird es wenigstens sichtbar geloggt.
+        """
+
+        if not (Runtime.is_linux() and Runtime.is_appimage()):
+            return
+
+        current = Runtime.current_executable()
+
+        leftover = current.with_name(
+            current.name + ".new"
+        )
+
+        if leftover.exists():
+
+            self.manager.logger.warning(
+                "Das letzte Companion-Update wurde nicht abgeschlossen "
+                f"({leftover.name} liegt noch neben der AppImage). "
+                "Bitte Update erneut starten."
             )
 
     # --------------------------------------------------
@@ -371,6 +404,20 @@ class CompanionUpdater:
         file = self.download_update()
 
         if file is None:
+            return False
+
+        #
+        # Ein leerer/fehlender Download darf niemals als "Update" an
+        # den Updater weitergereicht werden (z. B. bei einem Verbindungs-
+        # abbruch mitten im Stream, der keine Exception auslöst).
+        #
+
+        if not file.exists() or file.stat().st_size == 0:
+
+            self.manager.logger.error(
+                "Heruntergeladene Update-Datei ist leer oder fehlt."
+            )
+
             return False
 
         try:
