@@ -18,6 +18,7 @@ from core.resources import Resources
 from gui.theme.metrics import Metrics
 
 from gui.widgets.sidebar import Sidebar
+from gui.widgets.discord_status_button import DiscordStatusButton
 
 from gui.pages.dashboard import DashboardPage
 from gui.pages.addon import AddonPage
@@ -131,6 +132,39 @@ class MainWindow(QMainWindow):
 
         #
         # --------------------------------------------------
+        # Kopfzeile (Discord-Status, auf jeder Seite sichtbar)
+        # --------------------------------------------------
+        #
+
+        header_row = QHBoxLayout()
+
+        header_row.setContentsMargins(
+            0,
+            16,
+            20,
+            10,
+        )
+
+        header_row.addStretch()
+
+        self.discord_status_button = DiscordStatusButton(
+            self.manager
+        )
+
+        self.discord_status_button.clicked.connect(
+            self.open_discord_settings
+        )
+
+        header_row.addWidget(
+            self.discord_status_button
+        )
+
+        self.content_layout.addLayout(
+            header_row
+        )
+
+        #
+        # --------------------------------------------------
         # Seiten
         # --------------------------------------------------
         #
@@ -182,6 +216,8 @@ class MainWindow(QMainWindow):
                 self.sync
             )
         )
+
+        self.SETTINGS_PAGE_INDEX = self.pages.count()
 
         self.pages.addWidget(
             self.wrap_page(
@@ -297,6 +333,16 @@ class MainWindow(QMainWindow):
         #
 
         self.sidebar.refresh()
+
+    # --------------------------------------------------
+    # Discord-Statusbutton
+    # --------------------------------------------------
+
+    def open_discord_settings(self):
+
+        self.change_page(
+            self.SETTINGS_PAGE_INDEX
+        )
 
     # --------------------------------------------------
     # Resize

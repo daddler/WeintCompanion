@@ -7,6 +7,8 @@ import webbrowser
 
 import httpx
 
+from core.runtime import Runtime
+
 # --------------------------------------------------
 # Discord OAuth2 Konfiguration
 # --------------------------------------------------
@@ -113,9 +115,20 @@ class DiscordAuth:
             "prompt": "consent",
         })
 
-        webbrowser.open(
-            f"{DISCORD_AUTHORIZE_URL}?{query}"
-        )
+        #
+        # Siehe Runtime.clean_environ(): ohne das vererbt der
+        # AppImage/PyInstaller-Bundle sein eigenes LD_LIBRARY_PATH an
+        # den vom Browser-Öffnen intern gestarteten Subprozess (meist
+        # über /bin/sh) - der crasht dann sofort mit einem "symbol
+        # lookup error", der Browser öffnet nie, und der Login läuft
+        # stattdessen in den Timeout unten.
+        #
+
+        with Runtime.clean_environ():
+
+            webbrowser.open(
+                f"{DISCORD_AUTHORIZE_URL}?{query}"
+            )
 
         try:
 

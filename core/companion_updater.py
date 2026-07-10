@@ -289,6 +289,17 @@ class CompanionUpdater:
                         stdin=subprocess.DEVNULL,
                         stdout=debug_log,
                         stderr=debug_log,
+                        #
+                        # Siehe Runtime.clean_subprocess_env(): ohne
+                        # das vererbt das AppImage-Bundle sein eigenes
+                        # LD_LIBRARY_PATH an update.sh (und damit an
+                        # jedes darin aufgerufene System-Tool wie mv/
+                        # chmod/bash selbst) - klassisches "symbol
+                        # lookup error", das update.sh lautlos
+                        # abbrechen lässt, bevor es die AppImage
+                        # ersetzen kann.
+                        #
+                        env=Runtime.clean_subprocess_env(),
                     )
 
                     return
@@ -311,6 +322,7 @@ class CompanionUpdater:
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=Runtime.clean_subprocess_env(),
         )
 
     # --------------------------------------------------
