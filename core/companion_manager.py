@@ -15,11 +15,30 @@ from core.companion_updater import CompanionUpdater
 from core.launcher import Launcher
 from addon.sync_reader import SyncReader
 from core.sync_manager import SyncManager
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QObject, QTimer, Signal
 from core.discord_status import DiscordStatus
 from core.discord_account import DiscordAccountStore
 from core.discord_auth import DiscordAuth
 from core.discord_roster_sync import DiscordRosterSync
+
+
+class _AutoSyncStarter(QObject):
+    """
+    Stößt start_auto_sync() garantiert im Hauptthread an, egal von
+    welchem Thread aus emittiert wird.
+
+    QTimer.singleShot(0, callback) aus einem Thread OHNE eigene
+    laufende Qt-Event-Loop (wie unser InitThread - ein reiner
+    threading.Thread, der nie .exec() aufruft) ist dafür nicht
+    zuverlässig: der Callback braucht eine Event-Loop, die ihn
+    abarbeitet, und die des aufrufenden Threads gibt es hier gar
+    nicht. Eine Signal/Slot-Verbindung über Thread-Grenzen wird
+    dagegen immer über die Event-Loop des EMPFÄNGER-Threads
+    zugestellt (hier: der Hauptthread, der mit app.exec() läuft) -
+    unabhängig davon, ob der Sender-Thread selbst eine Event-Loop hat.
+    """
+
+    requested = Signal()
 
 
 class CompanionManager:
@@ -52,6 +71,19 @@ class CompanionManager:
 
         self.sync_timer.timeout.connect(
             self.run_auto_sync
+        )
+
+        #
+        # _AutoSyncStarter wird hier im Hauptthread erzeugt (Companion-
+        # Manager selbst lebt im Hauptthread) - seine Thread-Affinität
+        # ist damit korrekt gesetzt, bevor _initialize_worker im
+        # Hintergrund-Thread emit() darauf aufruft.
+        #
+
+        self._auto_sync_starter = _AutoSyncStarter()
+
+        self._auto_sync_starter.requested.connect(
+            self.start_auto_sync
         )
 
         self._sync_busy = False
@@ -108,13 +140,12 @@ class CompanionManager:
         finally:
 
             #
-            # Auto-Sync im Hauptthread starten (QTimer muss im Hauptthread laufen)
+            # Siehe _AutoSyncStarter-Docstring: garantiert im
+            # Hauptthread zugestellt, unabhängig von der (fehlenden)
+            # Event-Loop dieses Threads.
             #
 
-            QTimer.singleShot(
-                0,
-                self.start_auto_sync,
-            )
+            self._auto_sync_starter.requested.emit()
 
     # --------------------------------------------------
     # Automatische Synchronisation
