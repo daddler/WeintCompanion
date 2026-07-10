@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
+from core.lua_table import upsert_variable
+
 
 class SyncReader:
 
@@ -255,12 +257,13 @@ class SyncReader:
                 break
 
         #
-        # Lua-Datei neu erzeugen
+        # Nur den WeintCompanionDB-Block ersetzen - siehe
+        # core/lua_table.py: die Datei enthält daneben auch
+        # WeintCodex_SavedData, das hier unangetastet bleiben muss.
         #
 
         lines = []
 
-        lines.append("WeintCompanionDB = {")
         lines.append('["version"] = 1,')
         lines.append(f'["lastId"] = {last_id},')
         lines.append('["queue"] = {')
@@ -288,14 +291,11 @@ class SyncReader:
             ])
 
         lines.append("},")
-        lines.append("}")
 
-        file.write_text(
-
-            "\n".join(lines),
-
-            encoding="utf-8",
-
+        upsert_variable(
+            file,
+            "WeintCompanionDB",
+            "\n".join(lines) + "\n",
         )
 
         return True

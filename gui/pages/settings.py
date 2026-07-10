@@ -1,5 +1,7 @@
 from pathlib import Path
+import threading
 
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -17,6 +19,16 @@ from core.paths import Paths
 from core.resources import Resources
 
 
+class _DiscordLoginBridge(QObject):
+    """
+    Meldet das Ergebnis des Discord-Logins thread-sicher an den
+    Hauptthread zurück (der Login blockiert im Hintergrund-Thread,
+    siehe SettingsPage._run_discord_login).
+    """
+
+    finished = Signal(object, object)  # (result_dict | None, error_str | None)
+
+
 class SettingsPage(QWidget):
 
     def __init__(self, manager):
@@ -26,6 +38,11 @@ class SettingsPage(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setSpacing(18)
+
+        self._discord_bridge = _DiscordLoginBridge(self)
+        self._discord_bridge.finished.connect(
+            self._on_discord_login_finished
+        )
 
         # --------------------------------------------------
         # Titel
@@ -185,6 +202,88 @@ class SettingsPage(QWidget):
 
         layout.addWidget(
             wow
+        )
+
+        #
+        # ==================================================
+        # Discord
+        # ==================================================
+        #
+
+        discord = SectionCard(
+            Resources.discord(),
+            "Discord",
+        )
+
+        discord_layout = QVBoxLayout()
+        discord_layout.setSpacing(12)
+
+        self.discord_status = QLabel("Nicht verbunden")
+
+        self.discord_status.setStyleSheet("""
+        QLabel{
+            color:#AEB4C2;
+            font-size:14px;
+            font-weight:700;
+            background:transparent;
+        }
+        """)
+
+        discord_layout.addWidget(
+            self.discord_status
+        )
+
+        self.discord_hint = QLabel(
+            "Verknüpfe deinen Discord-Account, damit Companion "
+            "deinen Raid-Roster automatisch ans Addon übergeben kann."
+        )
+
+        self.discord_hint.setWordWrap(True)
+
+        self.discord_hint.setStyleSheet("""
+        QLabel{
+            color:#AEB4C2;
+            font-size:13px;
+            background:transparent;
+        }
+        """)
+
+        discord_layout.addWidget(
+            self.discord_hint
+        )
+
+        discord_button_row = QHBoxLayout()
+
+        discord_button_row.addStretch()
+
+        self.discord_unlink_button = HeroButton(
+            "Trennen",
+            primary=False,
+        )
+
+        self.discord_login_button = HeroButton(
+            "Mit Discord verbinden",
+            primary=True,
+        )
+
+        discord_button_row.addWidget(
+            self.discord_unlink_button
+        )
+
+        discord_button_row.addWidget(
+            self.discord_login_button
+        )
+
+        discord_layout.addLayout(
+            discord_button_row
+        )
+
+        discord.addLayout(
+            discord_layout
+        )
+
+        layout.addWidget(
+            discord
         )
 
         #
@@ -381,6 +480,14 @@ class SettingsPage(QWidget):
             self.save_settings
         )
 
+        self.discord_login_button.clicked.connect(
+            self.start_discord_login
+        )
+
+        self.discord_unlink_button.clicked.connect(
+            self.discord_unlink
+        )
+
         self.refresh()
 
     # --------------------------------------------------
@@ -434,6 +541,75 @@ class SettingsPage(QWidget):
             self.path_label.setText(
                 "Bitte wähle deinen World of Warcraft Classic-Ordner aus."
             )
+
+        #
+        # Discord
+        #
+
+        account = self.manager.discord_account.load()
+
+        if account:
+
+            self.discord_status.setText(
+                f"Verbunden als {account.get('username', '?')}"
+            )
+
+            self.discord_status.setStyleSheet("""
+            QLabel{
+                color:#78D879;
+                font-size:14px;
+                font-weight:700;
+                background:transparent;
+            }
+            """)
+
+            if account.get("authorized"):
+
+                self.discord_hint.setText(
+                    "Dein Account darf den Raid-Roster automatisch "
+                    "abrufen - Companion übergibt neue Anmeldungen "
+                    "automatisch ans Addon."
+                )
+
+            else:
+
+                self.discord_hint.setText(
+                    "Verbunden, aber dieser Account darf den "
+                    "Raid-Roster nicht abrufen (fehlende Rolle). "
+                    "Wende dich an einen Raidlead/Officer."
+                )
+
+            self.discord_login_button.setText(
+                "Erneut verbinden"
+            )
+
+            self.discord_unlink_button.setEnabled(True)
+
+        else:
+
+            self.discord_status.setText(
+                "Nicht verbunden"
+            )
+
+            self.discord_status.setStyleSheet("""
+            QLabel{
+                color:#F28C8C;
+                font-size:14px;
+                font-weight:700;
+                background:transparent;
+            }
+            """)
+
+            self.discord_hint.setText(
+                "Verknüpfe deinen Discord-Account, damit Companion "
+                "deinen Raid-Roster automatisch ans Addon übergeben kann."
+            )
+
+            self.discord_login_button.setText(
+                "Mit Discord verbinden"
+            )
+
+            self.discord_unlink_button.setEnabled(False)
 
         #
         # Einstellungen
@@ -677,6 +853,96 @@ class SettingsPage(QWidget):
 
         self.manager.logger.success(
             f"{count} Backup(s) gelöscht."
+        )
+
+        self.refresh()
+
+    # --------------------------------------------------
+    # Discord-Login
+    # --------------------------------------------------
+    # Der Login blockiert (öffnet den Browser, wartet auf den lokalen
+    # Redirect, tauscht den Code beim Bot aus) - läuft deshalb in
+    # einem Hintergrund-Thread, damit die UI währenddessen nicht
+    # einfriert. Das Ergebnis kommt thread-sicher per Qt-Signal
+    # zurück (siehe _CompanionUpdateBridge in dashboard.py fürs
+    # gleiche Muster).
+
+    def start_discord_login(self):
+
+        self.discord_login_button.setEnabled(False)
+        self.discord_unlink_button.setEnabled(False)
+
+        self.discord_status.setText(
+            "Browser öffnet sich - bitte Discord-Login abschließen..."
+        )
+
+        thread = threading.Thread(
+            target=self._discord_login_worker,
+            daemon=True,
+            name="DiscordLoginThread",
+        )
+
+        thread.start()
+
+    def _discord_login_worker(self):
+
+        try:
+
+            result = self.manager.discord_auth.login()
+
+        except Exception as exc:
+
+            self._discord_bridge.finished.emit(None, str(exc))
+
+            return
+
+        self._discord_bridge.finished.emit(result, None)
+
+    def _on_discord_login_finished(self, result, error):
+
+        if error:
+
+            self.manager.logger.error(
+                f"Discord-Login fehlgeschlagen: {error}"
+            )
+
+        else:
+
+            self.manager.discord_account.save(result)
+
+            if result.get("authorized"):
+
+                self.manager.logger.success(
+                    f"Discord verbunden als {result.get('username')}."
+                )
+
+            else:
+
+                self.manager.logger.warning(
+                    f"Discord verbunden als {result.get('username')}, "
+                    "aber ohne Berechtigung für den Raid-Roster-Export."
+                )
+
+        self.refresh()
+
+    # --------------------------------------------------
+    # Discord trennen
+    # --------------------------------------------------
+
+    def discord_unlink(self):
+
+        account = self.manager.discord_account.load()
+
+        if account and account.get("companion_token"):
+
+            self.manager.discord_auth.unlink(
+                account["companion_token"]
+            )
+
+        self.manager.discord_account.clear()
+
+        self.manager.logger.info(
+            "Discord-Verknüpfung getrennt."
         )
 
         self.refresh()

@@ -17,6 +17,9 @@ from addon.sync_reader import SyncReader
 from core.sync_manager import SyncManager
 from PySide6.QtCore import QTimer
 from core.discord_status import DiscordStatus
+from core.discord_account import DiscordAccountStore
+from core.discord_auth import DiscordAuth
+from core.discord_roster_sync import DiscordRosterSync
 
 
 class CompanionManager:
@@ -42,6 +45,9 @@ class CompanionManager:
         self.launcher = Launcher()
         self.sync = SyncManager(self)
         self.discord = DiscordStatus()
+        self.discord_account = DiscordAccountStore()
+        self.discord_auth = DiscordAuth()
+        self.discord_roster_sync = DiscordRosterSync(self)
         self.sync_timer = QTimer()
 
         self.sync_timer.timeout.connect(
@@ -176,6 +182,22 @@ class CompanionManager:
 
             self.logger.error(
                 f"Sync fehlgeschlagen: {exc}"
+            )
+
+        #
+        # Eigener try/except: ein Fehler beim Raid-Roster-Abruf
+        # (z. B. Bot nicht erreichbar) darf den Material-Sync oben
+        # nicht mit runterreißen und umgekehrt.
+        #
+
+        try:
+
+            self.discord_roster_sync.process()
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"Discord-Raid-Roster-Sync fehlgeschlagen: {exc}"
             )
 
         finally:
