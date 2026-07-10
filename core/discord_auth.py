@@ -20,7 +20,7 @@ import httpx
 # ist UND die der Bot in der Umgebungsvariable DISCORD_REDIRECT_URI
 # erwartet.
 
-CLIENT_ID = "REPLACE_WITH_DISCORD_CLIENT_ID"
+CLIENT_ID = "1501941067577298994"
 
 REDIRECT_PORT = 53682
 REDIRECT_URI = f"http://127.0.0.1:{REDIRECT_PORT}/callback"
