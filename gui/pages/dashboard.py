@@ -21,6 +21,15 @@ class _CompanionUpdateBridge(QObject):
     finished = Signal(bool)
 
 
+class _UpdateCheckBridge(QObject):
+    """
+    Meldet das Ende der manuellen Update-Prüfung (Refresh-Button)
+    thread-sicher an den Hauptthread zurück.
+    """
+
+    finished = Signal()
+
+
 class DashboardPage(QWidget):
 
     pageRequested = Signal(int)
@@ -47,6 +56,11 @@ class DashboardPage(QWidget):
         self.hero.secondaryClicked.connect(
             self.open_addon
         )
+
+        self.hero.refreshClicked.connect(
+            self.start_update_check
+        )
+
         layout.addWidget(self.hero)
 
         #
@@ -56,6 +70,11 @@ class DashboardPage(QWidget):
         self._update_bridge = _CompanionUpdateBridge(self)
         self._update_bridge.finished.connect(
             self._on_companion_update_finished
+        )
+
+        self._update_check_bridge = _UpdateCheckBridge(self)
+        self._update_check_bridge.finished.connect(
+            self._on_update_check_finished
         )
 
         #
@@ -236,6 +255,50 @@ class DashboardPage(QWidget):
         #
 
         self.hero.set_busy(False)
+
+        self.refresh()
+
+    # --------------------------------------------------
+    # Manuelle Update-Prüfung (Refresh-Button im Banner)
+    # --------------------------------------------------
+    # Macht zwei Netzwerkanfragen an GitHub (bis zu 15s Timeout je
+    # Anfrage, siehe GitHubUpdater) - läuft deshalb ebenfalls im
+    # Hintergrund-Thread, statt die UI währenddessen einfrieren zu
+    # lassen.
+
+    def start_update_check(self):
+
+        self.hero.set_refresh_busy(True)
+
+        self.manager.logger.info(
+            "Suche nach Updates..."
+        )
+
+        thread = threading.Thread(
+            target=self._update_check_worker,
+            daemon=True,
+            name="UpdateCheckThread",
+        )
+
+        thread.start()
+
+    def _update_check_worker(self):
+
+        try:
+
+            self.manager.refresh_update_status()
+
+        except Exception as exc:
+
+            self.manager.logger.error(
+                f"Update-Prüfung fehlgeschlagen: {exc}"
+            )
+
+        self._update_check_bridge.finished.emit()
+
+    def _on_update_check_finished(self):
+
+        self.hero.set_refresh_busy(False)
 
         self.refresh()
 

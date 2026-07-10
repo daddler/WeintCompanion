@@ -13,6 +13,7 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QColor,
     QFont,
+    QIcon,
     QLinearGradient,
     QPainter,
     QPainterPath,
@@ -223,6 +224,51 @@ class HeroBadge(QLabel):
 
 
 # ---------------------------------------------------------
+# Refresh-Button
+# ---------------------------------------------------------
+# Löst eine erneute Prüfung gegen GitHub aus (Addon + Companion),
+# ohne dass die App neu gestartet werden muss.
+
+
+class RefreshIconButton(QPushButton):
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.setIcon(
+            QIcon(Resources.sync())
+        )
+
+        self.setIconSize(QSize(16, 16))
+
+        self.setFixedSize(28, 28)
+
+        self.setCursor(Qt.PointingHandCursor)
+
+        self.setToolTip(
+            "Erneut nach Updates suchen"
+        )
+
+        self.setStyleSheet("""
+        QPushButton{
+            background:rgba(255,255,255,12);
+            border:1px solid rgba(255,255,255,30);
+            border-radius:14px;
+        }
+        QPushButton:hover{
+            background:rgba(255,255,255,25);
+        }
+        QPushButton:pressed{
+            background:rgba(255,255,255,10);
+        }
+        QPushButton:disabled{
+            background:rgba(255,255,255,6);
+        }
+        """)
+
+
+# ---------------------------------------------------------
 # Hero Banner
 # ---------------------------------------------------------
 
@@ -231,6 +277,7 @@ class HeroBanner(QWidget):
 
     primaryClicked = Signal()
     secondaryClicked = Signal()
+    refreshClicked = Signal()
 
     def __init__(self):
 
@@ -401,10 +448,29 @@ class HeroBanner(QWidget):
         }
         """)
 
-        self.left.addWidget(
+        status_row = QHBoxLayout()
+
+        status_row.setSpacing(8)
+
+        status_row.addWidget(
             self.status,
             alignment=Qt.AlignLeft,
         )
+
+        self.refresh_button = RefreshIconButton()
+
+        self.refresh_button.clicked.connect(
+            self.refreshClicked.emit
+        )
+
+        status_row.addWidget(
+            self.refresh_button,
+            alignment=Qt.AlignLeft,
+        )
+
+        status_row.addStretch()
+
+        self.left.addLayout(status_row)
 
         #
         # Version
@@ -1213,3 +1279,15 @@ class HeroBanner(QWidget):
             self.install_button.setText(
                 "Bitte warten..."
             )
+
+    def set_refresh_busy(self, busy: bool):
+
+        self.refresh_button.setEnabled(
+            not busy
+        )
+
+        self.refresh_button.setToolTip(
+            "Suche läuft..."
+            if busy
+            else "Erneut nach Updates suchen"
+        )

@@ -451,4 +451,19 @@ class CompanionManager:
         self.companion_updater.check_for_update()
         self.sync.process()
 
-    
+    # --------------------------------------------------
+    # Manuelle Update-Prüfung (Button im Dashboard)
+    # --------------------------------------------------
+
+    def refresh_update_status(self):
+        """
+        Prüft erneut gegen GitHub, ob ein Addon- oder Companion-Update
+        verfügbar ist - ohne die App neu zu starten. Macht dieselben
+        Anfragen wie full_refresh(), aber ohne Discord-Status/Sync,
+        die für eine reine "nach Updates suchen"-Aktion irrelevant sind.
+        """
+
+        self.detect_addon()
+        self.check_github()
+        self.companion_updater.check_for_update()
+
