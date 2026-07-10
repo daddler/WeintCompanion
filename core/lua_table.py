@@ -49,6 +49,36 @@ def _find_matching_brace(text: str, open_index: int) -> int:
     raise ValueError("Unausgeglichene Klammern in Lua-Datei.")
 
 
+def extract_variable_body(text: str, var_name: str) -> str | None:
+    """
+    Gegenstück zu upsert_variable(): gibt NUR den Inhalt zwischen den
+    äußeren "{"/"}" von "var_name = { ... }" zurück (ohne die
+    Klammern selbst), oder None, wenn die Variable nicht gefunden
+    wird.
+
+    WICHTIG: Eine WoW-SavedVariables-Datei kann mehrere Variablen
+    desselben Addons enthalten (z. B. WeintCompanionDB UND
+    WeintCompanionInboxDB). Ein zeilenweiser Parser, der einfach die
+    gesamte Datei ab dem ersten "["queue"]" durchsucht, ohne den
+    Gültigkeitsbereich zu begrenzen, liest sonst versehentlich auch
+    Einträge aus dem Queue einer GANZ ANDEREN Variable mit, sobald
+    diese weiter hinten in derselben Datei steht.
+    """
+
+    needle = f"{var_name} = {{"
+
+    start = text.find(needle)
+
+    if start == -1:
+        return None
+
+    open_index = start + len(needle) - 1
+
+    close_index = _find_matching_brace(text, open_index)
+
+    return text[open_index + 1:close_index]
+
+
 def upsert_variable(path: Path, var_name: str, body: str) -> None:
     """
     Ersetzt (oder ergänzt) den Block "var_name = { ... }" in einer

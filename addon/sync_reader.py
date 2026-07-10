@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
-from core.lua_table import upsert_variable
+from core.lua_table import extract_variable_body, upsert_variable
 
 
 class SyncReader:
@@ -55,16 +55,28 @@ class SyncReader:
     # --------------------------------------------------
 
     def read(self):
+        """
+        Gibt NUR den Inhalt der WeintCompanionDB-Variable zurück, nicht
+        die ganze Datei. Seit WeintCompanionInboxDB (Companion -> Addon,
+        Gegenrichtung) in derselben Datei liegt, würde ein Parser über
+        den kompletten Dateitext sonst auch dessen Warteschlange
+        mitlesen (siehe core/lua_table.py: extract_variable_body).
+        """
 
         file = self.get_file()
 
         if file is None:
             return ""
 
-        return file.read_text(
+        text = file.read_text(
             encoding="utf-8",
             errors="ignore",
         )
+
+        return extract_variable_body(
+            text,
+            "WeintCompanionDB",
+        ) or ""
 
     # --------------------------------------------------
     # Nachrichten lesen
