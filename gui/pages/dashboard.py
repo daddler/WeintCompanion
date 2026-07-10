@@ -276,10 +276,19 @@ class DashboardPage(QWidget):
             return
 
         #
-        # Fehlschlag: refresh() holt den echten Zustand aus dem
-        # AppState (companion_update_available ist weiterhin True)
-        # und zeigt so wieder korrekt "Update verfügbar" statt
-        # fälschlich "Alles aktuell".
+        # Fehlschlag: die App läuft weiter, also muss die zu Beginn
+        # gestoppte Auto-Sync auch wieder anlaufen - sonst bleibt sie
+        # für den Rest der Sitzung stumm (keine periodischen Syncs
+        # mehr), bis die App neu gestartet wird.
+        #
+
+        self.manager.start_auto_sync()
+
+        #
+        # refresh() holt den echten Zustand aus dem AppState
+        # (companion_update_available ist weiterhin True) und zeigt so
+        # wieder korrekt "Update verfügbar" statt fälschlich
+        # "Alles aktuell".
         #
 
         self.refresh()
