@@ -3,8 +3,6 @@ import os
 import shutil
 import subprocess
 
-from PySide6.QtWidgets import QApplication
-
 from core.github_updater import GitHubUpdater
 from core.linux_updater import LinuxUpdater
 from core.windows_updater import WindowsUpdater
@@ -412,6 +410,17 @@ class CompanionUpdater:
     # --------------------------------------------------
 
     def install_update(self):
+        """
+        Läuft in einem Hintergrund-Thread (siehe
+        DashboardPage._companion_update_worker) - deshalb dürfen hier
+        KEINE Qt-Objekte angefasst werden, die dem Hauptthread gehören
+        (QTimer, QApplication). stop_auto_sync() (intern QTimer.stop())
+        muss der Aufrufer vorher im Hauptthread erledigen; ebenso darf
+        QApplication.quit() erst zurück im Hauptthread passieren -
+        sonst kann die App bei einem Cross-Thread-Zugriff auf das
+        timer-gebundene Qt-Objekt hängen bleiben ("reagiert nicht"),
+        statt sauber zu beenden.
+        """
 
         file = self.download_update()
 
@@ -451,8 +460,6 @@ class CompanionUpdater:
                     current_appimage=current,
                 )
 
-                self.manager.stop_auto_sync()
-
                 self._spawn_detached(
                     [
                         str(script),
@@ -461,8 +468,6 @@ class CompanionUpdater:
                         str(os.getpid()),
                     ]
                 )
-
-                QApplication.quit()
 
                 return True
 
@@ -481,11 +486,7 @@ class CompanionUpdater:
                     pid=os.getpid(),
                 )
 
-                self.manager.stop_auto_sync()
-
                 self._spawn_windows_waiter(script)
-
-                QApplication.quit()
 
                 return True
 
@@ -497,9 +498,14 @@ class CompanionUpdater:
                 "Starte Installer..."
             )
 
-            self.manager.stop_auto_sync()
+            #
+            # launch() statt launch_and_exit(): Der Aufruf läuft im
+            # Hintergrund-Thread, QApplication.quit() muss aber im
+            # Hauptthread passieren (siehe Docstring oben) - das
+            # übernimmt der Aufrufer nach Rückkehr dieser Funktion.
+            #
 
-            self.manager.launcher.launch_and_exit(
+            self.manager.launcher.launch(
                 file
             )
 

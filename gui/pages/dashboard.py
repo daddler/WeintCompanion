@@ -1,8 +1,9 @@
 from pathlib import Path
 import threading
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QVBoxLayout,
     QWidget,
@@ -214,6 +215,17 @@ class DashboardPage(QWidget):
             "Companion-Update wird heruntergeladen..."
         )
 
+        #
+        # WICHTIG: stop_auto_sync() fasst ein QTimer-Objekt an, das
+        # dem Hauptthread gehört (self.manager.sync_timer). Das muss
+        # deshalb HIER, im Hauptthread, passieren - nicht im Worker
+        # unten. Ein Cross-Thread-Zugriff auf QTimer.stop() hat genau
+        # das eingefrorene Fenster ("reagiert nicht") verursacht, das
+        # vorher beim Companion-Update auftrat.
+        #
+
+        self.manager.stop_auto_sync()
+
         thread = threading.Thread(
             target=self._companion_update_worker,
             daemon=True,
@@ -243,18 +255,32 @@ class DashboardPage(QWidget):
 
     def _on_companion_update_finished(self, success: bool):
 
-        #
-        # Bei Erfolg beendet sich die App gleich selbst
-        # (QApplication.quit() wurde bereits im Worker aufgerufen) -
-        # der Reset ist dann irrelevant, schadet aber nicht.
-        #
-        # Bei Fehlschlag holt refresh() den echten Zustand aus dem
-        # AppState (companion_update_available ist weiterhin True) und
-        # zeigt so wieder korrekt "Update verfügbar" statt fälschlich
-        # "Alles aktuell".
-        #
-
         self.hero.set_busy(False)
+
+        if success:
+
+            #
+            # QApplication.quit() gehört ebenfalls in den Hauptthread
+            # (dieser Slot läuft dort, da das Signal per Queued
+            # Connection über Thread-Grenzen zugestellt wird). Eine
+            # kurze Verzögerung gibt dem gerade gestarteten Updater/
+            # Installer einen Moment Luft, bevor das Fenster
+            # verschwindet.
+            #
+
+            QTimer.singleShot(
+                300,
+                QApplication.quit,
+            )
+
+            return
+
+        #
+        # Fehlschlag: refresh() holt den echten Zustand aus dem
+        # AppState (companion_update_available ist weiterhin True)
+        # und zeigt so wieder korrekt "Update verfügbar" statt
+        # fälschlich "Alles aktuell".
+        #
 
         self.refresh()
 
