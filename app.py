@@ -141,6 +141,37 @@ if platform.system() == "Linux":
 
         os.environ.setdefault("QT_XCB_NO_XI2", "1")
 
+    # --------------------------------------------------
+    # Weitere Absturz-Mitigation: SIGSEGV bleibt trotz QT_XCB_NO_XI2
+    # (Einzelbericht openSUSE/X11, 07/2026)
+    # --------------------------------------------------
+    # QT_XCB_NO_XI2 allein hat den xcb-Absturz nicht bei jedem Nutzer
+    # verhindert - der Crash-Log zeigt weiterhin ein generisches
+    # SIGSEGV ohne Python-Frame, also tief im xcb-Plugin selbst.
+    # Zwei weitere, in Qt6-Bugreports häufig genannte Auslöser für
+    # genau dieses Crash-Bild werden hier zusätzlich deaktiviert:
+    #
+    # - QT_ACCESSIBILITY=0: Qts AT-SPI/Accessibility-Bridge crasht auf
+    #   manchen Distros (u. a. wenn ein Accessibility-Dienst im
+    #   Hintergrund läuft, auch unter KDE) sporadisch beim Wechsel des
+    #   Eingabefokus - unabhängig vom XI2-Codepfad.
+    # - QT_XCB_GL_INTEGRATION=none: vermeidet GLX/EGL-Kontexterstellung
+    #   im xcb-Plugin, ein bekannter Absturzherd bei inkompatiblen
+    #   Mesa-/Grafiktreiber-Kombinationen.
+    #
+    # Beide sind reine Diagnose-/Sicherheits-Downgrades (kein
+    # sichtbarer Funktionsverlust für unsere Buttons/Listen-UI) und
+    # über WEINT_FORCE_ACCESSIBILITY=1 / WEINT_FORCE_XCB_GL=1 einzeln
+    # abschaltbar, falls sie bei jemandem neue Probleme verursachen.
+
+    if os.environ.get("WEINT_FORCE_ACCESSIBILITY") != "1":
+
+        os.environ.setdefault("QT_ACCESSIBILITY", "0")
+
+    if os.environ.get("WEINT_FORCE_XCB_GL") != "1":
+
+        os.environ.setdefault("QT_XCB_GL_INTEGRATION", "none")
+
 
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
@@ -179,7 +210,11 @@ def main():
 
     print(
         "[WeintCompanion] QT_XCB_NO_XI2="
-        f"{os.environ.get('QT_XCB_NO_XI2', '<nicht gesetzt>')}"
+        f"{os.environ.get('QT_XCB_NO_XI2', '<nicht gesetzt>')} "
+        "QT_ACCESSIBILITY="
+        f"{os.environ.get('QT_ACCESSIBILITY', '<nicht gesetzt>')} "
+        "QT_XCB_GL_INTEGRATION="
+        f"{os.environ.get('QT_XCB_GL_INTEGRATION', '<nicht gesetzt>')}"
     )
 
     #
@@ -190,6 +225,24 @@ def main():
     window = MainWindow()
 
     window.show()
+
+    #
+    # Einzelbericht (openSUSE/Wayland, 07/2026): Prozess läuft
+    # sichtbar (RAM/CPU), aber kein Fenster erscheint - obwohl das
+    # native Wayland-Plugin laut Log sauber lädt. show() reicht bei
+    # manchen Compositorn offenbar nicht, um die Surface tatsächlich
+    # zu mappen/in den Vordergrund zu holen. raise_()/activateWindow()
+    # sind der Standard-Workaround dafür; die Diagnose-Zeile hilft,
+    # beim nächsten Bericht zu sehen, ob Qt das Fenster überhaupt für
+    # sichtbar hält.
+    #
+
+    window.raise_()
+    window.activateWindow()
+
+    print(
+        f"[WeintCompanion] Fenster sichtbar: {window.isVisible()}"
+    )
 
     sys.exit(app.exec())
 
