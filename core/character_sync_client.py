@@ -77,7 +77,33 @@ class CharacterSyncClient:
 
             return False
 
+        if response.status_code == 401:
+
+            #
+            # Der Bot kennt dieses Token nicht (mehr) - z. B. weil seine
+            # Datenbank bei einem Redeploy zurückgesetzt wurde. Ohne
+            # diesen Reset würde is_linked() lokal weiter "verknüpft"
+            # melden und dieselbe Nachricht endlos alle paar Sekunden
+            # erfolglos erneut versucht werden.
+            #
+
+            print(
+                "Charakter-Sync-Fehler: Companion-Token vom Bot abgelehnt "
+                "(401) - Verknüpfung wird lokal aufgehoben, bitte Discord "
+                "in den Einstellungen erneut verbinden."
+            )
+
+            self.account_store.clear()
+
+            return False
+
         if response.status_code != 200:
+
+            print(
+                f"Charakter-Sync-Fehler: HTTP {response.status_code} "
+                f"- {response.text[:200]}"
+            )
+
             return False
 
         try:
@@ -86,6 +112,20 @@ class CharacterSyncClient:
 
         except ValueError:
 
+            print(
+                f"Charakter-Sync-Fehler: Antwort war kein gültiges JSON "
+                f"- {response.text[:200]}"
+            )
+
             return False
 
-        return body.get("status") == "ok"
+        if body.get("status") != "ok":
+
+            print(
+                f"Charakter-Sync-Fehler: Bot meldet Status "
+                f"'{body.get('status')}' ({body.get('detail', '-')})"
+            )
+
+            return False
+
+        return True
