@@ -52,12 +52,14 @@ class CharacterSyncClient:
 
             name = parts[0].strip()
             cls = parts[1].strip() if len(parts) > 1 else ""
+            realm = parts[2].strip() if len(parts) > 2 else ""
 
             if name:
 
                 characters.append({
                     "name": name,
                     "class": cls,
+                    "realm": realm,
                 })
 
         try:
