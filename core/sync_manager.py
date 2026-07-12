@@ -1,5 +1,6 @@
 from addon.sync_reader import SyncReader
 from discord.sync_client import SyncClient
+from core.character_sync_client import CharacterSyncClient
 
 
 class SyncManager:
@@ -13,6 +14,7 @@ class SyncManager:
         )
 
         self.client = SyncClient()
+        self.character_client = CharacterSyncClient()
 
     # --------------------------------------------------
 
@@ -55,9 +57,33 @@ class SyncManager:
 
         for message in messages:
 
-            success = self.client.send(
-                message
-            )
+            #
+            # Charakter-Meldungen (Companion-Discord-Login -> Bot) laufen
+            # über einen eigenen, tokenbasierten Client statt über den
+            # anonymen Material-SyncClient. Ist kein Discord-Account
+            # verknüpft, wird die Nachricht ohne Fehlermeldung verworfen -
+            # das ist der normale Zustand für jeden nicht verknüpften
+            # Spieler, kein Fehler.
+            #
+
+            if message.get("type") == "character":
+
+                if not self.character_client.is_linked():
+
+                    self.reader.remove_message(
+                        message["id"]
+                    )
+                    continue
+
+                success = self.character_client.send(
+                    message["payload"]
+                )
+
+            else:
+
+                success = self.client.send(
+                    message
+                )
 
             if success:
 
