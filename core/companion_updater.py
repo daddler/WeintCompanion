@@ -376,19 +376,24 @@ class CompanionUpdater:
         Startet das Wartescript unsichtbar (kein Konsolenfenster)
         und komplett unabhängig von WeintCompanion, damit es auch
         nach dem Beenden von WeintCompanion weiterläuft.
+
+        WICHTIG: Hier NICHT zusätzlich DETACHED_PROCESS setzen.
+        Laut Win32-Doku wird CREATE_NO_WINDOW ignoriert, wenn es
+        zusammen mit DETACHED_PROCESS verwendet wird. Der Kind-
+        prozess startet dann komplett ohne Konsole - "timeout"
+        (aufgerufen aus dem Wartescript) braucht aber ein Konsolen-
+        Handle, um auf STRG+C zu prüfen, und erzeugt sich in diesem
+        Fall selbst ein neues, sichtbares Konsolenfenster. Genau das
+        ist das eingefrorene "timeout /t 1 /nobreak"-Fenster, das
+        Nutzer beim Update sehen. CREATE_NO_WINDOW allein reicht:
+        der Kindprozess bekommt eine (unsichtbare) Konsole und läuft
+        unabhängig von WeintCompanion weiter, da Windows-Kindprozesse
+        ohnehin nicht am Elternprozess hängen.
         """
 
-        creationflags = 0
-
-        creationflags |= getattr(
+        creationflags = getattr(
             subprocess,
             "CREATE_NO_WINDOW",
-            0,
-        )
-
-        creationflags |= getattr(
-            subprocess,
-            "DETACHED_PROCESS",
             0,
         )
 

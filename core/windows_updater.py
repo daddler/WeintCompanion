@@ -21,6 +21,17 @@ class WindowsUpdater:
     sondern über ein Batch-Skript, das aktiv per PID prüft,
     ob der alte Prozess wirklich beendet wurde, bevor der
     Installer läuft.
+
+    WICHTIG zum Warten zwischen den Prüfungen: Absichtlich
+    "ping -n 2 127.0.0.1" statt "timeout /t 1 /nobreak".
+    "timeout" braucht ein Konsolen-Handle, um auf STRG+C zu
+    prüfen - läuft das Skript (z. B. wegen fehlerhafter
+    Creation-Flags des aufrufenden Prozesses) ohne eigene
+    Konsole, erzeugt "timeout" sich selbst ein neues,
+    sichtbares und scheinbar eingefrorenes Konsolenfenster.
+    "ping" braucht dafür keine Konsoleninteraktion und wartet
+    zuverlässig auch dann, wenn keine (sichtbare) Konsole
+    vorhanden ist.
     """
 
     def prepare(
@@ -43,7 +54,7 @@ class WindowsUpdater:
             ":wait\r\n"
             f'tasklist /FI "PID eq {pid}" 2>NUL | find "{pid}" >NUL\r\n'
             "if not errorlevel 1 (\r\n"
-            "    timeout /t 1 /nobreak >NUL\r\n"
+            "    ping -n 2 127.0.0.1 >NUL\r\n"
             "    goto wait\r\n"
             ")\r\n"
             f'start "" "{installer}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART\r\n'
