@@ -548,6 +548,17 @@ class SettingsPage(QWidget):
 
         account = self.manager.discord_account.load()
 
+        #
+        # start_discord_login() deaktiviert den Button waehrend des
+        # laufenden Logins - ohne diese Zeile blieb er nach JEDEM
+        # refresh() (Login-Abschluss oder "Trennen") dauerhaft
+        # deaktiviert, da ihn sonst nirgendwo etwas wieder aktiviert
+        # hat. Das war der Bug: nach "Trennen" liess sich "Mit Discord
+        # verbinden" nicht mehr anklicken, nur ein Neustart der App half.
+        #
+
+        self.discord_login_button.setEnabled(True)
+
         if account:
 
             self.discord_status.setText(
