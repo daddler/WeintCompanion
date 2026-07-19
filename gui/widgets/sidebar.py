@@ -135,6 +135,8 @@ class Sidebar(QFrame):
 
         self.setObjectName("Sidebar")
 
+        self.setAttribute(Qt.WA_StyledBackground, True)
+
         self.setFixedWidth(Metrics.RAIL_WIDTH)
 
         self.setSizePolicy(

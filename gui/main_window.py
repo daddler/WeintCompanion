@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 from core.companion_manager import CompanionManager
 from core.resources import Resources
 
+from gui.theme.colors import Colors
 from gui.theme.metrics import Metrics
 
 from gui.widgets.sidebar import Sidebar
@@ -72,6 +73,27 @@ class MainWindow(QMainWindow):
 
         root = QWidget()
 
+        #
+        # Ohne einen expliziten, opaken Hintergrund bleibt dieses
+        # zentrale Widget (und alles, was sich per "background:
+        # transparent" darauf verlässt) im echten Rendering-Backing-
+        # Store transparent (Alpha 0) statt dunkel gefüllt - auf dem
+        # Bildschirm bisher zufällig unsichtbar, weil der Alpha-Kanal
+        # dort ignoriert wird, aber z. B. bei Screenshots/Grabs oder
+        # Compositing-Fenstermanagern als weißer/durchsichtiger
+        # Hintergrund sichtbar. WA_StyledBackground erzwingt, dass
+        # das "background"-Stylesheet dieses Widgets tatsächlich
+        # gemalt wird.
+        #
+
+        root.setObjectName("rootWidget")
+
+        root.setAttribute(Qt.WA_StyledBackground, True)
+
+        root.setStyleSheet(
+            f"QWidget#rootWidget{{background:{Colors.BACKGROUND};}}"
+        )
+
         self.setCentralWidget(root)
 
         self.root_layout = QHBoxLayout(root)
@@ -109,6 +131,14 @@ class MainWindow(QMainWindow):
 
         self.content.setObjectName(
             "contentContainer"
+        )
+
+        self.content.setAttribute(
+            Qt.WA_StyledBackground, True
+        )
+
+        self.content.setStyleSheet(
+            f"QFrame#contentContainer{{background:{Colors.BACKGROUND};}}"
         )
 
         self.content_layout = QVBoxLayout(
