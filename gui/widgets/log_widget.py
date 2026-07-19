@@ -1,13 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QObject, Signal
-from PySide6.QtGui import (
-    QColor,
-    QPainter,
-    QPainterPath,
-    QLinearGradient,
-    QPen,
-)
+from PySide6.QtGui import QColor
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -17,19 +11,25 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QAbstractItemView,
-    QGraphicsDropShadowEffect,
 )
 
 from core.logger import LogEntry
-from core.resources import Resources
-from PySide6.QtSvgWidgets import QSvgWidget
+from gui.theme.colors import Colors
 
 
 class _LogBridge(QObject):
     new_entry = Signal(object)
 
 
-CARD_RADIUS = 20
+CARD_RADIUS = 12
+
+LEVEL_TAGS = {
+
+    "info": ("INFO", Colors.DISCORD),
+    "success": ("SUCCESS", Colors.SUCCESS),
+    "warning": ("WARN", Colors.WARNING),
+    "error": ("ERROR", Colors.ERROR),
+}
 
 
 class LogWidget(QWidget):
@@ -42,19 +42,8 @@ class LogWidget(QWidget):
 
         self.logger = logger
 
-        #
-        # Shadow
-        #
-
-        shadow = QGraphicsDropShadowEffect(self)
-
-        shadow.setBlurRadius(28)
-
-        shadow.setOffset(0, 12)
-
-        shadow.setColor(QColor(0, 0, 0, 90))
-
-        self.setGraphicsEffect(shadow)
+        self._level_filter = None
+        self._text_filter = ""
 
         #
         # Root
@@ -62,14 +51,19 @@ class LogWidget(QWidget):
 
         root = QVBoxLayout(self)
 
-        root.setContentsMargins(
-            24,
-            22,
-            24,
-            22,
-        )
+        root.setContentsMargins(20, 18, 20, 18)
 
-        root.setSpacing(18)
+        root.setSpacing(12)
+
+        self.setObjectName("logWidget")
+
+        self.setStyleSheet(f"""
+        QWidget#logWidget{{
+            background:{Colors.CARD};
+            border:1px solid {Colors.BORDER};
+            border-radius:{CARD_RADIUS}px;
+        }}
+        """)
 
         #
         # Header
@@ -81,64 +75,27 @@ class LogWidget(QWidget):
 
         root.addLayout(header)
 
-        #
-        # Titel
-        #
-
-        icon = QSvgWidget(Resources.logs())
-        icon.setFixedSize(22, 22)
-
-        header.addWidget(icon)
-
         self.title = QLabel("Live-Protokoll")
 
-        self.title.setStyleSheet("""
-        QLabel{
-
-            color:white;
-
-            font-size:18px;
-
-            font-weight:700;
-
+        self.title.setStyleSheet(f"""
+        QLabel{{
+            color:{Colors.WHITE};
+            font-size:14px;
+            font-weight:600;
             background:transparent;
-        }
+        }}
         """)
 
         header.addWidget(self.title)
 
         header.addStretch()
 
-        #
-        # Live Badge
-        #
-
         self.live = QLabel("● LIVE")
 
-        self.live.setAlignment(Qt.AlignCenter)
-
-        self.live.setFixedHeight(28)
-
-        self.live.setStyleSheet("""
-        QLabel{
-
-            background:rgba(67,192,122,22);
-
-            color:#7DDB9E;
-
-            border:1px solid rgba(67,192,122,65);
-
-            border-radius:14px;
-
-            padding-left:12px;
-
-            padding-right:12px;
-
-            font-size:11px;
-
-            font-weight:700;
-        }
-        """)
+        self.live.setStyleSheet(
+            'font-family:"JetBrains Mono";'
+            f"font-size:10px;color:{Colors.SUCCESS};"
+        )
 
         header.addWidget(self.live)
 
@@ -154,56 +111,40 @@ class LogWidget(QWidget):
             QAbstractItemView.NoSelection
         )
 
-        self.list.setFocusPolicy(
-            Qt.NoFocus
-        )
+        self.list.setFocusPolicy(Qt.NoFocus)
 
-        self.list.setFrameShape(
-            QListWidget.NoFrame
-        )
+        self.list.setFrameShape(QListWidget.NoFrame)
 
         self.list.setHorizontalScrollBarPolicy(
             Qt.ScrollBarAlwaysOff
         )
 
-        self.list.setStyleSheet("""
-        QListWidget{
-
+        self.list.setStyleSheet(f"""
+        QListWidget{{
             background:transparent;
-
             border:none;
-
-            color:white;
-
+            color:{Colors.TEXT};
             outline:none;
-
-            font-size:13px;
-        }
-
-        QListWidget::item{
-
-            padding:10px;
-
-            border-bottom:1px solid rgba(255,255,255,8);
-        }
-
-        QListWidget::item:last{
-
+            font-family:"JetBrains Mono";
+            font-size:12.5px;
+        }}
+        QListWidget::item{{
+            padding:6px 4px;
+            border-bottom:1px solid {Colors.BORDER};
+        }}
+        QListWidget::item:last{{
             border:none;
-        }
+        }}
         """)
 
-        root.addWidget(
-            self.list,
-            1,
-        )
+        root.addWidget(self.list, 1)
 
         #
         # Thread-sicherer Bridge für Logger-Events
         #
 
         self._bridge = _LogBridge(self)
-        self._bridge.new_entry.connect(self._do_add_entry)
+        self._bridge.new_entry.connect(self._on_new_entry)
 
         #
         # History laden
@@ -220,206 +161,96 @@ class LogWidget(QWidget):
         )
 
     # --------------------------------------------------
-    # Paint
-    # --------------------------------------------------
-
-    def paintEvent(self, event):
-
-        painter = QPainter(self)
-
-        painter.setRenderHint(
-            QPainter.Antialiasing
-        )
-
-        rect = self.rect().adjusted(
-            1,
-            1,
-            -1,
-            -1,
-        )
-
-        path = QPainterPath()
-
-        path.addRoundedRect(
-            rect,
-            CARD_RADIUS,
-            CARD_RADIUS,
-        )
-
-        #
-        # Hintergrund
-        #
-
-        gradient = QLinearGradient(
-            rect.topLeft(),
-            rect.bottomLeft(),
-        )
-
-        gradient.setColorAt(
-            0,
-            QColor("#252933"),
-        )
-
-        gradient.setColorAt(
-            0.45,
-            QColor("#1C2028"),
-        )
-
-        gradient.setColorAt(
-            1,
-            QColor("#171A21"),
-        )
-
-        painter.fillPath(
-            path,
-            gradient,
-        )
-
-        #
-        # Goldener Glow links oben
-        #
-
-        glow = QLinearGradient(
-            rect.left(),
-            rect.top(),
-            rect.left() + 250,
-            rect.top() + 170,
-        )
-
-        glow.setColorAt(
-            0,
-            QColor(212, 175, 55, 35),
-        )
-
-        glow.setColorAt(
-            1,
-            QColor(212, 175, 55, 0),
-        )
-
-        painter.fillPath(
-            path,
-            glow,
-        )
-
-        #
-        # Rahmen
-        #
-
-        border = QLinearGradient(
-            rect.topLeft(),
-            rect.bottomRight(),
-        )
-
-        border.setColorAt(
-            0,
-            QColor("#6F5D2E"),
-        )
-
-        border.setColorAt(
-            0.5,
-            QColor("#3D404A"),
-        )
-
-        border.setColorAt(
-            1,
-            QColor("#6F5D2E"),
-        )
-
-        painter.setPen(
-            QPen(
-                border,
-                1.4,
-            )
-        )
-
-        painter.drawRoundedRect(
-            rect,
-            CARD_RADIUS,
-            CARD_RADIUS,
-        )
-
-        painter.end()
-
-    # --------------------------------------------------
     # Refresh
     # --------------------------------------------------
 
     def refresh(self):
 
+        self._rebuild()
+
+    def _rebuild(self):
+
         self.list.clear()
 
         for entry in self.logger.entries():
 
-            self._do_add_entry(entry)
+            if self._matches(entry):
+
+                self._append_item(entry)
+
+        self.list.scrollToBottom()
+
+    def _matches(self, entry: LogEntry) -> bool:
+
+        if (
+            self._level_filter is not None
+            and entry.level != self._level_filter
+        ):
+            return False
+
+        if (
+            self._text_filter
+            and self._text_filter.lower() not in entry.message.lower()
+        ):
+            return False
+
+        return True
+
+    # --------------------------------------------------
+    # Filter
+    # --------------------------------------------------
+
+    def set_level_filter(self, level: str | None):
+
+        self._level_filter = level
+
+        self._rebuild()
+
+    def set_text_filter(self, text: str):
+
+        self._text_filter = text
+
+        self._rebuild()
 
     # --------------------------------------------------
     # Add Entry (immer im Hauptthread via Bridge)
     # --------------------------------------------------
 
-    def _do_add_entry(self, entry: LogEntry):
+    def _on_new_entry(self, entry: LogEntry):
 
-        timestamp = entry.timestamp.strftime(
-            "%H:%M:%S"
-        )
+        if not self._matches(entry):
+            return
 
-        icons = {
-
-            "info": "ℹ",
-
-            "success": "✓",
-
-            "warning": "⚠",
-
-            "error": "✕",
-        }
-
-        colors = {
-
-            "info": "#C8CDD8",
-
-            "success": "#7ED957",
-
-            "warning": "#E8C96D",
-
-            "error": "#F08C8C",
-        }
-
-        icon = icons.get(
-            entry.level,
-            "•",
-        )
-
-        item = QListWidgetItem(
-            f"{timestamp}    {icon}    {entry.message}"
-        )
-
-        item.setForeground(
-            QColor(
-                colors.get(
-                    entry.level,
-                    "#FFFFFF",
-                )
-            )
-        )
-
-        self.list.addItem(item)
+        self._append_item(entry)
 
         self.list.scrollToBottom()
 
-        while (
-            self.list.count()
-            > self.MAX_ENTRIES
-        ):
+        while self.list.count() > self.MAX_ENTRIES:
 
             self.list.takeItem(0)
 
-        # --------------------------------------------------
+    def _append_item(self, entry: LogEntry):
+
+        timestamp = entry.timestamp.strftime("%H:%M:%S")
+
+        tag, color = LEVEL_TAGS.get(
+            entry.level,
+            ("INFO", Colors.TEXT_SECONDARY),
+        )
+
+        item = QListWidgetItem(
+            f"{timestamp}  {tag:<8}{entry.message}"
+        )
+
+        item.setForeground(QColor(color))
+
+        self.list.addItem(item)
+
+    # --------------------------------------------------
     # Clear
     # --------------------------------------------------
 
     def clear(self):
-        """Leert das Protokoll."""
-
         self.list.clear()
 
     # --------------------------------------------------
@@ -432,56 +263,25 @@ class LogWidget(QWidget):
 
             self.live.setText("● LIVE")
 
-            self.live.setStyleSheet("""
-            QLabel{
-
-                background:rgba(67,192,122,22);
-
-                color:#7DDB9E;
-
-                border:1px solid rgba(67,192,122,65);
-
-                border-radius:14px;
-
-                padding-left:12px;
-                padding-right:12px;
-
-                font-size:11px;
-
-                font-weight:700;
-            }
-            """)
+            self.live.setStyleSheet(
+                'font-family:"JetBrains Mono";'
+                f"font-size:10px;color:{Colors.SUCCESS};"
+            )
 
         else:
 
             self.live.setText("● PAUSIERT")
 
-            self.live.setStyleSheet("""
-            QLabel{
-
-                background:rgba(212,175,55,20);
-
-                color:#E8C96D;
-
-                border:1px solid rgba(212,175,55,70);
-
-                border-radius:14px;
-
-                padding-left:12px;
-                padding-right:12px;
-
-                font-size:11px;
-
-                font-weight:700;
-            }
-            """)
+            self.live.setStyleSheet(
+                'font-family:"JetBrains Mono";'
+                f"font-size:10px;color:{Colors.WARNING};"
+            )
 
     # --------------------------------------------------
     # Scroll
     # --------------------------------------------------
 
     def scroll_to_bottom(self):
-
         self.list.scrollToBottom()
 
     # --------------------------------------------------

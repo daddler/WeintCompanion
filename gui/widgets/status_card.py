@@ -1,24 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import (
-    Qt,
-    QSize,
-    QRectF,
-    Signal,
-    Property,
-    QPropertyAnimation,
-    QEasingCurve,
-)
-
-from PySide6.QtGui import (
-    QColor,
-    QCursor,
-    QLinearGradient,
-    QPainter,
-    QPainterPath,
-    QPen,
-)
-
+from PySide6.QtCore import Qt, QSize, Signal
+from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
     QFrame,
     QLabel,
@@ -26,12 +9,21 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QVBoxLayout,
     QSizePolicy,
-    QGraphicsDropShadowEffect,
 )
 from PySide6.QtSvgWidgets import QSvgWidget
 from pathlib import Path
 
-CARD_RADIUS = 20
+from gui.theme.colors import Colors
+
+CARD_RADIUS = 12
+
+STATE_COLORS = {
+
+    "normal": (Colors.SUCCESS, "rgba(124,192,110,18)", "INSTALLIERT"),
+    "warning": (Colors.WARNING, "rgba(212,162,74,18)", "UPDATE"),
+    "error": (Colors.ERROR, "rgba(229,107,107,18)", "OFFLINE"),
+    "info": (Colors.DISCORD, "rgba(139,149,245,18)", "INFO"),
+}
 
 
 class StatusCard(QFrame):
@@ -52,6 +44,8 @@ class StatusCard(QFrame):
         super().__init__()
 
         self._display_mode = self.NORMAL_MODE
+        self._state = "normal"
+        self._hover = False
 
         self.setObjectName("statusCard")
 
@@ -61,45 +55,11 @@ class StatusCard(QFrame):
 
         self.setMouseTracking(True)
 
-        #
-        # immer identische Höhe
-        #
-
-        self.setFixedHeight(180)
+        self.setFixedHeight(150)
 
         self.setSizePolicy(
             QSizePolicy.Expanding,
             QSizePolicy.Fixed,
-        )
-
-        self._hover = False
-        self._state = "normal"
-        self._border_alpha = 110
-
-        self.border_animation = QPropertyAnimation(
-            self,
-            b"borderAlpha",
-        )
-
-        self.border_animation.setStartValue(80)
-        self.border_animation.setEndValue(170)
-
-        self.border_animation.setDuration(1400)
-
-        self.border_animation.setLoopCount(-1)
-
-        self.border_animation.setEasingCurve(
-            QEasingCurve.InOutSine
-        )
-
-        shadow = QGraphicsDropShadowEffect(self)
-
-        shadow.setBlurRadius(40)
-        shadow.setOffset(0, 16)
-        shadow.setColor(QColor(0,0,0,120))
-
-        self.setGraphicsEffect(
-            shadow
         )
 
         #
@@ -108,66 +68,31 @@ class StatusCard(QFrame):
 
         self.root = QVBoxLayout(self)
 
-        self.root.setContentsMargins(
-            22,
-            18,
-            22,
-            18,
-        )
+        self.root.setContentsMargins(18, 16, 18, 16)
 
-        self.root.setSpacing(12)
+        self.root.setSpacing(10)
 
         #
-        # ==========================================
         # Header
-        # ==========================================
         #
 
         header = QHBoxLayout()
 
-        header.setSpacing(12)
+        header.setSpacing(10)
 
         self.root.addLayout(header)
 
-        #
-        # Icon
-        #
-
         self.icon_container = QFrame()
 
-        self.icon_container.setFixedSize(
-            50,
-            50,
-        )
+        self.icon_container.setFixedSize(32, 32)
 
-        self.icon_container.setStyleSheet("""
-        QFrame{
+        icon_layout = QVBoxLayout(self.icon_container)
 
-            background:#353947;
-
-            border:1px solid rgba(255,255,255,20);
-
-            border-radius:16px;
-        }
-        """)
-
-        icon_layout = QVBoxLayout(
-            self.icon_container
-        )
-
-        icon_layout.setContentsMargins(
-            0,
-            0,
-            0,
-            0,
-        )
+        icon_layout.setContentsMargins(0, 0, 0, 0)
 
         self.icon_label = QSvgWidget()
 
-        self.icon_label.setFixedSize(
-            26,
-            26,
-        )
+        self.icon_label.setFixedSize(16, 16)
 
         self.set_icon(icon)
 
@@ -176,449 +101,142 @@ class StatusCard(QFrame):
             alignment=Qt.AlignCenter,
         )
 
-        header.addWidget(
-            self.icon_container
-        )
-
-        #
-        # Titel
-        #
+        header.addWidget(self.icon_container)
 
         title_layout = QVBoxLayout()
 
-        title_layout.setSpacing(2)
+        title_layout.setSpacing(0)
 
-        header.addLayout(
-            title_layout,
-            1,
-        )
+        header.addLayout(title_layout, 1)
 
         self.title_label = QLabel(title)
 
-        self.title_label.setStyleSheet("""
-        QLabel{
-
-            color:white;
-
-            font-size:15px;
-
-            font-weight:700;
-        }
-        """)
-
-        title_layout.addWidget(
-            self.title_label
-        )
-
-        #
-        # Status (groß)
-        #
-
-        self.status_label = QLabel(status)
-
-        self.status_label.setStyleSheet("""
-        QLabel{
-
-            color:#67D46B;
-
+        self.title_label.setStyleSheet(f"""
+        QLabel{{
+            color:{Colors.WHITE};
             font-size:13px;
-
-            font-weight:700;
-
-            background:transparent;
-        }
+            font-weight:600;
+        }}
         """)
 
-        title_layout.addWidget(
-            self.status_label
-        )
+        title_layout.addWidget(self.title_label)
 
         header.addStretch()
 
-        #
-        # Badge rechts
-        #
-
         self.badge = QLabel("")
 
-        self.badge.setMinimumHeight(26)
-
-        self.badge.setAlignment(
-            Qt.AlignCenter
-        )
-
-        self.badge.setStyleSheet("""
-        QLabel{
-
-            background:rgba(67,192,122,20);
-
-            color:#73DA7B;
-
-            border:1px solid rgba(67,192,122,60);
-
-            border-radius:13px;
-
-            padding-left:10px;
-
-            padding-right:10px;
-
-            font-size:11px;
-
-            font-weight:700;
-        }
-        """)
+        self.badge.setAlignment(Qt.AlignCenter)
 
         header.addWidget(
             self.badge,
             alignment=Qt.AlignTop,
         )
 
-                #
-        # ==========================================
-        # Hauptinhalt
-        # ==========================================
+        #
+        # Value
         #
 
         self.value_label = QLabel()
 
-        self.value_label.setStyleSheet("""
-        QLabel{
-
-            color:white;
-
-            font-size:26px;
-
-            font-weight:800;
-
-            background:transparent;
-        }
+        self.value_label.setStyleSheet(f"""
+        QLabel{{
+            color:{Colors.WHITE};
+            font-family:"JetBrains Mono";
+            font-size:20px;
+            font-weight:600;
+            letter-spacing:-0.02em;
+        }}
         """)
 
         self.value_label.hide()
 
-        self.root.addWidget(
-            self.value_label
-        )
+        self.root.addWidget(self.value_label)
 
         #
-        # Details
+        # Status / Details
         #
+
+        self.status_label = QLabel(status)
+
+        self.status_label.setStyleSheet(f"""
+        QLabel{{
+            color:{Colors.TEXT_SECONDARY};
+            font-size:12px;
+        }}
+        """)
+
+        self.root.addWidget(self.status_label)
 
         self.details_label = QLabel(details)
 
         self.details_label.setWordWrap(True)
 
-        self.details_label.setStyleSheet("""
-        QLabel{
-
-            color:#AEB4C2;
-
+        self.details_label.setStyleSheet(f"""
+        QLabel{{
+            color:{Colors.TEXT_MUTED};
             font-size:12px;
-
-            background:transparent;
-        }
+        }}
         """)
 
-        self.root.addWidget(
-            self.details_label
-        )
-
-        #
-        # Abstand bis Button
-        #
+        self.root.addWidget(self.details_label)
 
         self.root.addStretch()
 
         #
-        # ==========================================
         # Button
-        # ==========================================
         #
 
         bottom = QHBoxLayout()
 
-        bottom.setContentsMargins(
-            0,
-            0,
-            0,
-            0,
-        )
+        bottom.setContentsMargins(0, 0, 0, 0)
 
-        bottom.setSpacing(0)
+        self.button = QPushButton(button_text)
 
-        self.button = QPushButton(
-            button_text
-        )
+        self.button.setMinimumHeight(36)
 
-        self.button.setMinimumHeight(44)
+        self.button.setCursor(Qt.PointingHandCursor)
 
-        self.button.setCursor(
-            Qt.PointingHandCursor
-        )
-
-        self.button.setStyleSheet("""
-        QPushButton{
-
-            background:#D6B04D;
-
-            color:#171717;
-
-            border:none;
-
-            border-radius:12px;
-
-            padding-left:18px;
-
-            padding-right:18px;
-
-            font-size:13px;
-
-            font-weight:700;
-        }
-
-        QPushButton:hover{
-
-            background:#E6C15A;
-        }
-
-        QPushButton:pressed{
-
-            background:#B8942D;
-        }
-
-        QPushButton:disabled{
-
-            background:#3C414C;
-
-            color:#7B808B;
-        }
+        self.button.setStyleSheet(f"""
+        QPushButton{{
+            background:{Colors.SURFACE_LIGHT};
+            color:{Colors.TEXT};
+            border:1px solid {Colors.BORDER_LIGHT};
+            border-radius:6px;
+            padding-left:14px;
+            padding-right:14px;
+            font-size:12px;
+            font-weight:500;
+        }}
+        QPushButton:hover{{
+            background:{Colors.BORDER_LIGHT};
+        }}
+        QPushButton:disabled{{
+            color:{Colors.TEXT_MUTED};
+        }}
         """)
 
         if not button_text:
-
             self.button.hide()
 
         bottom.addStretch()
+        bottom.addWidget(self.button)
 
-        bottom.addWidget(
-            self.button
-        )
+        self.root.addLayout(bottom)
 
-        self.root.addLayout(
-            bottom
-        )
-
-        #
-        # Initialen Status setzen
-        #
+        self.setStyleSheet(f"""
+        QFrame#statusCard{{
+            background:{Colors.CARD};
+            border:1px solid {Colors.BORDER};
+            border-radius:{CARD_RADIUS}px;
+        }}
+        """)
 
         self.set_status(status)
-    
-        # --------------------------------------------------
-    # Größe
+
     # --------------------------------------------------
 
     def sizeHint(self):
-
-        return QSize(
-            320,
-            180,
-        )
-
-    # --------------------------------------------------
-    # Paint
-    # --------------------------------------------------
-
-    def paintEvent(self, event):
-
-        painter = QPainter(self)
-
-        painter.setRenderHint(
-            QPainter.Antialiasing
-        )
-
-        rect = self.rect().adjusted(
-            1,
-            1,
-            -1,
-            -1,
-        )
-
-        path = QPainterPath()
-
-        path.addRoundedRect(
-            QRectF(rect),
-            CARD_RADIUS,
-            CARD_RADIUS,
-        )
-
-        #
-        # Hintergrund
-        #
-
-        background = QLinearGradient(
-            rect.topLeft(),
-            rect.bottomLeft(),
-        )
-
-        background.setColorAt(
-            0,
-            QColor(36, 41, 51, 215),
-        )
-
-        background.setColorAt(
-            0.55,
-            QColor(29, 33, 41, 205),
-        )
-
-        background.setColorAt(
-            1,
-            QColor(24, 27, 34, 195),
-        )
-
-        painter.fillPath(
-            path,
-            background,
-        )
-
-        #
-        # Hover Glow
-        #
-
-        if self._hover:
-
-            glow = QLinearGradient(
-                rect.topLeft(),
-                rect.bottomRight(),
-            )
-
-            glow.setColorAt(
-                0,
-                QColor(175,120,255,55),
-            )
-
-            glow.setColorAt(
-                1,
-                QColor(139, 92, 246, 0),
-            )
-
-            painter.fillPath(
-                path,
-                glow,
-            )
-
-            shine = QLinearGradient(
-                rect.left(),
-                rect.top(),
-                rect.right(),
-                rect.top(),
-            )
-
-            shine.setColorAt(
-                0,
-                QColor(255,255,255,18),
-            )
-
-            shine.setColorAt(
-                0.5,
-                QColor(255,255,255,4),
-            )
-
-            shine.setColorAt(
-                1,
-                QColor(255,255,255,0),
-            )
-
-            painter.fillPath(
-                path,
-                shine,
-            )
-
-        #
-        # Rahmen
-        #
-
-        border = QLinearGradient(
-            rect.topLeft(),
-            rect.bottomRight(),
-        )
-
-        alpha = self._border_alpha
-
-        if self._state == "warning":
-
-            border.setColorAt(
-                0,
-                QColor(214, 176, 77, alpha),
-            )
-
-            border.setColorAt(
-                1,
-                QColor(142, 106, 22, alpha),
-            )
-
-        elif self._state == "error":
-
-            border.setColorAt(
-                0,
-                QColor(228, 106, 106, alpha),
-            )
-
-            border.setColorAt(
-                1,
-                QColor(150, 57, 57, alpha),
-            )
-
-        elif self._state == "info":
-
-            border.setColorAt(
-                0,
-                QColor(95, 170, 255, alpha),
-            )
-
-            border.setColorAt(
-                1,
-                QColor(55, 120, 220, alpha),
-            )
-
-        elif self._hover:
-
-            border.setColorAt(
-                0,
-                QColor(139, 92, 246, 180),
-            )
-
-            border.setColorAt(
-                1,
-                QColor(101, 70, 204, 180),
-            )
-
-        else:
-
-            border.setColorAt(
-                0,
-                QColor(74, 78, 89, 120),
-            )
-
-            border.setColorAt(
-                1,
-                QColor(54, 58, 69, 120),
-            )
-
-        painter.setPen(
-            QPen(
-                border,
-                1.5,
-            )
-        )
-
-        painter.drawRoundedRect(
-            QRectF(rect),
-            CARD_RADIUS,
-            CARD_RADIUS,
-        )
-
-        painter.end()
+        return QSize(300, 150)
 
     # --------------------------------------------------
     # Hover
@@ -628,7 +246,13 @@ class StatusCard(QFrame):
 
         self._hover = True
 
-        self.update()
+        self.setStyleSheet(f"""
+        QFrame#statusCard{{
+            background:{Colors.CARD_HOVER};
+            border:1px solid {Colors.BORDER_LIGHT};
+            border-radius:{CARD_RADIUS}px;
+        }}
+        """)
 
         super().enterEvent(event)
 
@@ -636,36 +260,23 @@ class StatusCard(QFrame):
 
         self._hover = False
 
-        self.update()
+        self.setStyleSheet(f"""
+        QFrame#statusCard{{
+            background:{Colors.CARD};
+            border:1px solid {Colors.BORDER};
+            border-radius:{CARD_RADIUS}px;
+        }}
+        """)
 
         super().leaveEvent(event)
 
     def mousePressEvent(self, event):
 
         if event.button() == Qt.LeftButton:
-
             self.clicked.emit()
 
         super().mousePressEvent(event)
 
-    def getBorderAlpha(self):
-
-        return self._border_alpha
-
-
-    def setBorderAlpha(self, value):
-
-        self._border_alpha = value
-
-        self.update()
-
-
-    borderAlpha = Property(
-        int,
-        getBorderAlpha,
-        setBorderAlpha,
-    )
-    
     # --------------------------------------------------
     # State
     # --------------------------------------------------
@@ -673,17 +284,6 @@ class StatusCard(QFrame):
     def set_state(self, state: str):
 
         self._state = state.lower()
-
-        if self._state in ("warning", "error", "info"):
-
-            self.border_animation.start()
-
-        else:
-
-            self.border_animation.stop()
-
-            self._border_alpha = 110
-
         self.update()
 
     # --------------------------------------------------
@@ -697,249 +297,106 @@ class StatusCard(QFrame):
         lower = text.lower()
 
         #
-        # Badge automatisch anpassen
+        # Negative Formulierungen ("Nicht installiert", "Nicht
+        # gefunden") enthalten dieselben Teilworte wie die positiven
+        # Zustände ("installiert", "gefunden") - deshalb müssen die
+        # negativen/warnenden Prüfungen zuerst kommen, sonst gewinnt
+        # immer fälschlich der grüne "normal"-Zustand.
         #
 
         if (
-            "🟢" in text
-            or "installiert" in lower
-            or "aktuell" in lower
-            or "gefunden" in lower
-            or "vorhanden" in lower
-        ):
-
-            badge = "ONLINE"
-
-            fg = "#7DDB9E"
-            bg = "rgba(67,192,122,22)"
-            border = "rgba(67,192,122,65)"
-
-        elif (
-            "🟡" in text
-            or "update" in lower
-            or "warn" in lower
-        ):
-
-            badge = "UPDATE"
-
-            fg = "#E8C96D"
-            bg = "rgba(212,175,55,20)"
-            border = "rgba(212,175,55,70)"
-
-        elif (
             "🔴" in text
             or "nicht" in lower
             or "offline" in lower
             or "error" in lower
             or "fehler" in lower
         ):
+            key = "error"
 
-            badge = "OFFLINE"
+        elif (
+            "🟡" in text
+            or "update" in lower
+            or "warn" in lower
+        ):
+            key = "warning"
 
-            fg = "#F28C8C"
-            bg = "rgba(255,87,87,22)"
-            border = "rgba(255,87,87,65)"
+        elif (
+            "🟢" in text
+            or "installiert" in lower
+            or "aktuell" in lower
+            or "gefunden" in lower
+            or "vorhanden" in lower
+        ):
+            key = "normal"
 
         else:
+            key = "info"
 
-            badge = "INFO"
+        color, bg, badge_text = STATE_COLORS[key]
 
-            fg = "#8DBFFF"
-            bg = "rgba(63,140,255,20)"
-            border = "rgba(63,140,255,65)"
-
-        self.status_label.setStyleSheet(f"""
-        QLabel{{
-            color:{fg};
-            font-size:13px;
-            font-weight:700;
-            background:transparent;
-        }}
-        """)
-
-        self.badge.setText(
-            badge
-        )
+        self.badge.setText(badge_text)
 
         self.badge.setStyleSheet(f"""
         QLabel{{
-
             background:{bg};
-
-            color:{fg};
-
-            border:1px solid {border};
-
-            border-radius:13px;
-
-            padding-left:10px;
-
-            padding-right:10px;
-
-            font-size:11px;
-
+            color:{color};
+            border-radius:4px;
+            padding:3px 8px;
+            font-family:"JetBrains Mono";
+            font-size:10px;
             font-weight:700;
         }}
         """)
 
-        if badge == "ONLINE":
+        self.icon_container.setStyleSheet(f"""
+        QFrame{{
+            background:{bg};
+            border-radius:8px;
+        }}
+        """)
 
-            self.icon_container.setStyleSheet("""
-            QFrame{
-                background:qlineargradient(
-                    x1:0,y1:0,x2:1,y2:1,
-                    stop:0 rgba(67,192,122,55),
-                    stop:1 rgba(67,192,122,20)
-                );
-                border:1px solid rgba(67,192,122,90);
-                border-radius:16px;
-            }
-            """)
-
-        elif badge == "UPDATE":
-
-            self.icon_container.setStyleSheet("""
-            QFrame{
-                background:qlineargradient(
-                    x1:0,y1:0,x2:1,y2:1,
-                    stop:0 rgba(212,175,55,55),
-                    stop:1 rgba(212,175,55,18)
-                );
-                border:1px solid rgba(212,175,55,90);
-                border-radius:16px;
-            }
-            """)
-
-        elif badge == "OFFLINE":
-
-            self.icon_container.setStyleSheet("""
-            QFrame{
-                background:qlineargradient(
-                    x1:0,y1:0,x2:1,y2:1,
-                    stop:0 rgba(235,90,90,55),
-                    stop:1 rgba(235,90,90,18)
-                );
-                border:1px solid rgba(235,90,90,90);
-                border-radius:16px;
-            }
-            """)
-
-        else:
-
-            self.icon_container.setStyleSheet("""
-            QFrame{
-                background:qlineargradient(
-                    x1:0,y1:0,x2:1,y2:1,
-                    stop:0 rgba(80,145,255,45),
-                    stop:1 rgba(80,145,255,15)
-                );
-                border:1px solid rgba(80,145,255,80);
-                border-radius:16px;
-            }
-            """)
-
-    # --------------------------------------------------
-    # Value
     # --------------------------------------------------
 
     def set_value(self, value: str):
 
         value = str(value).strip()
 
-        self.value_label.setVisible(
-            bool(value)
-        )
-
+        self.value_label.setVisible(bool(value))
         self.value_label.setText(value)
 
-    # --------------------------------------------------
-    # Details
-    # --------------------------------------------------
-
     def set_details(self, text: str):
-
         self.details_label.setText(text)
 
-    # --------------------------------------------------
-    # Title
-    # --------------------------------------------------
-
     def set_title(self, text: str):
-
         self.title_label.setText(text)
-
-    # --------------------------------------------------
-    # Icon
-    # --------------------------------------------------
 
     def set_icon(self, icon: str):
 
         if Path(icon).exists():
             self.icon_label.load(icon)
 
-    # --------------------------------------------------
-    # Tooltip
-    # --------------------------------------------------
-
     def set_tooltip(self, text: str):
 
         self.setToolTip(text)
-
         self.details_label.setToolTip(text)
-
         self.status_label.setToolTip(text)
-
-    # --------------------------------------------------
-    # Button
-    # --------------------------------------------------
 
     def set_button_text(self, text: str):
 
         self.button.setText(text)
-
-        self.button.setVisible(
-            bool(text)
-        )
+        self.button.setVisible(bool(text))
 
     def set_button_enabled(self, enabled: bool):
-
         self.button.setEnabled(enabled)
 
     def show_button(self):
-
         self.button.show()
 
     def hide_button(self):
-
         self.button.hide()
 
     def get_button(self):
-
         return self.button
 
     def setDisplayMode(self, mode: str):
-
         self._display_mode = mode
-
-        shadow = self.graphicsEffect()
-
-        if mode == self.HERO_MODE:
-
-            if shadow:
-                shadow.setBlurRadius(8)
-                shadow.setOffset(0, 2)
-
-            self.setStyleSheet("""
-            QFrame#statusCard{
-                background:rgba(28,31,39,150);
-                border:none;
-            }
-            """)
-
-        else:
-
-            if shadow:
-                shadow.setBlurRadius(26)
-                shadow.setOffset(0,10)
-
-            self.setStyleSheet("")

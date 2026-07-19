@@ -1,16 +1,20 @@
 from pathlib import Path
 import threading
 
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import Qt, QObject, QTimer, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
+    QHBoxLayout,
+    QLabel,
     QVBoxLayout,
     QWidget,
 )
+from core.platform import open_folder
+from gui.widgets.activity_panel import ActivityPanel
 from gui.widgets.dashboard_cards import DashboardCards
-from gui.widgets.log_widget import LogWidget
-from gui.widgets.hero_banner import HeroBanner
+from gui.widgets.hero_banner import HeroButton
+from gui.widgets.priority_banner import PriorityBanner
 
 
 class _CompanionUpdateBridge(QObject):
@@ -40,16 +44,72 @@ class DashboardPage(QWidget):
 
         self.manager = manager
 
-        layout = QVBoxLayout(self)
+        root = QHBoxLayout(self)
 
-        layout.setContentsMargins(30, 25, 30, 25)
-        layout.setSpacing(22)
+        root.setContentsMargins(32, 28, 32, 28)
+        root.setSpacing(24)
 
         #
-        # Hero Banner
+        # --------------------------------------------------
+        # Hauptspalte
+        # --------------------------------------------------
         #
 
-        self.hero = HeroBanner()
+        main_column = QVBoxLayout()
+
+        main_column.setSpacing(20)
+
+        root.addLayout(main_column, 1)
+
+        #
+        # Kopfzeile
+        #
+
+        header = QHBoxLayout()
+
+        title_col = QVBoxLayout()
+        title_col.setSpacing(4)
+
+        eyebrow = QLabel(
+            "DASHBOARD · MISTS OF PANDARIA CLASSIC"
+        )
+
+        eyebrow.setObjectName("eyebrow")
+
+        title_col.addWidget(eyebrow)
+
+        title = QLabel("Willkommen zurück.")
+
+        title.setObjectName("title")
+
+        title_col.addWidget(title)
+
+        header.addLayout(title_col)
+
+        header.addStretch()
+
+        self.check_updates_button = HeroButton(
+            "Nach Updates suchen",
+            primary=False,
+        )
+
+        self.check_updates_button.clicked.connect(
+            self.start_update_check
+        )
+
+        header.addWidget(
+            self.check_updates_button,
+            alignment=Qt.AlignVCenter,
+        )
+
+        main_column.addLayout(header)
+
+        #
+        # Priority-Banner (ersetzt den alten HeroBanner)
+        #
+
+        self.hero = PriorityBanner()
+
         self.hero.primaryClicked.connect(
             self.install_or_update
         )
@@ -62,7 +122,7 @@ class DashboardPage(QWidget):
             self.start_update_check
         )
 
-        layout.addWidget(self.hero)
+        main_column.addWidget(self.hero)
 
         #
         # Bridge fürs Companion-Update (läuft im Hintergrund-Thread)
@@ -79,7 +139,7 @@ class DashboardPage(QWidget):
         )
 
         #
-        # Statuskarten
+        # Modul-Grid (Statuskarten)
         #
 
         self.cards = DashboardCards(manager)
@@ -92,23 +152,69 @@ class DashboardPage(QWidget):
             self.pageRequested.emit
         )
 
+        main_column.addWidget(self.cards)
+
         #
-        # Karten in den Hero integrieren
+        # Quick Actions
         #
 
-        self.hero.addDashboardCards(
-            self.cards
+        quick_row = QHBoxLayout()
+        quick_row.setSpacing(10)
+
+        self.open_addon_button = HeroButton(
+            "Addon-Ordner öffnen",
+            primary=False,
         )
 
-        #
-        # Log Widget
-        #
-
-        self.logs = LogWidget(
-            manager.logger
+        self.open_addon_button.clicked.connect(
+            self.open_addon_folder
         )
 
-        layout.addWidget(self.logs)
+        self.start_wow_button = HeroButton(
+            "WoW starten",
+            primary=False,
+        )
+
+        self.start_wow_button.setEnabled(False)
+
+        self.start_wow_button.setToolTip(
+            "Geplant - noch nicht verfügbar."
+        )
+
+        self.sync_now_button = HeroButton(
+            "Jetzt synchronisieren",
+            primary=False,
+        )
+
+        self.sync_now_button.clicked.connect(
+            self.sync_now_quick
+        )
+
+        for button in (
+            self.open_addon_button,
+            self.start_wow_button,
+            self.sync_now_button,
+        ):
+
+            quick_row.addWidget(button, 1)
+
+        main_column.addStretch()
+
+        main_column.addLayout(quick_row)
+
+        #
+        # --------------------------------------------------
+        # Activity-Panel
+        # --------------------------------------------------
+        #
+
+        self.activity = ActivityPanel(manager.logger)
+
+        self.activity.openLogsRequested.connect(
+            lambda: self.pageRequested.emit(4)
+        )
+
+        root.addWidget(self.activity)
 
         #
         # Initialer Zustand
@@ -392,3 +498,29 @@ class DashboardPage(QWidget):
         )
 
         self.refresh()
+
+    # --------------------------------------------------
+    # Quick Actions
+    # --------------------------------------------------
+
+    def open_addon_folder(self):
+
+        state = self.manager.state
+
+        if not state.addon_found:
+
+            self.manager.logger.error(
+                "Addon-Ordner nicht gefunden."
+            )
+
+            return
+
+        open_folder(state.addon_path)
+
+    def sync_now_quick(self):
+
+        self.manager.logger.info(
+            "Manuelle Synchronisation gestartet..."
+        )
+
+        self.manager.run_auto_sync()

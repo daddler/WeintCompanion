@@ -18,7 +18,6 @@ from core.resources import Resources
 from gui.theme.metrics import Metrics
 
 from gui.widgets.sidebar import Sidebar
-from gui.widgets.discord_status_button import DiscordStatusButton
 
 from gui.pages.dashboard import DashboardPage
 from gui.pages.addon import AddonPage
@@ -78,13 +77,13 @@ class MainWindow(QMainWindow):
         self.root_layout = QHBoxLayout(root)
 
         self.root_layout.setContentsMargins(
-            16,
-            16,
-            16,
-            16,
+            0,
+            0,
+            0,
+            0,
         )
 
-        self.root_layout.setSpacing(18)
+        self.root_layout.setSpacing(0)
 
         #
         # --------------------------------------------------
@@ -128,39 +127,6 @@ class MainWindow(QMainWindow):
         self.root_layout.addWidget(
             self.content,
             1,
-        )
-
-        #
-        # --------------------------------------------------
-        # Kopfzeile (Discord-Status, auf jeder Seite sichtbar)
-        # --------------------------------------------------
-        #
-
-        header_row = QHBoxLayout()
-
-        header_row.setContentsMargins(
-            0,
-            16,
-            20,
-            10,
-        )
-
-        header_row.addStretch()
-
-        self.discord_status_button = DiscordStatusButton(
-            self.manager
-        )
-
-        self.discord_status_button.clicked.connect(
-            self.open_discord_settings
-        )
-
-        header_row.addWidget(
-            self.discord_status_button
-        )
-
-        self.content_layout.addLayout(
-            header_row
         )
 
         #
@@ -237,6 +203,10 @@ class MainWindow(QMainWindow):
 
         self.sidebar.pageChanged.connect(
             self.change_page
+        )
+
+        self.sidebar.avatarClicked.connect(
+            self.open_discord_settings
         )
 
         self.dashboard.pageRequested.connect(
@@ -344,36 +314,7 @@ class MainWindow(QMainWindow):
             self.SETTINGS_PAGE_INDEX
         )
 
-    # --------------------------------------------------
-    # Resize
-    # --------------------------------------------------
+        if hasattr(self.settings, "show_section"):
 
-    def resizeEvent(self, event):
+            self.settings.show_section("discord")
 
-        super().resizeEvent(event)
-
-        #
-        # Platz für spätere Responsive-Anpassungen
-        #
-
-        if self.width() < 1280:
-
-            self.root_layout.setContentsMargins(
-                10,
-                10,
-                10,
-                10,
-            )
-
-            self.root_layout.setSpacing(12)
-
-        else:
-
-            self.root_layout.setContentsMargins(
-                16,
-                16,
-                16,
-                16,
-            )
-
-            self.root_layout.setSpacing(18)
