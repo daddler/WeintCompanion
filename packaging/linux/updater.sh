@@ -69,15 +69,19 @@ sleep 2
 #
 # Prüfen ob sie wirklich läuft
 #
-# Hinweis: "pgrep -f $CURRENT" ist bei AppImages unzuverlässig,
-# da der eigentliche Prozess intern oft aus einem gemounteten
-# Pfad (/tmp/.mount_XXXX/...) läuft und nicht mehr den
-# ursprünglichen AppImage-Pfad in der Kommandozeile führt.
-# Daher wird stattdessen direkt die PID des gestarteten
-# Hintergrundprozesses geprüft.
+# Bewusst NUR die direkte PID-Prüfung, kein "pgrep -f $CURRENT"
+# als Fallback: dieses Skript bekommt $CURRENT selbst als
+# Kommandozeilenargument übergeben (siehe oben, $1), daher matcht
+# "pgrep -f $CURRENT" IMMER auch den eigenen update.sh-Prozess -
+# ein Selbsttreffer, der eine fehlgeschlagene neue Version fälschlich
+# als "erfolgreich gestartet" durchgehen lässt. Die PID-Prüfung
+# ($NEWPID von "$!" direkt nach dem Start) ist zudem zuverlässiger:
+# Bei AppImages läuft der eigentliche Prozess intern zwar oft aus
+# einem gemounteten Pfad (/tmp/.mount_XXXX/...), aber genau die hier
+# geprüfte äußere Runtime-PID bleibt dabei erhalten.
 #
 
-if kill -0 "$NEWPID" 2>/dev/null || pgrep -f "$CURRENT" >/dev/null
+if kill -0 "$NEWPID" 2>/dev/null
 then
 
     echo "Neue Version erfolgreich gestartet."
