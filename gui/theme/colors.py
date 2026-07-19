@@ -1,6 +1,9 @@
 """
 WeintCompanion Theme
 Farben
+
+Command-Deck-Palette (dunkles Purple/Indigo-Theme, siehe Claude-Design-
+Projekt "WoW MoP Companion App Design" -> "WeintCompanion 1b.dc.html").
 """
 
 from dataclasses import dataclass
@@ -13,61 +16,65 @@ class Colors:
     # Hauptfarben
     # -------------------------------------------------
 
-    BACKGROUND = "#16171D"
+    BACKGROUND = "#0A0A0C"
 
-    SURFACE = "#1E2028"
-    SURFACE_ALT = "#23262F"
-    SURFACE_LIGHT = "#2A2E39"
+    SURFACE = "#0F0F12"
+    SURFACE_ALT = "#08080A"
+    SURFACE_LIGHT = "#17171C"
 
-    CARD = "#252833"
-    CARD_HOVER = "#2B2F3C"
+    CARD = "#0F0F12"
+    CARD_HOVER = "#17171C"
 
-    SIDEBAR = "#14151B"
-    SIDEBAR_HOVER = "#232733"
+    SIDEBAR = "#08080A"
+    SIDEBAR_HOVER = "#17171C"
 
     # -------------------------------------------------
     # Rahmen
     # -------------------------------------------------
 
-    BORDER = "#363A47"
-    BORDER_LIGHT = "#464B5A"
-    BORDER_GOLD = "#6E5A2B"
+    BORDER = "#1E1E24"
+    BORDER_LIGHT = "#2A2A34"
+    BORDER_ACCENT = "#2A1E3D"
 
     # -------------------------------------------------
-    # Akzentfarben
+    # Akzentfarben (Gradient Lila -> Indigo)
     # -------------------------------------------------
 
-    PRIMARY = "#8B5CF6"
-    PRIMARY_HOVER = "#9D71FF"
-    PRIMARY_PRESSED = "#7247E8"
+    PRIMARY = "#A855F7"
+    PRIMARY_2 = "#6366F1"
+    PRIMARY_HOVER = "#C084FC"
+    PRIMARY_PRESSED = "#9333EA"
 
-    GOLD = "#D9B347"
+    GOLD = "#D4A24A"
     GOLD_LIGHT = "#E8C96D"
     GOLD_HOVER = "#E8C460"
+
+    DISCORD = "#8B95F5"
 
     # -------------------------------------------------
     # Status
     # -------------------------------------------------
 
-    SUCCESS = "#6EDC74"
-    SUCCESS_LIGHT = "#7DDB9E"
+    SUCCESS = "#7CC06E"
+    SUCCESS_LIGHT = "#8FDA80"
 
-    WARNING = "#F1B84B"
+    WARNING = "#D4A24A"
     WARNING_LIGHT = "#E8C96D"
 
-    ERROR = "#EB5A5A"
+    ERROR = "#E56B6B"
     ERROR_LIGHT = "#F18C8C"
 
-    INFO = "#53A8FF"
-    INFO_LIGHT = "#8DBFFF"
+    INFO = "#8B95F5"
+    INFO_LIGHT = "#A8B0FF"
 
     # -------------------------------------------------
     # Texte
     # -------------------------------------------------
 
-    TEXT = "#F6F7FA"
-    TEXT_SECONDARY = "#B3B8C6"
-    TEXT_MUTED = "#868B98"
+    TEXT = "#E8E8EA"
+    TEXT_SECONDARY = "#A8A8B0"
+    TEXT_MUTED = "#6B6B74"
+    TEXT_FAINT = "#4A4A52"
 
     # -------------------------------------------------
     # Transparenzen

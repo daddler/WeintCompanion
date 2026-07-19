@@ -1,14 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import (
-    QColor,
-    QLinearGradient,
-    QPainter,
-    QPainterPath,
-    QPen,
-    QPixmap,
-)
+from PySide6.QtGui import QColor, QCursor, QLinearGradient, QPainter
 
 from PySide6.QtWidgets import (
     QFrame,
@@ -17,18 +10,122 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from gui.widgets.navigation_item import NavigationItem
+from gui.widgets.rail_item import RailItem
 from core.resources import Resources
-from core.version import VERSION
+from gui.theme.colors import Colors
+from gui.theme.metrics import Metrics
 
 
-SIDEBAR_WIDTH = 305
-SIDEBAR_RADIUS = 26
+RAIL_BORDER = Colors.SURFACE_LIGHT
+
+
+class _AvatarButton(QFrame):
+    """
+    Runder Discord-Avatar unten in der Rail - Klick öffnet die
+    Discord-Einstellungen (ersetzt den alten DiscordStatusButton).
+    """
+
+    clicked = Signal()
+
+    SIZE = 36
+
+    def __init__(self):
+
+        super().__init__()
+
+        self.setFixedSize(self.SIZE, self.SIZE)
+
+        self.setCursor(QCursor(Qt.PointingHandCursor))
+
+        self._connected = False
+        self._initial = "?"
+
+    def setState(self, connected: bool, initial: str, tooltip: str):
+
+        self._connected = connected
+        self._initial = initial or "?"
+
+        self.setToolTip(tooltip)
+
+        self.update()
+
+    def paintEvent(self, event):
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        rect = self.rect()
+
+        gradient = QLinearGradient(
+            rect.topLeft(),
+            rect.bottomRight(),
+        )
+
+        if self._connected:
+
+            gradient.setColorAt(0, QColor("#5865F2"))
+            gradient.setColorAt(1, QColor("#7983F5"))
+
+        else:
+
+            gradient.setColorAt(0, QColor(Colors.SURFACE_LIGHT))
+            gradient.setColorAt(1, QColor(Colors.BORDER_LIGHT))
+
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(gradient)
+        painter.drawEllipse(rect)
+
+        painter.setPen(QColor(Colors.WHITE))
+
+        font = painter.font()
+        font.setPointSize(12)
+        font.setBold(True)
+        painter.setFont(font)
+
+        painter.drawText(
+            rect,
+            Qt.AlignCenter,
+            self._initial[:1].upper(),
+        )
+
+        #
+        # Präsenz-Punkt
+        #
+
+        dot_color = (
+            QColor(Colors.SUCCESS)
+            if self._connected
+            else QColor(Colors.TEXT_FAINT)
+        )
+
+        painter.setBrush(dot_color)
+
+        painter.setPen(QColor(Colors.SIDEBAR))
+
+        painter.drawEllipse(
+            rect.width() - 10,
+            rect.height() - 10,
+            9,
+            9,
+        )
+
+        painter.end()
+
+    def mousePressEvent(self, event):
+
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+
+        super().mousePressEvent(event)
 
 
 class Sidebar(QFrame):
+    """
+    Icon-only Rail-Sidebar (72px), siehe Design's linke `<aside>`-Spalte.
+    """
 
     pageChanged = Signal(int)
+    avatarClicked = Signal()
 
     def __init__(self, manager):
 
@@ -38,237 +135,65 @@ class Sidebar(QFrame):
 
         self.setObjectName("Sidebar")
 
-        self.setFixedWidth(
-            SIDEBAR_WIDTH
-        )
+        self.setAttribute(Qt.WA_StyledBackground, True)
+
+        self.setFixedWidth(Metrics.RAIL_WIDTH)
 
         self.setSizePolicy(
             QSizePolicy.Fixed,
             QSizePolicy.Expanding,
         )
 
-        #
-        # Root Layout
-        #
+        self.setStyleSheet(f"""
+        QFrame#Sidebar{{
+            background:{Colors.SIDEBAR};
+            border:none;
+            border-right:1px solid {RAIL_BORDER};
+        }}
+        """)
 
         self.root = QVBoxLayout(self)
 
-        self.root.setContentsMargins(
-            22,
-            22,
-            22,
-            22,
-        )
+        self.root.setContentsMargins(14, 16, 14, 16)
 
-        self.root.setSpacing(18)
-
-        #
-        # Bereiche
-        #
-
-        self.build_header()
-
-        self.build_navigation()
-
-        self.build_status()
-
-        self.build_footer()
-
-        #
-        # Initialisieren
-        #
-
-        self.refresh()
-
-        if self.items:
-
-            self.items[0].setActive(True)
-
-    # ---------------------------------------------------------
-    # Header
-    # ---------------------------------------------------------
-
-    def build_header(self):
-
-        header = QVBoxLayout()
-
-        header.setContentsMargins(
-            0,
-            4,
-            0,
-            0,
-        )
-
-        header.setSpacing(8)
+        self.root.setSpacing(6)
 
         #
         # Logo
         #
 
-        self.logo = QLabel()
+        self.mark = QLabel("W")
 
-        self.logo.setAlignment(
-            Qt.AlignCenter
-        )
+        self.mark.setFixedSize(40, 40)
 
-        pix = QPixmap(
-            Resources.logo()
-        )
+        self.mark.setAlignment(Qt.AlignCenter)
 
-        if not pix.isNull():
-
-            self.logo.setPixmap(
-
-                pix.scaled(
-
-                    170,
-                    170,
-
-                    Qt.KeepAspectRatio,
-
-                    Qt.SmoothTransformation,
-
-                )
-
-            )
-
-        header.addWidget(
-            self.logo,
-            alignment=Qt.AlignCenter,
-        )
-
-        #
-        # Titel
-        #
-
-        title = QLabel(
-            "WeintCompanion"
-        )
-
-        title.setAlignment(
-            Qt.AlignCenter
-        )
-
-        title.setObjectName(
-            "sidebarTitle"
-        )
-
-        title.setStyleSheet("""
-        QLabel{
-
+        self.mark.setStyleSheet(f"""
+        QLabel{{
+            background:qlineargradient(
+                x1:0,y1:0,x2:1,y2:1,
+                stop:0 {Colors.PRIMARY},
+                stop:1 {Colors.PRIMARY_2}
+            );
             color:white;
-
-            font-size:21px;
-
+            font-size:15px;
             font-weight:800;
-
-            background:transparent;
-        }
+            border-radius:10px;
+        }}
         """)
 
-        header.addWidget(title)
-
-        #
-        # Badge
-        #
-
-        badge = QLabel(
-            "MISTS OF PANDARIA CLASSIC"
-        )
-
-        badge.setAlignment(
-            Qt.AlignCenter
-        )
-
-        badge.setFixedHeight(
-            28
-        )
-
-        badge.setStyleSheet("""
-        QLabel{
-
-            background:rgba(214,176,77,18);
-
-            color:#E6C86B;
-
-            border:1px solid rgba(214,176,77,45);
-
-            border-radius:14px;
-
-            font-size:10px;
-
-            font-weight:700;
-
-            padding-left:14px;
-
-            padding-right:14px;
-        }
-        """)
-
-        header.addWidget(
-            badge,
+        self.root.addWidget(
+            self.mark,
             alignment=Qt.AlignCenter,
         )
 
+        self.root.addSpacing(6)
+
         #
-        # Version
+        # Navigation
         #
 
-        self.version = QLabel(
-            f"Version {VERSION}"
-        )
-
-        self.version.setAlignment(
-            Qt.AlignCenter
-        )
-
-        self.version.setStyleSheet("""
-        QLabel{
-
-            color:#8E96A4;
-
-            font-size:12px;
-
-            background:transparent;
-        }
-        """)
-
-        header.addWidget(
-            self.version
-        )
-
-        self.root.addLayout(
-            header
-        )
-
-        self.root.addSpacing(
-            18
-        )
-    
-    # ---------------------------------------------------------
-    # Navigation
-    # ---------------------------------------------------------
-
-    def build_navigation(self):
-
-        self.navigation = QVBoxLayout()
-
-        self.navigation.setContentsMargins(
-            0,
-            0,
-            0,
-            0,
-        )
-
-        self.navigation.setSpacing(
-            8
-        )
-
-        self.root.addLayout(
-            self.navigation
-        )
-
-        self.items = []
+        self.items: list[RailItem] = []
 
         pages = [
 
@@ -280,379 +205,46 @@ class Sidebar(QFrame):
 
         ]
 
-        for index, (icon, text) in enumerate(pages):
+        for index, (icon, tooltip) in enumerate(pages):
 
-            item = NavigationItem(
-                icon,
-                text,
-            )
-
-            #
-            # NavigationItem.clicked besitzt
-            # keine Parameter.
-            #
+            item = RailItem(icon, tooltip)
 
             item.clicked.connect(
                 lambda i=index: self.change_page(i)
             )
 
-            self.navigation.addWidget(
-                item
+            self.root.addWidget(
+                item,
+                alignment=Qt.AlignCenter,
             )
 
-            self.items.append(
-                item
-            )
-
-        #
-        # Trennlinie
-        #
-
-        separator = QFrame()
-
-        separator.setFixedHeight(
-            1
-        )
-
-        separator.setStyleSheet("""
-        QFrame{
-
-            background:#323743;
-
-            border:none;
-        }
-        """)
-
-        self.navigation.addSpacing(
-            12
-        )
-
-        self.navigation.addWidget(
-            separator
-        )
-
-        self.navigation.addSpacing(
-            14
-        )
-
-    # ---------------------------------------------------------
-    # Systemstatus
-    # ---------------------------------------------------------
-
-    def build_status(self):
-
-        from PySide6.QtSvgWidgets import QSvgWidget
-        from PySide6.QtWidgets import QHBoxLayout
-
-        self.status = QFrame()
-
-        self.status.setObjectName(
-            "sidebarStatus"
-        )
-
-        self.status.setStyleSheet("""
-        QFrame#sidebarStatus{
-
-            background:qlineargradient(
-                x1:0,
-                y1:0,
-                x2:0,
-                y2:1,
-                stop:0 #242933,
-                stop:1 #1A1E25
-            );
-
-            border:1px solid #383D48;
-
-            border-radius:18px;
-        }
-        """)
-
-        layout = QVBoxLayout(self.status)
-
-        layout.setContentsMargins(
-            18,
-            18,
-            18,
-            18,
-        )
-
-        layout.setSpacing(14)
-
-        #
-        # Titel
-        #
-
-        title = QLabel("SYSTEMSTATUS")
-
-        title.setStyleSheet("""
-        QLabel{
-            color:#C9CFD9;
-            font-size:11px;
-            font-weight:700;
-            letter-spacing:1px;
-            background:transparent;
-        }
-        """)
-
-        layout.addWidget(title)
-
-        #
-        # Helfer
-        #
-
-        def create_status_row(icon_path):
-
-            row = QHBoxLayout()
-            row.setSpacing(10)
-
-            icon = QSvgWidget(icon_path)
-            icon.setFixedSize(18, 18)
-
-            label = QLabel()
-
-            label.setStyleSheet("""
-            QLabel{
-                color:white;
-                font-size:13px;
-                background:transparent;
-            }
-            """)
-
-            row.addWidget(icon)
-            row.addWidget(label, 1)
-
-            return row, label
-
-        #
-        # Companion
-        #
-
-        row, self.companion_status = create_status_row(
-            Resources.companion()
-        )
-
-        layout.addLayout(row)
-
-        #
-        # WeintCodex
-        #
-
-        row, self.addon_status = create_status_row(
-            Resources.software()
-        )
-
-        layout.addLayout(row)
-
-        #
-        # WoW
-        #
-
-        row, self.wow_status = create_status_row(
-            Resources.game()
-        )
-
-        layout.addLayout(row)
-
-        #
-        # Discord
-        #
-
-        row, self.discord_status = create_status_row(
-            Resources.discord()
-        )
-
-        layout.addLayout(row)
-
-        self.root.addWidget(
-            self.status
-        )
+            self.items.append(item)
 
         self.root.addStretch()
-    # ---------------------------------------------------------
-    # Footer
-    # ---------------------------------------------------------
 
-    def build_footer(self):
+        #
+        # Avatar
+        #
 
-        line = QFrame()
+        self.avatar = _AvatarButton()
 
-        line.setFixedHeight(1)
-
-        line.setStyleSheet("""
-        QFrame{
-
-            background:#323743;
-
-            border:none;
-        }
-        """)
+        self.avatar.clicked.connect(
+            self.avatarClicked.emit
+        )
 
         self.root.addWidget(
-            line
-        )
-
-        self.root.addSpacing(
-            12
-        )
-
-        footer = QLabel(
-            "Powered by Daddler2419"
-        )
-
-        footer.setAlignment(
-            Qt.AlignCenter
-        )
-
-        footer.setStyleSheet("""
-        QLabel{
-
-            color:#707785;
-
-            font-size:11px;
-
-            background:transparent;
-        }
-        """)
-
-        self.root.addWidget(
-            footer
-        )
-
-    # ---------------------------------------------------------
-    # Paint
-    # ---------------------------------------------------------
-
-    def paintEvent(self, event):
-
-        painter = QPainter(self)
-
-        painter.setRenderHint(
-            QPainter.Antialiasing
-        )
-
-        rect = self.rect().adjusted(
-            1,
-            1,
-            -1,
-            -1,
-        )
-
-        path = QPainterPath()
-
-        path.addRoundedRect(
-            rect,
-            SIDEBAR_RADIUS,
-            SIDEBAR_RADIUS,
+            self.avatar,
+            alignment=Qt.AlignCenter,
         )
 
         #
-        # Hintergrund
+        # Initialisieren
         #
 
-        background = QLinearGradient(
-            rect.topLeft(),
-            rect.bottomLeft(),
-        )
+        self.refresh()
 
-        background.setColorAt(
-            0,
-            QColor("#23262F"),
-        )
-
-        background.setColorAt(
-            0.45,
-            QColor("#1B1F27"),
-        )
-
-        background.setColorAt(
-            1,
-            QColor("#15181E"),
-        )
-
-        painter.fillPath(
-            path,
-            background,
-        )
-
-        #
-        # Goldener Glow oben
-        #
-
-        glow = QLinearGradient(
-
-            rect.left(),
-
-            rect.top(),
-
-            rect.left() + 260,
-
-            rect.top() + 180,
-
-        )
-
-        glow.setColorAt(
-            0,
-            QColor(212, 175, 55, 24),
-        )
-
-        glow.setColorAt(
-            1,
-            QColor(212, 175, 55, 0),
-        )
-
-        painter.fillPath(
-            path,
-            glow,
-        )
-
-        #
-        # Rand
-        #
-
-        border = QLinearGradient(
-
-            rect.topLeft(),
-
-            rect.bottomRight(),
-
-        )
-
-        border.setColorAt(
-            0,
-            QColor("#6E5A2B"),
-        )
-
-        border.setColorAt(
-            0.5,
-            QColor("#3A3E47"),
-        )
-
-        border.setColorAt(
-            1,
-            QColor("#6E5A2B"),
-        )
-
-        painter.setPen(
-
-            QPen(
-                border,
-                1.3,
-            )
-
-        )
-
-        painter.drawRoundedRect(
-
-            rect,
-
-            SIDEBAR_RADIUS,
-
-            SIDEBAR_RADIUS,
-
-        )
-
-        painter.end()
+        if self.items:
+            self.items[0].setActive(True)
 
     # ---------------------------------------------------------
     # Navigation
@@ -661,7 +253,6 @@ class Sidebar(QFrame):
     def change_page(self, index):
 
         for item in self.items:
-
             item.setActive(False)
 
         self.items[index].setActive(True)
@@ -676,82 +267,30 @@ class Sidebar(QFrame):
 
         state = self.manager.state
 
-        #
-        # Version
-        #
+        account = self.manager.discord_account.load()
 
-        self.version.setText(
-            f"Version {state.companion_version}"
-        )
+        if account:
 
-        #
-        # Companion
-        #
+            username = account.get("username", "Discord")
 
-        if state.companion_update_available:
+            self.avatar.setState(
+                connected=True,
+                initial=username,
+                tooltip=f"Mit Discord verbunden als {username}",
+            )
 
-            self.companion_status.setText(
-                f"Companion  v{VERSION}\nUpdate verfügbar"
+        elif state.discord_connected:
+
+            self.avatar.setState(
+                connected=True,
+                initial=state.discord_name or "D",
+                tooltip=f"Discord-Bot online: {state.discord_name}",
             )
 
         else:
 
-            self.companion_status.setText(
-                f"Companion  v{VERSION}"
-            )
-
-        #
-        # World of Warcraft
-        #
-
-        if state.wow_found:
-
-            self.wow_status.setText(
-                "World of Warcraft\nClassic gefunden"
-            )
-
-        else:
-
-            self.wow_status.setText(
-                "World of Warcraft\nNicht gefunden"
-            )
-
-        #
-        # WeintCodex
-        #
-
-        if state.addon_found:
-
-            self.addon_status.setText(
-                f"WeintCodex\nVersion {state.addon_version}"
-            )
-
-        else:
-
-            self.addon_status.setText(
-                "WeintCodex\nNicht installiert"
-            )
-
-        #
-        # Discord
-        #
-
-        if state.discord_connected:
-
-            if state.discord_latency is not None:
-
-                self.discord_status.setText(
-                    f"Discord Bot\n{state.discord_name}\n{state.discord_latency} ms"
-                )
-
-            else:
-
-                self.discord_status.setText(
-                    f"Discord Bot\n{state.discord_name}"
-                )
-
-        else:
-
-            self.discord_status.setText(
-                "Discord Bot\nOffline"
+            self.avatar.setState(
+                connected=False,
+                initial="?",
+                tooltip="Nicht mit Discord verbunden",
             )

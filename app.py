@@ -173,10 +173,12 @@ if platform.system() == "Linux":
         os.environ.setdefault("QT_XCB_GL_INTEGRATION", "none")
 
 
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
 from gui.main_window import MainWindow
+from gui.splash import SplashScreen
 from gui.theme.stylesheet import APP_STYLE
 
 
@@ -222,27 +224,50 @@ def main():
     #
     app.setStyleSheet(APP_STYLE)
 
-    window = MainWindow()
-
-    window.show()
-
     #
-    # Einzelbericht (openSUSE/Wayland, 07/2026): Prozess läuft
-    # sichtbar (RAM/CPU), aber kein Fenster erscheint - obwohl das
-    # native Wayland-Plugin laut Log sauber lädt. show() reicht bei
-    # manchen Compositorn offenbar nicht, um die Surface tatsächlich
-    # zu mappen/in den Vordergrund zu holen. raise_()/activateWindow()
-    # sind der Standard-Workaround dafür; die Diagnose-Zeile hilft,
-    # beim nächsten Bericht zu sehen, ob Qt das Fenster überhaupt für
-    # sichtbar hält.
+    # --------------------------------------------------
+    # Splash-Screen (ephemer, siehe gui/splash.py)
+    # --------------------------------------------------
+    # Rein kosmetisch - MainWindow initialisiert seinen eigenen
+    # Zustand ohnehin verzögert/im Hintergrund-Thread (siehe
+    # CompanionManager.initialize()), der Splash verzögert also nur
+    # den sichtbaren Fensterwechsel, nicht den echten App-Start.
     #
 
-    window.raise_()
-    window.activateWindow()
+    splash = SplashScreen()
+    splash.show()
 
-    print(
-        f"[WeintCompanion] Fenster sichtbar: {window.isVisible()}"
-    )
+    window_holder = {}
+
+    def _show_main_window():
+
+        window = MainWindow()
+
+        window_holder["window"] = window
+
+        window.show()
+
+        #
+        # Einzelbericht (openSUSE/Wayland, 07/2026): Prozess läuft
+        # sichtbar (RAM/CPU), aber kein Fenster erscheint - obwohl das
+        # native Wayland-Plugin laut Log sauber lädt. show() reicht bei
+        # manchen Compositorn offenbar nicht, um die Surface tatsächlich
+        # zu mappen/in den Vordergrund zu holen. raise_()/activateWindow()
+        # sind der Standard-Workaround dafür; die Diagnose-Zeile hilft,
+        # beim nächsten Bericht zu sehen, ob Qt das Fenster überhaupt für
+        # sichtbar hält.
+        #
+
+        window.raise_()
+        window.activateWindow()
+
+        print(
+            f"[WeintCompanion] Fenster sichtbar: {window.isVisible()}"
+        )
+
+        splash.close()
+
+    QTimer.singleShot(1500, _show_main_window)
 
     sys.exit(app.exec())
 

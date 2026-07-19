@@ -5,6 +5,7 @@ import subprocess
 
 from core.github_updater import GitHubUpdater
 from core.linux_updater import LinuxUpdater
+from core.paths import Paths
 from core.windows_updater import WindowsUpdater
 from core.runtime import Runtime
 from core.version import VERSION
@@ -167,8 +168,7 @@ class CompanionUpdater:
         else:
 
             destination = (
-                Path("cache")
-                / "downloads"
+                Paths.downloads()
                 / filename
             )
 

@@ -32,11 +32,41 @@ QToolTip {{
 
     color:{Colors.TEXT};
 
-    border:1px solid {Colors.BORDER_GOLD};
+    border:1px solid {Colors.BORDER_LIGHT};
 
-    border-radius:8px;
+    border-radius:6px;
 
-    padding:8px;
+    padding:6px 10px;
+}}
+
+/* ==========================================================
+   SCROLLBAR
+========================================================== */
+
+QScrollBar:vertical {{
+    background:transparent;
+    width:10px;
+    margin:0px;
+}}
+
+QScrollBar::handle:vertical {{
+    background:{Colors.BORDER_LIGHT};
+    border-radius:5px;
+    min-height:24px;
+}}
+
+QScrollBar::handle:vertical:hover {{
+    background:{Colors.TEXT_MUTED};
+}}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {{
+    height:0px;
+}}
+
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {{
+    background:transparent;
 }}
 
 /* ==========================================================
@@ -57,6 +87,8 @@ QLabel#title {{
     font-weight:{Typography.BOLD};
 
     color:{Colors.WHITE};
+
+    letter-spacing:-0.02em;
 }}
 
 QLabel#subtitle {{
@@ -66,47 +98,33 @@ QLabel#subtitle {{
     color:{Colors.TEXT_SECONDARY};
 }}
 
+QLabel#eyebrow {{
+
+    font-family:"{Typography.MONO_FONT}";
+
+    font-size:{Typography.MICRO}px;
+
+    color:{Colors.TEXT_MUTED};
+
+    letter-spacing:0.15em;
+}}
+
 QLabel#cardTitle {{
 
     font-size:{Typography.CARD_TITLE}px;
 
-    font-weight:{Typography.BOLD};
+    font-weight:{Typography.SEMIBOLD};
 
     color:{Colors.WHITE};
 }}
 
 QLabel#cardValue {{
 
+    font-family:"{Typography.MONO_FONT}";
+
     font-size:{Typography.BODY}px;
 
     color:{Colors.TEXT};
-}}
-
-QLabel#heroTitle {{
-
-    font-size:{Typography.HERO_TITLE}px;
-
-    font-weight:{Typography.BOLD};
-
-    color:{Colors.WHITE};
-}}
-
-QLabel#heroSubtitle {{
-
-    font-size:16px;
-
-    color:{Colors.TEXT_SECONDARY};
-}}
-
-QLabel#sidebarLogo {{
-
-    color:{Colors.WHITE};
-
-    font-size:22px;
-
-    font-weight:{Typography.BOLD};
-
-    letter-spacing:1px;
 }}
 
 /* ==========================================================
@@ -125,9 +143,9 @@ QPushButton{{
 
     min-height:{Metrics.BUTTON_HEIGHT}px;
 
-    padding:0px 20px;
+    padding:0px 18px;
 
-    font-size:15px;
+    font-size:13px;
 
     font-weight:{Typography.SEMIBOLD};
 }}
@@ -144,7 +162,7 @@ QPushButton:pressed{{
 
 QPushButton:disabled{{
 
-    background:{Colors.CARD};
+    background:{Colors.SURFACE_LIGHT};
 
     color:{Colors.TEXT_MUTED};
 }}
@@ -162,9 +180,9 @@ QLineEdit{{
 
     border:1px solid {Colors.BORDER};
 
-    border-radius:12px;
+    border-radius:8px;
 
-    padding:10px 14px;
+    padding:8px 12px;
 }}
 
 QLineEdit:hover{{
@@ -174,7 +192,7 @@ QLineEdit:hover{{
 
 QLineEdit:focus{{
 
-    border:1px solid {Colors.GOLD};
+    border:1px solid {Colors.PRIMARY};
 
     selection-background-color:{Colors.PRIMARY};
 }}
@@ -193,7 +211,7 @@ QTextEdit{{
 
     border:1px solid {Colors.BORDER};
 
-    border-radius:12px;
+    border-radius:8px;
 
     padding:12px;
 }}
@@ -201,7 +219,7 @@ QTextEdit{{
 QPlainTextEdit:focus,
 QTextEdit:focus{{
 
-    border:1px solid {Colors.GOLD};
+    border:1px solid {Colors.PRIMARY};
 }}
 
 
@@ -217,9 +235,9 @@ QComboBox{{
 
     border:1px solid {Colors.BORDER};
 
-    border-radius:12px;
+    border-radius:8px;
 
-    min-height:40px;
+    min-height:36px;
 
     padding-left:12px;
 }}
@@ -231,14 +249,14 @@ QComboBox:hover{{
 
 QComboBox:focus{{
 
-    border:1px solid {Colors.GOLD};
+    border:1px solid {Colors.PRIMARY};
 }}
 
 QComboBox::drop-down{{
 
     border:none;
 
-    width:32px;
+    width:28px;
 
     background:transparent;
 }}
@@ -249,7 +267,7 @@ QComboBox QAbstractItemView{{
 
     color:{Colors.TEXT};
 
-    border:1px solid {Colors.BORDER_GOLD};
+    border:1px solid {Colors.BORDER_LIGHT};
 
     selection-background-color:{Colors.PRIMARY};
 
@@ -270,22 +288,47 @@ QCheckBox{{
 
 QCheckBox::indicator{{
 
-    width:18px;
+    width:16px;
 
-    height:18px;
+    height:16px;
 
-    border-radius:5px;
+    border-radius:4px;
 
-    border:1px solid {Colors.BORDER};
+    border:1px solid {Colors.BORDER_LIGHT};
 
     background:{Colors.SURFACE_ALT};
 }}
 
 QCheckBox::indicator:checked{{
 
-    background:{Colors.GOLD};
+    background:{Colors.PRIMARY};
 
-    border:1px solid {Colors.GOLD};
+    border:1px solid {Colors.PRIMARY};
+}}
+
+
+/* ==========================================================
+   SPINBOX
+========================================================== */
+
+QSpinBox{{
+
+    background:{Colors.SURFACE_ALT};
+
+    color:{Colors.TEXT};
+
+    border:1px solid {Colors.BORDER};
+
+    border-radius:8px;
+
+    min-height:34px;
+
+    padding-left:10px;
+}}
+
+QSpinBox:focus{{
+
+    border:1px solid {Colors.PRIMARY};
 }}
 
 
@@ -297,7 +340,7 @@ QGroupBox{{
 
     border:1px solid {Colors.BORDER};
 
-    border-radius:16px;
+    border-radius:12px;
 
     margin-top:18px;
 

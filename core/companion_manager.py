@@ -223,7 +223,12 @@ class CompanionManager:
 
         try:
 
-            self.discord_roster_sync.process()
+            if self.config.data.get(
+                "roster_sync_enabled",
+                True,
+            ):
+
+                self.discord_roster_sync.process()
 
         except Exception as exc:
 

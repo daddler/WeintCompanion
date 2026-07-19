@@ -1,16 +1,84 @@
+from PySide6.QtCore import Qt
+from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
+    QGridLayout,
+    QHBoxLayout,
     QLabel,
     QVBoxLayout,
-    QHBoxLayout,
-    QGridLayout,
     QWidget,
 )
 
-from gui.widgets.hero_banner import HeroButton
-from gui.widgets.section_card import SectionCard
-from gui.widgets.log_widget import LogWidget
-from gui.widgets.status_card import StatusCard
 from core.resources import Resources
+from gui.theme.colors import Colors
+from gui.widgets.card import Card
+from gui.widgets.hero_banner import HeroButton
+from gui.widgets.log_widget import LogWidget
+from gui.widgets.toggle_switch import ToggleSwitch
+
+
+class _BridgeCard(Card):
+
+    def __init__(
+        self,
+        title: str,
+        description: str,
+        real: bool,
+        checked: bool = False,
+    ):
+        super().__init__()
+
+        self.real = real
+
+        top_row = QHBoxLayout()
+
+        text_col = QVBoxLayout()
+        text_col.setSpacing(4)
+
+        title_color = Colors.WHITE if real else Colors.TEXT_SECONDARY
+
+        title_label = QLabel(title)
+
+        title_label.setStyleSheet(
+            f"font-size:14px;font-weight:600;color:{title_color};"
+        )
+
+        text_col.addWidget(title_label)
+
+        description_label = QLabel(description)
+
+        description_label.setWordWrap(True)
+
+        description_label.setStyleSheet(
+            f"font-size:12px;color:{Colors.TEXT_MUTED};"
+        )
+
+        text_col.addWidget(description_label)
+
+        top_row.addLayout(text_col, 1)
+
+        self.toggle = ToggleSwitch(checked=checked)
+
+        if not real:
+            self.toggle.setEnabled(False)
+
+        top_row.addWidget(self.toggle, alignment=Qt.AlignTop)
+
+        self.addLayout(top_row)
+
+        caption_text = (
+            "Aktiv"
+            if real
+            else "Geplant - noch nicht implementiert"
+        )
+
+        caption = QLabel(caption_text)
+
+        caption.setStyleSheet(
+            'font-family:"JetBrains Mono";'
+            f"font-size:10px;color:{Colors.TEXT_FAINT};"
+        )
+
+        self.addWidget(caption)
 
 
 class SyncPage(QWidget):
@@ -21,152 +89,258 @@ class SyncPage(QWidget):
         self.manager = manager
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(18)
+
+        layout.setContentsMargins(32, 28, 32, 28)
+        layout.setSpacing(20)
 
         #
         # --------------------------------------------------
-        # Titel
+        # Kopfzeile
         # --------------------------------------------------
         #
 
-        title = QLabel("Synchronisation")
+        header = QHBoxLayout()
+
+        title_col = QVBoxLayout()
+        title_col.setSpacing(4)
+
+        eyebrow = QLabel("SYNCHRONISATION · DISCORD ↔ SPIEL")
+        eyebrow.setObjectName("eyebrow")
+
+        title_col.addWidget(eyebrow)
+
+        title = QLabel("Bridges")
         title.setObjectName("title")
 
+        title_col.addWidget(title)
+
         subtitle = QLabel(
-            "Überprüfe die Verbindung zwischen WeintCompanion, WeintCodex und zukünftigen Diensten."
+            "Was zwischen deinem Discord-Server und WoW synchronisiert wird."
         )
         subtitle.setObjectName("subtitle")
-        subtitle.setWordWrap(True)
 
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
+        title_col.addWidget(subtitle)
 
-        # --------------------------------------------------
-        # Statuskarten
-        # --------------------------------------------------
+        header.addLayout(title_col)
 
-        self.status_card = StatusCard(
-            Resources.sync(),
-            "Synchronisation",
-            "Bereit",
-            "Noch keine Prüfung durchgeführt.",
-        )
-
-        self.wow_card = StatusCard(
-            Resources.game(),
-            "World of Warcraft",
-            "-",
-            "-",
-        )
-
-        self.addon_card = StatusCard(
-            Resources.software(),
-            "WeintCodex",
-            "-",
-            "-",
-        )
-
-        self.discord_card = StatusCard(
-            Resources.discord(),
-            "Discord Bot",
-            "-",
-            "-",
-        )
-
-        cards = QGridLayout()
-
-        cards.setHorizontalSpacing(18)
-        cards.setVerticalSpacing(18)
-
-        cards.addWidget(
-            self.status_card,
-            0,
-            0,
-        )
-
-        cards.addWidget(
-            self.wow_card,
-            0,
-            1,
-        )
-
-        cards.addWidget(
-            self.addon_card,
-            0,
-            2,
-        )
-
-        cards.addWidget(
-            self.discord_card,
-            1,
-            0,
-            1,
-            3,
-        )
-
-        for column in range(3):
-            cards.setColumnStretch(column, 1)
-
-        layout.addLayout(cards)
-
-        #
-        # --------------------------------------------------
-        # Buttons
-        # --------------------------------------------------
-        #
-
-        # --------------------------------------------------
-        # Aktionen
-        # --------------------------------------------------
-
-        self.connection_button = HeroButton(
-            "Verbindung prüfen",
-            primary=False,
-        )
+        header.addStretch()
 
         self.sync_button = HeroButton(
-            "Synchronisation testen",
+            "Jetzt synchronisieren",
             primary=True,
         )
 
-        button_row = QHBoxLayout()
-        button_row.setSpacing(14)
+        header.addWidget(self.sync_button, alignment=Qt.AlignTop)
 
-        button_row.addWidget(self.connection_button)
-        button_row.addWidget(self.sync_button)
-        button_row.addStretch()
-
-        layout.addLayout(button_row)
+        layout.addLayout(header)
 
         #
         # --------------------------------------------------
-        # Log
+        # Flow-Visual
+        # --------------------------------------------------
+        #
+
+        self.flow_card = Card()
+
+        flow_row = QHBoxLayout()
+
+        flow_row.setSpacing(24)
+
+        #
+        # WoW
+        #
+
+        wow_col = QHBoxLayout()
+        wow_col.setSpacing(14)
+
+        wow_text = QVBoxLayout()
+        wow_text.setSpacing(2)
+
+        self.wow_title = QLabel("World of Warcraft")
+
+        self.wow_title.setStyleSheet(
+            f"font-size:15px;font-weight:600;color:{Colors.WHITE};"
+        )
+
+        wow_text.addWidget(self.wow_title)
+
+        self.wow_meta = QLabel("-")
+
+        self.wow_meta.setStyleSheet(
+            'font-family:"JetBrains Mono";'
+            f"font-size:11px;color:{Colors.TEXT_MUTED};"
+        )
+
+        wow_text.addWidget(self.wow_meta)
+
+        wow_col.addLayout(wow_text)
+
+        self.wow_icon_box = QLabel()
+
+        self.wow_icon_box.setFixedSize(48, 48)
+
+        wow_icon_layout = QHBoxLayout(self.wow_icon_box)
+        wow_icon_layout.setContentsMargins(0, 0, 0, 0)
+
+        wow_icon = QSvgWidget(Resources.game())
+        wow_icon.setFixedSize(20, 20)
+
+        wow_icon_layout.addWidget(wow_icon, alignment=Qt.AlignCenter)
+
+        wow_col.addWidget(self.wow_icon_box)
+
+        flow_row.addLayout(wow_col, 1)
+
+        #
+        # Mitte: Latenz
+        #
+
+        middle_col = QVBoxLayout()
+        middle_col.setSpacing(4)
+
+        arrow = QLabel("↔")
+
+        arrow.setAlignment(Qt.AlignCenter)
+
+        arrow.setStyleSheet(
+            f"color:{Colors.PRIMARY};font-size:20px;"
+        )
+
+        middle_col.addWidget(arrow)
+
+        self.latency_label = QLabel("- ms")
+
+        self.latency_label.setAlignment(Qt.AlignCenter)
+
+        self.latency_label.setStyleSheet(
+            'font-family:"JetBrains Mono";'
+            f"font-size:10px;color:{Colors.TEXT_MUTED};"
+        )
+
+        middle_col.addWidget(self.latency_label)
+
+        flow_row.addLayout(middle_col)
+
+        #
+        # Discord
+        #
+
+        discord_col = QHBoxLayout()
+        discord_col.setSpacing(14)
+
+        self.discord_icon_box = QLabel()
+
+        self.discord_icon_box.setFixedSize(48, 48)
+
+        discord_icon_layout = QHBoxLayout(self.discord_icon_box)
+        discord_icon_layout.setContentsMargins(0, 0, 0, 0)
+
+        discord_icon = QSvgWidget(Resources.discord())
+        discord_icon.setFixedSize(20, 20)
+
+        discord_icon_layout.addWidget(
+            discord_icon,
+            alignment=Qt.AlignCenter,
+        )
+
+        discord_col.addWidget(self.discord_icon_box)
+
+        discord_text = QVBoxLayout()
+        discord_text.setSpacing(2)
+
+        self.discord_title = QLabel("Discord")
+
+        self.discord_title.setStyleSheet(
+            f"font-size:15px;font-weight:600;color:{Colors.WHITE};"
+        )
+
+        discord_text.addWidget(self.discord_title)
+
+        self.discord_meta = QLabel("-")
+
+        self.discord_meta.setStyleSheet(
+            'font-family:"JetBrains Mono";'
+            f"font-size:11px;color:{Colors.TEXT_MUTED};"
+        )
+
+        discord_text.addWidget(self.discord_meta)
+
+        discord_col.addLayout(discord_text)
+
+        flow_row.addLayout(discord_col, 1)
+
+        self.flow_card.addLayout(flow_row)
+
+        layout.addWidget(self.flow_card)
+
+        #
+        # --------------------------------------------------
+        # Bridges
+        # --------------------------------------------------
+        #
+
+        bridge_grid = QGridLayout()
+
+        bridge_grid.setHorizontalSpacing(14)
+        bridge_grid.setVerticalSpacing(14)
+
+        self.roster_bridge = _BridgeCard(
+            "Charakter-Roster",
+            "Wer online ist, welcher Char, welche Rolle",
+            real=True,
+            checked=self.manager.config.data.get(
+                "roster_sync_enabled", True,
+            ),
+        )
+
+        self.calendar_bridge = _BridgeCard(
+            "Gilden-Kalender",
+            "Raid-Termine → Discord-Events",
+            real=False,
+        )
+
+        self.loot_bridge = _BridgeCard(
+            "Loot-Verteilung",
+            "Loot-Log → Discord-Channel #loot",
+            real=False,
+        )
+
+        self.chat_bridge = _BridgeCard(
+            "Chat-Bridge",
+            "Guild-Chat ↔ Discord-Channel",
+            real=False,
+        )
+
+        bridge_grid.addWidget(self.roster_bridge, 0, 0)
+        bridge_grid.addWidget(self.calendar_bridge, 0, 1)
+        bridge_grid.addWidget(self.loot_bridge, 1, 0)
+        bridge_grid.addWidget(self.chat_bridge, 1, 1)
+
+        bridge_grid.setColumnStretch(0, 1)
+        bridge_grid.setColumnStretch(1, 1)
+
+        layout.addLayout(bridge_grid)
+
+        #
+        # --------------------------------------------------
+        # Live-Tail
         # --------------------------------------------------
         #
 
         self.logs = LogWidget(manager.logger)
 
-        log_card = SectionCard(
-            Resources.logs(),
-            "Live-Protokoll",
-        )
+        self.logs.title.setText("Sync-Events")
 
-        log_card.addWidget(self.logs)
-
-        layout.addWidget(log_card)
-
-        layout.addStretch()
+        layout.addWidget(self.logs, 1)
 
         #
         # Signale
         #
 
-        self.sync_button.clicked.connect(
-            self.sync_now
-        )
+        self.sync_button.clicked.connect(self.sync_now)
 
-        self.connection_button.clicked.connect(
-            self.check_connection
+        self.roster_bridge.toggle.toggled.connect(
+            self.set_roster_sync_enabled
         )
 
         self.refresh()
@@ -185,100 +359,53 @@ class SyncPage(QWidget):
 
         if state.wow_found:
 
-            self.wow_card.set_status(
-                "🟢 Gefunden"
-            )
-
-            self.wow_card.set_details(
-                str(state.wow_path)
+            self.wow_meta.setText(
+                f"MoP Classic · {state.wow_path.name}"
             )
 
         else:
 
-            self.wow_card.set_status(
-                "🔴 Nicht gefunden"
-            )
-
-            self.wow_card.set_details(
-                "Bitte Classic auswählen."
-            )
+            self.wow_meta.setText("Nicht gefunden")
 
         #
-        # Addon
-        #
-
-        if state.addon_found:
-
-            self.addon_card.set_status(
-                "🟢 Installiert"
-            )
-
-            self.addon_card.set_details(
-                f"Version {state.addon_version}"
-            )
-
-        else:
-
-            self.addon_card.set_status(
-                "🔴 Nicht installiert"
-            )
-
-            self.addon_card.set_details("-")
-
-        #
-        # Discord Bot
+        # Discord
         #
 
         if state.discord_connected:
 
-            self.discord_card.set_state(
-                "normal"
-            )
+            self.discord_meta.setText(state.discord_name)
 
-            self.discord_card.set_status(
-                "🟢 Online"
-            )
+        else:
 
-            self.discord_card.set_value(
-                state.discord_name
-            )
+            self.discord_meta.setText("Offline")
 
-            self.discord_card.set_details(
-                "\n".join([
-                    f"Server: {state.discord_guilds}",
-                    f"Ping: {state.discord_latency} ms",
-                ])
+        if state.discord_latency is not None:
+
+            self.latency_label.setText(f"{state.discord_latency} ms")
+
+        else:
+
+            self.latency_label.setText("- ms")
+
+    # --------------------------------------------------
+
+    def set_roster_sync_enabled(self, enabled: bool):
+
+        self.manager.config.data["roster_sync_enabled"] = enabled
+
+        self.manager.config.save()
+
+        if enabled:
+
+            self.manager.logger.success(
+                "Charakter-Roster-Sync aktiviert."
             )
 
         else:
 
-            self.discord_card.set_state(
-                "error"
+            self.manager.logger.info(
+                "Charakter-Roster-Sync deaktiviert."
             )
-
-            self.discord_card.set_status(
-                "🔴 Offline"
-            )
-
-            self.discord_card.set_value("")
-
-            self.discord_card.set_details(
-                "Bot konnte nicht erreicht werden."
-            )
-
-    # --------------------------------------------------
-
-    def check_connection(self):
-
-        self.manager.logger.info(
-            "Prüfe Synchronisationsvoraussetzungen..."
-        )
-
-        self.refresh()
-
-        self.manager.logger.success(
-            "Prüfung abgeschlossen."
-        )
 
     # --------------------------------------------------
 
@@ -294,14 +421,6 @@ class SyncPage(QWidget):
 
         if not state.wow_found:
 
-            self.status_card.set_status(
-                "🔴 Nicht bereit"
-            )
-
-            self.status_card.set_details(
-                "World of Warcraft wurde nicht gefunden."
-            )
-
             self.manager.logger.error(
                 "Keine WoW-Installation gefunden."
             )
@@ -310,28 +429,14 @@ class SyncPage(QWidget):
 
         if not state.addon_found:
 
-            self.status_card.set_status(
-                "🟡 Teilweise bereit"
-            )
-
-            self.status_card.set_details(
-                "WeintCodex ist nicht installiert."
-            )
-
             self.manager.logger.warning(
                 "Addon wurde nicht gefunden."
             )
 
             return
 
-        self.status_card.set_status(
-            "🟢 Bereit"
-        )
-
-        self.status_card.set_details(
-            "Alle Voraussetzungen sind erfüllt."
-        )
+        self.manager.run_auto_sync()
 
         self.manager.logger.success(
-            "Synchronisationstest erfolgreich."
+            "Synchronisation angestoßen."
         )

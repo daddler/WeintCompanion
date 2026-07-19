@@ -16,20 +16,31 @@ class Metrics:
     WINDOW_MIN_WIDTH = 1500
     WINDOW_MIN_HEIGHT = 860
 
-    SIDEBAR_WIDTH = 305
+    # -------------------------------------------------
+    # Rail-Sidebar
+    # -------------------------------------------------
+
+    RAIL_WIDTH = 72
+
+    SETTINGS_NAV_WIDTH = 220
+
+    ACTIVITY_PANEL_WIDTH = 360
 
     # -------------------------------------------------
     # Rundungen
     # -------------------------------------------------
 
     RADIUS_SMALL = 8
-    RADIUS_MEDIUM = 14
-    RADIUS_LARGE = 20
 
-    RADIUS_CARD = 20
-    RADIUS_PANEL = 20
-    RADIUS_HERO = 24
-    RADIUS_SIDEBAR = 26
+    RADIUS_MEDIUM = 10
+
+    RADIUS_LARGE = 12
+
+    RADIUS_CARD = 12
+
+    RADIUS_PANEL = 12
+
+    RADIUS_PILL = 999
 
     # -------------------------------------------------
     # Seitenlayout
@@ -39,53 +50,41 @@ class Metrics:
 
     PAGE_SPACING = 24
 
-    SECTION_SPACING = 26
+    SECTION_SPACING = 20
 
-    CARD_SPACING = 20
+    CARD_SPACING = 14
 
-    INNER_PADDING = 22
-
-    # -------------------------------------------------
-    # Hero
-    # -------------------------------------------------
-
-    HERO_HEIGHT = 560
-
-    HERO_BUTTON_HEIGHT = 46
-
-    HERO_IMAGE_WIDTH = 430
-
-    HERO_IMAGE_HEIGHT = 300
+    INNER_PADDING = 20
 
     # -------------------------------------------------
     # Cards
     # -------------------------------------------------
 
-    STATUS_CARD_HEIGHT = 175
+    STATUS_CARD_HEIGHT = 150
 
-    CARD_ICON_SIZE = 58
+    CARD_ICON_SIZE = 32
 
-    CARD_VALUE_SIZE = 30
+    CARD_VALUE_SIZE = 22
 
-    CARD_BADGE_HEIGHT = 28
+    CARD_BADGE_HEIGHT = 22
 
     # -------------------------------------------------
     # Navigation
     # -------------------------------------------------
 
-    NAV_ITEM_HEIGHT = 60
+    RAIL_ITEM_SIZE = 44
 
-    LOGO_SIZE = 118
+    NAV_ITEM_HEIGHT = 40
 
-    STATUS_BOX_HEIGHT = 145
+    LOGO_SIZE = 40
 
     # -------------------------------------------------
     # Buttons
     # -------------------------------------------------
 
-    BUTTON_HEIGHT = 46
+    BUTTON_HEIGHT = 40
 
-    BUTTON_RADIUS = 14
+    BUTTON_RADIUS = 8
 
     # -------------------------------------------------
     # LogWidget
@@ -93,18 +92,18 @@ class Metrics:
 
     LOG_HEADER_HEIGHT = 34
 
-    LOG_ITEM_HEIGHT = 38
+    LOG_ITEM_HEIGHT = 30
 
     # -------------------------------------------------
     # TopBar
     # -------------------------------------------------
 
-    TOPBAR_HEIGHT = 68
+    TOPBAR_HEIGHT = 56
 
     # -------------------------------------------------
     # Schatten
     # -------------------------------------------------
 
-    SHADOW_BLUR = 28
+    SHADOW_BLUR = 30
 
-    SHADOW_OFFSET = 10
+    SHADOW_OFFSET = 12

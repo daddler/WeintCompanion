@@ -1,143 +1,57 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import (
-    QColor,
-    QCursor,
-    QLinearGradient,
-    QPainter,
-    QPainterPath,
-    QPen,
-)
+from PySide6.QtGui import QColor, QCursor, QLinearGradient, QPainter, QPainterPath
 
-from PySide6.QtWidgets import (
-    QFrame,
-    QHBoxLayout,
-    QLabel,
-    QSizePolicy,
-)
-from PySide6.QtSvgWidgets import QSvgWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel
 
+from gui.theme.colors import Colors
 
-RADIUS = 16
+RADIUS = 8
 
 
 class NavigationItem(QFrame):
+    """
+    Text-Navigationselement, wie im Design's `.nav-item` (Settings-
+    Unternavigation): flache Fläche, linker Gradient-Balken im
+    aktiven Zustand, kein Icon.
+    """
 
     clicked = Signal()
 
-    def __init__(self, icon: str, text: str):
+    def __init__(self, text: str):
 
         super().__init__()
 
         self.setAttribute(Qt.WA_TranslucentBackground)
-
-        # Manche Wayland-Compositor (z. B. GNOME/Mutter) tracken nur
-        # teilweise "beschädigte" Bildbereiche beim Neuzeichnen. Bei
-        # transparenten Widgets kann das dazu führen, dass alte Pixel
-        # stehen bleiben ("Ghosting"), weil Qt nicht immer die volle
-        # Fläche als geändert markiert. WA_NoSystemBackground stellt
-        # sicher, dass Qt bei jedem update() konsequent den gesamten
-        # Widget-Bereich neu zeichnet, statt auf ein automatisches
-        # Hintergrund-Clearing zu vertrauen.
         self.setAttribute(Qt.WA_NoSystemBackground, True)
-
-        self.setStyleSheet("""
-        QFrame{
-            background:transparent;
-            border:none;
-        }
-        """)
 
         self.active = False
         self.hover = False
 
-        self.setCursor(
-            QCursor(Qt.PointingHandCursor)
-        )
+        self.setCursor(QCursor(Qt.PointingHandCursor))
 
-        self.setFixedHeight(56)
+        self.setFixedHeight(38)
 
         self.layout = QHBoxLayout(self)
 
-        self.layout.setContentsMargins(
-            16,
-            10,
-            16,
-            10,
-        )
+        self.layout.setContentsMargins(12, 8, 12, 8)
 
-        self.layout.setSpacing(12)
-
-        #
-        # Linker Indicator
-        #
-
-        self.indicator = QFrame()
-
-        self.indicator.setFixedSize(
-            3,
-            30,
-        )
-
-        self.indicator.setStyleSheet("""
-        QFrame{
-
-            background:transparent;
-
-            border-radius:1px;
-        }
-        """)
-
-        self.layout.addWidget(
-            self.indicator
-        )
-
-        #
-        # Icon
-        #
-
-        self.icon = QSvgWidget(icon)
-
-        self.icon.setFixedSize(
-            22,
-            22,
-        )
-
-        self.icon.setSizePolicy(
-            QSizePolicy.Fixed,
-            QSizePolicy.Fixed,
-        )
-
-        self.layout.addWidget(
-            self.icon
-        )
-
-        #
-        # Text
-        #
+        self.layout.setSpacing(0)
 
         self.label = QLabel(text)
 
-        self.label.setStyleSheet("""
-        QLabel{
-
-            color:white;
-
-            background:transparent;
-
-            font-size:14px;
-
-            font-weight:600;
-        }
-        """)
-
-        self.layout.addWidget(
-            self.label
+        self.label.setStyleSheet(
+            f"color:{Colors.TEXT_MUTED};"
+            "font-size:13px;"
+            "font-weight:500;"
+            "background:transparent;"
         )
 
+        self.layout.addWidget(self.label)
+
         self.layout.addStretch()
-    
+
     # -------------------------------------------------
     # Paint
     # -------------------------------------------------
@@ -145,118 +59,38 @@ class NavigationItem(QFrame):
     def paintEvent(self, event):
 
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
 
-        painter.setRenderHint(
-            QPainter.Antialiasing
-        )
-
-        rect = self.rect().adjusted(
-            1,
-            1,
-            -1,
-            -1,
-        )
+        rect = self.rect()
 
         path = QPainterPath()
-
-        path.addRoundedRect(
-            rect,
-            RADIUS,
-            RADIUS,
-        )
-
-        #
-        # Hintergrund
-        #
+        path.addRoundedRect(rect, RADIUS, RADIUS)
 
         if self.active:
 
-            background = QLinearGradient(
-                rect.topLeft(),
-                rect.bottomRight(),
-            )
-
-            background.setColorAt(
-                0,
-                QColor("#3A2F58"),
-            )
-
-            background.setColorAt(
-                1,
-                QColor("#2B2342"),
-            )
-
-            painter.fillPath(
-                path,
-                background,
-            )
-
-            #
-            # Violetter Glow links
-            #
+            painter.fillPath(path, QColor(Colors.SURFACE_LIGHT))
 
             glow = QLinearGradient(
-                rect.left(),
-                rect.top(),
-                rect.left() + 40,
-                rect.top(),
+                0, rect.top() + 6, 0, rect.bottom() - 6,
             )
 
-            glow.setColorAt(
-                0,
-                QColor(150, 95, 255, 170),
-            )
-
-            glow.setColorAt(
-                1,
-                QColor(150, 95, 255, 0),
-            )
+            glow.setColorAt(0, QColor(Colors.PRIMARY))
+            glow.setColorAt(1, QColor(Colors.PRIMARY_2))
 
             painter.fillRect(
-                rect.adjusted(0, 8, -rect.width() + 6, -8),
+                rect.left(),
+                rect.top() + 6,
+                3,
+                rect.height() - 12,
                 glow,
-            )
-
-            #
-            # dezenter Rahmen
-            #
-
-            painter.setPen(
-                QPen(
-                    QColor(170, 120, 255, 80),
-                    1,
-                )
-            )
-
-            painter.drawRoundedRect(
-                rect,
-                RADIUS,
-                RADIUS,
             )
 
         elif self.hover:
 
-            background = QLinearGradient(
-                rect.topLeft(),
-                rect.bottomLeft(),
-            )
-
-            background.setColorAt(
-                0,
-                QColor(255, 255, 255, 14),
-            )
-
-            background.setColorAt(
-                1,
-                QColor(255, 255, 255, 6),
-            )
-
-            painter.fillPath(
-                path,
-                background,
-            )
+            painter.fillPath(path, QColor(Colors.SURFACE_LIGHT))
 
         painter.end()
+
     # -------------------------------------------------
     # Hover
     # -------------------------------------------------
@@ -264,7 +98,6 @@ class NavigationItem(QFrame):
     def enterEvent(self, event):
 
         self.hover = True
-
         self.update()
 
         super().enterEvent(event)
@@ -272,10 +105,9 @@ class NavigationItem(QFrame):
     def leaveEvent(self, event):
 
         self.hover = False
-
         self.update()
 
-        super().leaveEvent(event) 
+        super().leaveEvent(event)
 
     # -------------------------------------------------
     # Click
@@ -284,7 +116,6 @@ class NavigationItem(QFrame):
     def mousePressEvent(self, event):
 
         if event.button() == Qt.LeftButton:
-
             self.clicked.emit()
 
         super().mousePressEvent(event)
@@ -297,55 +128,16 @@ class NavigationItem(QFrame):
 
         self.active = active
 
-        if active:
+        color = Colors.WHITE if active else Colors.TEXT_MUTED
 
-            #
-            # linker Glow-Indikator
-            #
+        weight = 600 if active else 500
 
-            self.indicator.setStyleSheet("""
-            QFrame{
-
-                background:#A66CFF;
-
-                border-radius:1px;
-            }
-            """)
-
-            self.label.setStyleSheet("""
-            QLabel{
-
-                color:white;
-
-                background:transparent;
-
-                font-size:14px;
-
-                font-weight:700;
-            }
-            """)
-
-        else:
-
-            self.indicator.setStyleSheet("""
-            QFrame{
-
-                background:transparent;
-            }
-            """)
-
-            self.label.setStyleSheet("""
-            QLabel{
-
-                color:#B7BDC9;
-
-                background:transparent;
-
-                font-size:14px;
-
-                font-weight:600;
-            }
-            """)
+        self.label.setStyleSheet(
+            f"color:{color};"
+            f"font-size:13px;"
+            f"font-weight:{weight};"
+            "background:transparent;"
+        )
 
         self.update()
 
@@ -354,9 +146,7 @@ class NavigationItem(QFrame):
     # -------------------------------------------------
 
     def sizeHint(self):
-
         return self.minimumSizeHint()
 
     def minimumSizeHint(self):
-
         return self.layout.minimumSize()

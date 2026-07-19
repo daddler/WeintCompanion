@@ -1,7 +1,5 @@
 from PySide6.QtCore import Qt
 
-from gui.widgets.status_card import CARD_RADIUS
-
 from PySide6.QtSvgWidgets import QSvgWidget
 
 from PySide6.QtWidgets import (
@@ -10,6 +8,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
 )
+
+from gui.theme.colors import Colors
+
+CARD_RADIUS = 12
 
 
 class SectionCard(QFrame):
@@ -26,22 +28,17 @@ class SectionCard(QFrame):
 
         self.setStyleSheet(f"""
         QFrame#sectionCard{{
-            background:#20242D;
-            border:1px solid #353B47;
+            background:{Colors.CARD};
+            border:1px solid {Colors.BORDER};
             border-radius:{CARD_RADIUS}px;
         }}
         """)
 
         self.root = QVBoxLayout(self)
 
-        self.root.setContentsMargins(
-            24,
-            22,
-            24,
-            22,
-        )
+        self.root.setContentsMargins(22, 20, 22, 20)
 
-        self.root.setSpacing(18)
+        self.root.setSpacing(14)
 
         #
         # --------------------------------------------------
@@ -51,14 +48,11 @@ class SectionCard(QFrame):
 
         header = QHBoxLayout()
 
-        header.setSpacing(12)
+        header.setSpacing(10)
 
         self.icon = QSvgWidget(icon)
 
-        self.icon.setFixedSize(
-            22,
-            22,
-        )
+        self.icon.setFixedSize(18, 18)
 
         header.addWidget(
             self.icon,
@@ -67,19 +61,17 @@ class SectionCard(QFrame):
 
         self.title = QLabel(title)
 
-        self.title.setStyleSheet("""
-        QLabel{
-            color:white;
-            font-size:20px;
-            font-weight:700;
+        self.title.setStyleSheet(f"""
+        QLabel{{
+            color:{Colors.WHITE};
+            font-size:15px;
+            font-weight:600;
             background:transparent;
             border:none;
-        }
+        }}
         """)
 
-        header.addWidget(
-            self.title,
-        )
+        header.addWidget(self.title)
 
         header.addStretch()
 
@@ -95,13 +87,13 @@ class SectionCard(QFrame):
 
             self.subtitle.setWordWrap(True)
 
-            self.subtitle.setStyleSheet("""
-            QLabel{
-                color:#AEB4C2;
+            self.subtitle.setStyleSheet(f"""
+            QLabel{{
+                color:{Colors.TEXT_SECONDARY};
                 font-size:13px;
                 background:transparent;
                 border:none;
-            }
+            }}
             """)
 
             self.root.addWidget(self.subtitle)
@@ -114,11 +106,11 @@ class SectionCard(QFrame):
 
         line.setFixedHeight(1)
 
-        line.setStyleSheet("""
-        QFrame{
-            background:#343945;
+        line.setStyleSheet(f"""
+        QFrame{{
+            background:{Colors.BORDER};
             border:none;
-        }
+        }}
         """)
 
         self.root.addWidget(line)
@@ -129,7 +121,7 @@ class SectionCard(QFrame):
 
         self.content = QVBoxLayout()
 
-        self.content.setSpacing(16)
+        self.content.setSpacing(14)
 
         self.root.addLayout(self.content)
 

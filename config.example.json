@@ -2,5 +2,6 @@
     "classic_path": "",
     "check_updates": true,
     "auto_sync": false,
-    "sync_interval": 5
+    "sync_interval": 5,
+    "roster_sync_enabled": true
 }

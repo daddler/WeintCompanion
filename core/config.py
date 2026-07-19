@@ -27,6 +27,8 @@ class Config:
 
             "sync_interval": 5,
 
+            "roster_sync_enabled": True,
+
         }
 
         self.load()
@@ -63,6 +65,7 @@ class Config:
                     "check_updates": True,
                     "auto_sync": True,
                     "sync_interval": 5,
+                    "roster_sync_enabled": True,
 
                 }
 
