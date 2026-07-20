@@ -38,12 +38,14 @@ class WoWFinder:
         # Bekannte Blizzard-Struktur
         #
 
+        visited = set()
+
         for root in self.search_roots:
 
             if not root.exists():
                 continue
 
-            result = self._search(root)
+            result = self._search(root, visited)
 
             if result:
                 return result
@@ -52,7 +54,41 @@ class WoWFinder:
 
     # --------------------------------------------------
 
-    def _search(self, directory):
+    def _search(self, directory, visited, depth=0):
+
+        #
+        # Schutz gegen Endlosrekursion durch Symlink-Zyklen: Ein
+        # Steam-Proton-Prefix enthält unter "pfx/dosdevices/" u. a.
+        # "z:" als Symlink auf "/" - da unsere Suchwurzeln (z. B.
+        # "~/.steam", "~/.local/share") selbst wieder unterhalb von
+        # "/" liegen, würde ein naives Verfolgen dieses Symlinks
+        # zurück auf sich selbst führen und dabei denselben Pfad
+        # immer wieder anhängen (siehe Crash-Report: kde-open erhielt
+        # einen Pfad mit mehrfach wiederholtem
+        # ".../pfx/dosdevices/z:/home/...". Die eigentliche
+        # WoW-Installation liegt ohnehin unter dem echten
+        # "pfx/drive_c/..."-Verzeichnis, nicht hinter den
+        # Bequemlichkeits-Symlinks in "dosdevices/" - wir überspringen
+        # Symlinks beim Abstieg daher komplett.
+        #
+        # Zusätzlich schützt ein besuchte-Pfade-Set (per realem,
+        # aufgelöstem Pfad) sowie ein Tiefenlimit vor anderen, nicht
+        # symlink-basierten Zyklen bzw. pathologisch tiefen
+        # Verzeichnisbäumen.
+        #
+
+        if depth > 40:
+            return None
+
+        try:
+            real = directory.resolve()
+        except OSError:
+            return None
+
+        if real in visited:
+            return None
+
+        visited.add(real)
 
         try:
 
@@ -80,10 +116,13 @@ class WoWFinder:
 
             for child in directory.iterdir():
 
+                if child.is_symlink():
+                    continue
+
                 if not child.is_dir():
                     continue
 
-                result = self._search(child)
+                result = self._search(child, visited, depth + 1)
 
                 if result:
                     return result

@@ -86,12 +86,37 @@ class Runtime:
     # PyInstaller hinterlegt den ursprünglichen Wert (falls vorhanden)
     # genau für diesen Fall in LD_LIBRARY_PATH_ORIG.
 
+    #
+    # In app.py setzen wir beim Start mehrere QT_*-Variablen, um
+    # bekannte Abstürze in UNSERER EIGENEN gebündelten Qt-Runtime zu
+    # umgehen (SIGSEGV in libxkbcommon/xcb, siehe app.py). Diese
+    # Variablen landen über os.environ.setdefault() prozessweit und
+    # würden sonst an jedes extern gestartete Programm vererbt - z. B.
+    # an "xdg-open", das auf KDE-Systemen intern "kde-open" (ein
+    # eigenständiges, System-Qt6-Binary) aufruft. Ein durch uns
+    # erzwungenes QT_QPA_PLATFORM="wayland;xcb" kann dort dazu führen,
+    # dass kde-open weder das wayland- noch das xcb-Plugin laden kann
+    # und mit SIGABRT abstürzt ("no Qt platform plugin could be
+    # initialized"), obwohl es ohne unsere Vorgabe seine eigene,
+    # passende Plattform gefunden hätte. Diese Variablen sind reine
+    # Workarounds für unseren eigenen Prozess und gehören nicht in die
+    # Umgebung fremder Programme.
+    #
+
+    _OWN_QT_WORKAROUND_VARS = (
+        "QT_QPA_PLATFORM",
+        "QT_XCB_NO_XI2",
+        "QT_ACCESSIBILITY",
+        "QT_XCB_GL_INTEGRATION",
+    )
+
     @staticmethod
     def clean_subprocess_env() -> dict:
         """
         Kopie von os.environ, bereinigt um das gebündelte
-        LD_LIBRARY_PATH - zum Übergeben an subprocess.Popen(env=...)
-        beim Start externer Programme.
+        LD_LIBRARY_PATH sowie um unsere eigenen Qt-Crash-Workarounds -
+        zum Übergeben an subprocess.Popen(env=...) beim Start externer
+        Programme.
         """
 
         env = os.environ.copy()
@@ -102,6 +127,9 @@ class Runtime:
             env["LD_LIBRARY_PATH"] = original
         else:
             env.pop("LD_LIBRARY_PATH", None)
+
+        for var in Runtime._OWN_QT_WORKAROUND_VARS:
+            env.pop(var, None)
 
         return env
 
