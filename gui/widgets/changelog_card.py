@@ -40,8 +40,8 @@ class ChangelogCard(Card):
 
         self.text.setReadOnly(True)
 
-        self.text.setMinimumHeight(90)
-        self.text.setMaximumHeight(140)
+        self.text.setMinimumHeight(64)
+        self.text.setMaximumHeight(88)
 
         self.text.setStyleSheet(f"""
         QTextEdit{{

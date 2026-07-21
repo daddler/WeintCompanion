@@ -14,7 +14,7 @@ class Metrics:
     # -------------------------------------------------
 
     WINDOW_MIN_WIDTH = 1500
-    WINDOW_MIN_HEIGHT = 860
+    WINDOW_MIN_HEIGHT = 900
 
     # -------------------------------------------------
     # Rail-Sidebar

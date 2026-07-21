@@ -67,7 +67,7 @@ class _ArtworkHeader(QWidget):
 
             painter.drawPixmap(
                 (self.width() - scaled.width()) // 2,
-                0,
+                (self.height() - scaled.height()) // 2,
                 scaled,
             )
 

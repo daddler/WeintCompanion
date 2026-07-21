@@ -194,11 +194,16 @@ class MainWindow(QMainWindow):
         #
         # ScrollContainer
         #
+        # Das Dashboard bekommt bewusst KEINEN Scroll-Wrapper: das
+        # Fenster ist auf Metrics.WINDOW_MIN_HEIGHT dimensioniert,
+        # damit der komplette Dashboard-Inhalt (inkl. Changelog-Karte)
+        # immer ohne Scrollen der Hauptseite passt - lediglich die
+        # Changelog-Karte selbst darf bei längerem Text intern
+        # scrollen (siehe ChangelogCard/QTextEdit).
+        #
 
         self.pages.addWidget(
-            self.wrap_page(
-                self.dashboard
-            )
+            self.dashboard
         )
 
         self.pages.addWidget(
@@ -318,7 +323,17 @@ class MainWindow(QMainWindow):
         if current is None:
             return
 
-        page = current.widget()
+        #
+        # Die meisten Seiten stecken in einem QScrollArea-Wrapper
+        # (siehe wrap_page) - das Dashboard bewusst nicht (siehe
+        # Kommentar bei dessen addWidget-Aufruf oben).
+        #
+
+        page = (
+            current.widget()
+            if isinstance(current, QScrollArea)
+            else current
+        )
 
         #
         # Refresh
