@@ -241,11 +241,15 @@ class MainWindow(QMainWindow):
         )
 
         self.sidebar.avatarClicked.connect(
-            self.open_discord_settings
+            lambda: self.open_settings_section("discord")
         )
 
         self.dashboard.pageRequested.connect(
             self.change_page
+        )
+
+        self.dashboard.openSettingsSection.connect(
+            self.open_settings_section
         )
 
         #
@@ -350,10 +354,13 @@ class MainWindow(QMainWindow):
         self.sidebar.refresh()
 
     # --------------------------------------------------
-    # Discord-Statusbutton
+    # Zu einem Settings-Unterabschnitt springen
     # --------------------------------------------------
+    # Genutzt vom Discord-Statusbutton in der Sidebar sowie vom
+    # "WoW starten"-Button im Dashboard, wenn unter Linux noch kein
+    # Start-Befehl hinterlegt ist.
 
-    def open_discord_settings(self):
+    def open_settings_section(self, key: str):
 
         self.change_page(
             self.SETTINGS_PAGE_INDEX
@@ -361,5 +368,5 @@ class MainWindow(QMainWindow):
 
         if hasattr(self.settings, "show_section"):
 
-            self.settings.show_section("discord")
+            self.settings.show_section(key)
 

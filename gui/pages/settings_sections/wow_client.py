@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -175,6 +176,18 @@ class WowClientSection(SectionContent):
 
         layout.addLayout(button_row)
 
+        self.saved_label = QLabel("")
+
+        self.saved_label.setAlignment(Qt.AlignRight)
+
+        self.saved_label.setStyleSheet(
+            f"font-size:12px;font-weight:600;color:{Colors.SUCCESS};"
+        )
+
+        self.saved_label.hide()
+
+        layout.addWidget(self.saved_label)
+
         self.addRow(self.linux_card, divider=False)
 
     # --------------------------------------------------
@@ -244,6 +257,15 @@ class WowClientSection(SectionContent):
 
         self.manager.logger.success(
             "Battle.net-Start-Konfiguration gespeichert."
+        )
+
+        self.saved_label.setText("✓ Einstellungen gespeichert")
+
+        self.saved_label.show()
+
+        QTimer.singleShot(
+            3000,
+            self.saved_label.hide,
         )
 
     # --------------------------------------------------

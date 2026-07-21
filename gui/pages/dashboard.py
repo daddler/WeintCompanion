@@ -39,6 +39,7 @@ class _UpdateCheckBridge(QObject):
 class DashboardPage(QWidget):
 
     pageRequested = Signal(int)
+    openSettingsSection = Signal(str)
 
     def __init__(self, manager):
         super().__init__()
@@ -79,11 +80,11 @@ class DashboardPage(QWidget):
 
         title_col.addWidget(eyebrow)
 
-        title = QLabel("Willkommen zurück.")
+        self.title_label = QLabel("Willkommen zurück.")
 
-        title.setObjectName("title")
+        self.title_label.setObjectName("title")
 
-        title_col.addWidget(title)
+        title_col.addWidget(self.title_label)
 
         header.addLayout(title_col)
 
@@ -181,7 +182,7 @@ class DashboardPage(QWidget):
 
         self.start_wow_button = HeroButton(
             "WoW starten",
-            primary=False,
+            primary=True,
         )
 
         self.start_wow_button.clicked.connect(
@@ -247,9 +248,36 @@ class DashboardPage(QWidget):
 
         self._update_start_wow_button()
 
+        self._update_welcome_title()
+
+    # --------------------------------------------------
+
+    def _update_welcome_title(self):
+
+        account = self.manager.discord_account.load()
+
+        if account and account.get("username"):
+
+            self.title_label.setText(
+                f"Willkommen zurück, {account['username']}."
+            )
+
+        else:
+
+            self.title_label.setText("Willkommen zurück.")
+
     # --------------------------------------------------
 
     def _update_start_wow_button(self):
+
+        #
+        # Der Button bleibt bewusst immer klickbar (statt bei
+        # fehlender Linux-Konfiguration deaktiviert zu werden) -
+        # ein Klick ohne hinterlegten Start-Befehl leitet in
+        # start_wow() direkt zu den Einstellungen weiter, statt
+        # den Nutzer nur mit einem leicht übersehenen Tooltip
+        # allein zu lassen.
+        #
 
         if is_windows():
 
@@ -262,7 +290,7 @@ class DashboardPage(QWidget):
 
             command = self.manager.config.get_linux_launch_command()
 
-            self.start_wow_button.setEnabled(bool(command))
+            self.start_wow_button.setEnabled(True)
 
             self.start_wow_button.setToolTip(
                 ""
@@ -564,6 +592,20 @@ class DashboardPage(QWidget):
         open_folder(state.addon_path)
 
     def start_wow(self):
+
+        if (
+            is_linux()
+            and not self.manager.config.get_linux_launch_command()
+        ):
+
+            self.manager.logger.warning(
+                "Kein Battle.net-Start-Befehl hinterlegt - bitte "
+                "zuerst in den Einstellungen (WoW-Client) einrichten."
+            )
+
+            self.openSettingsSection.emit("wow_client")
+
+            return
 
         self.manager.start_wow()
 
