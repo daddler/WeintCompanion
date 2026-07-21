@@ -34,7 +34,6 @@ class ToggleSwitch(QAbstractButton):
         super().__init__(parent)
 
         self.setCheckable(True)
-        self.setChecked(checked)
 
         self.setCursor(Qt.PointingHandCursor)
 
@@ -54,9 +53,36 @@ class ToggleSwitch(QAbstractButton):
             QEasingCurve.InOutQuad
         )
 
+        #
+        # super().setChecked() statt self.setChecked(): _thumb_position
+        # ist oben bereits passend zu "checked" gesetzt, unser eigener
+        # setChecked()-Override (siehe unten) wäre hier nur redundant.
+        #
+
+        super().setChecked(checked)
+
         self.toggled.connect(
             self._animate_to_state
         )
+
+    # --------------------------------------------------
+    # Sichtbaren Zustand synchron zu isChecked() halten
+    # --------------------------------------------------
+    # QAbstractButton.setChecked() ist in Qt nicht virtual - ein
+    # interaktiver Klick ändert den Zustand direkt in C++ und feuert
+    # dabei ganz normal das toggled-Signal (oben verbunden mit
+    # _animate_to_state). Ruft dagegen unser eigener Code setChecked()
+    # explizit auf - typischerweise aus refresh() mit blockSignals(True),
+    # um die zugehörige _save_*()-Methode nicht erneut auszulösen -,
+    # würde ohne diesen Override die Thumb-Position stumm auf dem alten
+    # Wert hängen bleiben: der Schalter zeigt dann z.B. nach einem
+    # Neustart "aus" an, obwohl isChecked() bereits korrekt True ist.
+
+    def setChecked(self, checked: bool):
+
+        super().setChecked(checked)
+
+        self._animate_to_state(checked)
 
     # --------------------------------------------------
     # Property fürs Thumb
