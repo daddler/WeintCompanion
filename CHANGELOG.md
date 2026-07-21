@@ -1,6 +1,16 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 0.8.7.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 0.8.8.
+
+## 0.8.8
+
+- Fix: "Addon-Ordner öffnen" konnte auf KDE-Systemen (z. B. Nobara) lautlos
+  fehlschlagen bzw. mit einem Absturz von "kde-open" enden. Ursache: von
+  PyInstaller gesetzte Variablen wie QT_PLUGIN_PATH wurden an den
+  gestarteten "xdg-open"-Prozess vererbt, wodurch dessen "kde-open" die
+  Qt-Plattform-Plugins aus dem WeintCompanion-Bundle statt aus dem System
+  zu laden versuchte und abstürzte. Diese Variablen werden jetzt zusätzlich
+  aus der Umgebung externer Prozesse entfernt.
 
 ## 0.8.7
 

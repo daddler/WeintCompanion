@@ -108,6 +108,25 @@ class Runtime:
         "QT_XCB_NO_XI2",
         "QT_ACCESSIBILITY",
         "QT_XCB_GL_INTEGRATION",
+        "QT_DEBUG_PLUGINS",
+    )
+
+    # PyInstaller hinterlegt beim Einfrieren zusätzlich QT_PLUGIN_PATH
+    # (und verwandte Variablen) auf das gebündelte PySide6/Qt/plugins-
+    # Verzeichnis, damit UNSERE eigene Qt-Runtime ihre Plugins findet.
+    # Genau wie die Workaround-Variablen oben vererbt sich das an
+    # "kde-open" & Co.: Der Kindprozess sucht dann ZUERST im
+    # AppImage-Mount nach Plattform-Plugins, findet dort ein zur
+    # System-Qt-Version inkompatibles xcb/wayland-Plugin ("even though
+    # it was found") und bricht ab, statt regulär seine eigenen
+    # System-Plugins zu laden. Muss daher genau wie LD_LIBRARY_PATH
+    # aus der Umgebung fremder Programme entfernt werden.
+
+    _BUNDLED_QT_PATH_VARS = (
+        "QT_PLUGIN_PATH",
+        "QT_QPA_PLATFORM_PLUGIN_PATH",
+        "QML2_IMPORT_PATH",
+        "QML_IMPORT_PATH",
     )
 
     @staticmethod
@@ -129,6 +148,9 @@ class Runtime:
             env.pop("LD_LIBRARY_PATH", None)
 
         for var in Runtime._OWN_QT_WORKAROUND_VARS:
+            env.pop(var, None)
+
+        for var in Runtime._BUNDLED_QT_PATH_VARS:
             env.pop(var, None)
 
         return env
@@ -156,6 +178,23 @@ class Runtime:
         else:
             os.environ.pop(key, None)
 
+        #
+        # Gleiches Problem wie in clean_subprocess_env(): auch hier
+        # dürfen unsere eigenen Qt-Workarounds und die von PyInstaller
+        # gesetzten Plugin-Pfade nicht an den extern gestarteten
+        # Prozess (Browser) vererbt werden.
+        #
+
+        _leaky_vars = (
+            Runtime._OWN_QT_WORKAROUND_VARS + Runtime._BUNDLED_QT_PATH_VARS
+        )
+
+        _saved = {
+            var: os.environ.pop(var)
+            for var in _leaky_vars
+            if var in os.environ
+        }
+
         try:
 
             yield
@@ -166,3 +205,5 @@ class Runtime:
                 os.environ[key] = original
             else:
                 os.environ.pop(key, None)
+
+            os.environ.update(_saved)
