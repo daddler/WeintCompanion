@@ -14,11 +14,20 @@ from PySide6.QtWidgets import (
 )
 
 from core.resources import Resources
+from core.runtime import Runtime
 from core.version import VERSION
 from gui.theme.colors import Colors
 from gui.widgets.hero_banner import HeroButton
 
 REPO_URL = "https://github.com/daddler/WeintCodex"
+
+# Feedback-Channel auf dem WeintCodex-Discord - Deep-Link statt der
+# reinen Invite-URL, damit Mitglieder direkt im richtigen Channel
+# landen statt auf dem Server-Standardkanal.
+DISCORD_FEEDBACK_URL = (
+    "https://discord.com/channels/"
+    "1311060525555257364/1519466082362982410"
+)
 
 
 class _ArtworkHeader(QWidget):
@@ -81,6 +90,18 @@ class _ArtworkHeader(QWidget):
         painter.fillRect(rect, fade)
 
         painter.end()
+
+
+def _open_external(url: str):
+    """
+    Öffnet eine URL im System-Browser. Siehe Runtime.clean_environ():
+    ohne das vererbt der AppImage/PyInstaller-Bundle sein eigenes
+    LD_LIBRARY_PATH an den intern gestarteten Browser-Subprozess, der
+    dann lautlos abstürzt - der Browser öffnet nie, ohne Fehler.
+    """
+
+    with Runtime.clean_environ():
+        webbrowser.open(url)
 
 
 def _hex_to_rgb(value: str):
@@ -275,7 +296,7 @@ class AboutSection(QWidget):
         github_button = HeroButton("GitHub öffnen", primary=False)
 
         github_button.clicked.connect(
-            lambda: webbrowser.open(REPO_URL)
+            lambda: _open_external(REPO_URL)
         )
 
         button_row.addWidget(github_button)
@@ -283,7 +304,7 @@ class AboutSection(QWidget):
         changelog_button = HeroButton("Changelog", primary=False)
 
         changelog_button.clicked.connect(
-            lambda: webbrowser.open(f"{REPO_URL}/releases")
+            lambda: _open_external(f"{REPO_URL}/releases")
         )
 
         button_row.addWidget(changelog_button)
@@ -291,7 +312,7 @@ class AboutSection(QWidget):
         support_button = HeroButton("Support", primary=False)
 
         support_button.clicked.connect(
-            lambda: webbrowser.open(f"{REPO_URL}/issues")
+            lambda: _open_external(DISCORD_FEEDBACK_URL)
         )
 
         button_row.addWidget(support_button)
