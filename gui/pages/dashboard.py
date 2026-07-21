@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
-from core.platform import open_folder
+from core.platform import is_linux, is_windows, open_folder
 from gui.widgets.activity_panel import ActivityPanel
 from gui.widgets.dashboard_cards import DashboardCards
 from gui.widgets.hero_banner import HeroButton
@@ -175,10 +175,8 @@ class DashboardPage(QWidget):
             primary=False,
         )
 
-        self.start_wow_button.setEnabled(False)
-
-        self.start_wow_button.setToolTip(
-            "Geplant - noch nicht verfügbar."
+        self.start_wow_button.clicked.connect(
+            self.start_wow
         )
 
         self.sync_now_button = HeroButton(
@@ -232,6 +230,41 @@ class DashboardPage(QWidget):
 
         self.hero.updateFromState(
             self.manager.state
+        )
+
+        self._update_start_wow_button()
+
+    # --------------------------------------------------
+
+    def _update_start_wow_button(self):
+
+        if is_windows():
+
+            self.start_wow_button.setEnabled(True)
+            self.start_wow_button.setToolTip("")
+
+            return
+
+        if is_linux():
+
+            command = self.manager.config.get_linux_launch_command()
+
+            self.start_wow_button.setEnabled(bool(command))
+
+            self.start_wow_button.setToolTip(
+                ""
+                if command
+                else
+                "Bitte zuerst in den Einstellungen (WoW-Client) "
+                "einen Start-Befehl hinterlegen."
+            )
+
+            return
+
+        self.start_wow_button.setEnabled(False)
+
+        self.start_wow_button.setToolTip(
+            "Nur unter Windows und Linux verfügbar."
         )
 
     # --------------------------------------------------
@@ -516,6 +549,10 @@ class DashboardPage(QWidget):
             return
 
         open_folder(state.addon_path)
+
+    def start_wow(self):
+
+        self.manager.start_wow()
 
     def sync_now_quick(self):
 

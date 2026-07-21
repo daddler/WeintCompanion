@@ -13,6 +13,7 @@ from core.logger import Logger
 from core.installer_workflow import InstallerWorkflow
 from core.companion_updater import CompanionUpdater
 from core.launcher import Launcher
+from core.battlenet_launcher import BattleNetLauncher
 from addon.sync_reader import SyncReader
 from core.sync_manager import SyncManager
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -62,6 +63,7 @@ class CompanionManager:
         self.workflow = InstallerWorkflow(self)
         self.companion_updater = CompanionUpdater(self)
         self.launcher = Launcher()
+        self.battlenet_launcher = BattleNetLauncher(self.config)
         self.sync = SyncManager(self)
         self.discord = DiscordStatus()
         self.discord_account = DiscordAccountStore()
@@ -452,6 +454,28 @@ class CompanionManager:
     def install_or_update(self):
 
         return self.workflow.run()
+
+    # --------------------------------------------------
+    # WoW starten (Battle.net)
+    # --------------------------------------------------
+
+    def start_wow(self):
+
+        try:
+
+            self.battlenet_launcher.launch(
+                self.state.wow_path
+            )
+
+            self.logger.success(
+                "Battle.net wird gestartet..."
+            )
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"Battle.net konnte nicht gestartet werden: {exc}"
+            )
 
     # --------------------------------------------------
     # Status

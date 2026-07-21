@@ -1,11 +1,30 @@
 from pathlib import Path
 
-from PySide6.QtWidgets import QFileDialog, QHBoxLayout, QLabel, QMessageBox, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QVBoxLayout,
+    QWidget,
+)
 
+from core.platform import is_linux
 from gui.theme.colors import Colors
 from gui.widgets.hero_banner import HeroButton
+from gui.widgets.segmented_control import SegmentedControl
 
 from ._common import SectionContent
+
+
+LINUX_LAUNCHER_PLACEHOLDERS = {
+
+    "custom": "z. B. faugus-launcher --start \"Battle.net\"",
+    "lutris": "Lutris-Spiel-Slug, z. B. battlenet",
+    "steam": "Steam App-ID, z. B. 123456789",
+
+}
 
 
 class WowClientSection(SectionContent):
@@ -60,11 +79,99 @@ class WowClientSection(SectionContent):
 
         card_layout.addLayout(button_row)
 
-        self.addRow(card, divider=False)
+        self.addRow(card, divider=not is_linux())
 
         self.change_button.clicked.connect(self.choose_folder)
 
+        #
+        # --------------------------------------------------
+        # Battle.net-Start (nur unter Linux relevant - unter
+        # Windows wird Battle.net.exe automatisch neben dem
+        # WoW-Ordner gefunden und gestartet)
+        # --------------------------------------------------
+        #
+
+        self.linux_card = None
+
+        if is_linux():
+
+            self._build_linux_launch_card()
+
         self.refresh()
+
+    # --------------------------------------------------
+
+    def _build_linux_launch_card(self):
+
+        self.linux_card = QWidget()
+
+        layout = QVBoxLayout(self.linux_card)
+
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        title = QLabel("Battle.net-Start")
+
+        title.setStyleSheet(
+            f"font-size:14px;font-weight:700;color:{Colors.WHITE};"
+        )
+
+        layout.addWidget(title)
+
+        description = QLabel(
+            "Unter Linux gibt es kein einheitliches Battle.net - "
+            "hinterlege, wie dein Launcher (Lutris, Steam, Faugus, "
+            "Bottles, ...) gestartet wird."
+        )
+
+        description.setWordWrap(True)
+
+        description.setStyleSheet(
+            f"font-size:13px;color:{Colors.TEXT_MUTED};"
+        )
+
+        layout.addWidget(description)
+
+        self.launcher_type_control = SegmentedControl([
+
+            ("Eigener Befehl", "custom"),
+            ("Lutris", "lutris"),
+            ("Steam", "steam"),
+
+        ])
+
+        self.launcher_type_control.valueChanged.connect(
+            self._on_launcher_type_changed
+        )
+
+        layout.addWidget(self.launcher_type_control)
+
+        self.launcher_value_input = QLineEdit()
+
+        self.launcher_value_input.editingFinished.connect(
+            self._save_linux_launcher
+        )
+
+        layout.addWidget(self.launcher_value_input)
+
+        button_row = QHBoxLayout()
+
+        button_row.addStretch()
+
+        self.save_launcher_button = HeroButton(
+            "Speichern",
+            primary=False,
+        )
+
+        self.save_launcher_button.clicked.connect(
+            self._save_linux_launcher
+        )
+
+        button_row.addWidget(self.save_launcher_button)
+
+        layout.addLayout(button_row)
+
+        self.addRow(self.linux_card, divider=False)
 
     # --------------------------------------------------
 
@@ -93,6 +200,47 @@ class WowClientSection(SectionContent):
             self.path_label.setText(
                 "Bitte wähle deinen World of Warcraft Classic-Ordner aus."
             )
+
+        if self.linux_card is not None:
+
+            launcher_type = self.manager.config.get_linux_launcher_type()
+
+            self.launcher_type_control.blockSignals(True)
+            self.launcher_type_control.setValue(launcher_type)
+            self.launcher_type_control.blockSignals(False)
+
+            self.launcher_value_input.setText(
+                self.manager.config.get_linux_launcher_value()
+            )
+
+            self.launcher_value_input.setPlaceholderText(
+                LINUX_LAUNCHER_PLACEHOLDERS.get(
+                    launcher_type,
+                    "",
+                )
+            )
+
+    # --------------------------------------------------
+
+    def _on_launcher_type_changed(self, launcher_type):
+
+        self.launcher_value_input.setPlaceholderText(
+            LINUX_LAUNCHER_PLACEHOLDERS.get(
+                launcher_type,
+                "",
+            )
+        )
+
+    def _save_linux_launcher(self):
+
+        self.manager.config.set_linux_launcher(
+            self.launcher_type_control.value(),
+            self.launcher_value_input.text(),
+        )
+
+        self.manager.logger.success(
+            "Battle.net-Start-Konfiguration gespeichert."
+        )
 
     # --------------------------------------------------
 
