@@ -1,10 +1,12 @@
 import sys
+import threading
 from pathlib import Path
 
 import PySide6
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, QTimer, Signal
 from PySide6.QtSvgWidgets import QSvgWidget
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QGridLayout,
     QHBoxLayout,
@@ -19,6 +21,16 @@ from core.version import VERSION
 from gui.theme.colors import Colors
 from gui.widgets.card import Card
 from gui.widgets.hero_banner import HeroButton
+
+
+class _CompanionUpdateBridge(QObject):
+    """
+    Meldet das Ergebnis des Companion-Updates thread-sicher an den
+    Hauptthread zurück (siehe DashboardPage._CompanionUpdateBridge
+    fürs gleiche Muster).
+    """
+
+    finished = Signal(bool)
 
 
 def _diff_box(eyebrow: str, value: str, meta: str, accent: bool = False):
@@ -247,6 +259,153 @@ class AddonPage(QWidget):
         layout.addWidget(self.addon_card)
 
         # --------------------------------------------------
+        # Komponente: WeintCompanion
+        # --------------------------------------------------
+
+        self.companion_card = Card()
+
+        companion_header = QHBoxLayout()
+        companion_header.setSpacing(16)
+
+        companion_icon_box = QLabel()
+
+        companion_icon_box.setFixedSize(48, 48)
+
+        companion_icon_box.setStyleSheet(f"""
+        QLabel{{
+            background:rgba(124,192,110,20);
+            border:1px solid {Colors.BORDER_ACCENT};
+            border-radius:12px;
+        }}
+        """)
+
+        companion_icon_layout = QHBoxLayout(companion_icon_box)
+        companion_icon_layout.setContentsMargins(0, 0, 0, 0)
+
+        companion_icon = QSvgWidget(Resources.companion())
+        companion_icon.setFixedSize(22, 22)
+
+        companion_icon_layout.addWidget(
+            companion_icon,
+            alignment=Qt.AlignCenter,
+        )
+
+        companion_header.addWidget(companion_icon_box)
+
+        companion_title_col = QVBoxLayout()
+        companion_title_col.setSpacing(2)
+
+        companion_title = QLabel("WeintCompanion")
+
+        companion_title.setStyleSheet(
+            f"font-size:17px;font-weight:600;color:{Colors.WHITE};"
+        )
+
+        companion_title_col.addWidget(companion_title)
+
+        companion_subtitle = QLabel(
+            "github.com/daddler/WeintCompanion · Desktop App"
+        )
+
+        companion_subtitle.setStyleSheet(
+            'font-family:"JetBrains Mono";'
+            f"font-size:11px;color:{Colors.TEXT_MUTED};"
+        )
+
+        companion_title_col.addWidget(companion_subtitle)
+
+        companion_header.addLayout(companion_title_col, 1)
+
+        self.companion_update_button = HeroButton(
+            "Companion aktualisieren",
+            primary=True,
+        )
+
+        companion_header.addWidget(self.companion_update_button)
+
+        self.companion_card.addLayout(companion_header)
+
+        #
+        # Versions-Diff
+        #
+
+        companion_diff_row = QHBoxLayout()
+        companion_diff_row.setSpacing(16)
+
+        (
+            self.companion_installed_box,
+            self.companion_installed_value,
+            self.companion_installed_meta,
+        ) = _diff_box(
+            "INSTALLIERT", "-", "-",
+        )
+
+        companion_diff_row.addWidget(self.companion_installed_box, 1)
+
+        companion_arrow = QLabel("→")
+
+        companion_arrow.setAlignment(Qt.AlignCenter)
+
+        companion_arrow.setStyleSheet(
+            f"color:{Colors.PRIMARY};font-size:18px;"
+        )
+
+        companion_diff_row.addWidget(companion_arrow)
+
+        (
+            self.companion_latest_box,
+            self.companion_latest_value,
+            self.companion_latest_meta,
+        ) = _diff_box(
+            "NEUESTE", "-", "-", accent=True,
+        )
+
+        companion_diff_row.addWidget(self.companion_latest_box, 1)
+
+        self.companion_card.addLayout(companion_diff_row)
+
+        #
+        # Changelog
+        #
+
+        companion_changelog_label = QLabel("CHANGELOG")
+
+        companion_changelog_label.setObjectName("eyebrow")
+
+        companion_changelog_label.setStyleSheet(
+            'font-family:"JetBrains Mono";'
+            f"font-size:10px;color:{Colors.TEXT_MUTED};letter-spacing:0.1em;"
+        )
+
+        self.companion_card.addWidget(companion_changelog_label)
+
+        self.companion_changelog = QTextEdit()
+
+        self.companion_changelog.setReadOnly(True)
+
+        self.companion_changelog.setMinimumHeight(110)
+
+        self.companion_changelog.setStyleSheet(f"""
+        QTextEdit{{
+            background:transparent;
+            border:none;
+            color:{Colors.TEXT_SECONDARY};
+            padding:0px;
+            font-size:13px;
+        }}
+        """)
+
+        self.companion_card.addWidget(self.companion_changelog)
+
+        layout.addWidget(self.companion_card)
+
+        self._update_bridge = _CompanionUpdateBridge(self)
+
+        self._update_bridge.finished.connect(
+            self._on_companion_update_finished
+        )
+
+        # --------------------------------------------------
         # Weitere Komponenten
         # --------------------------------------------------
 
@@ -408,6 +567,9 @@ class AddonPage(QWidget):
         self.reinstall_button.clicked.connect(self.install_or_update)
         self.update_button.clicked.connect(self.install_or_update)
         self.change_path_button.clicked.connect(self.choose_folder)
+        self.companion_update_button.clicked.connect(
+            self.update_companion
+        )
 
         self.refresh()
 
@@ -466,6 +628,58 @@ class AddonPage(QWidget):
             self.update_button.setText("Addon aktuell")
             self.update_button.setEnabled(False)
             self.reinstall_button.setEnabled(True)
+
+        #
+        # Komponente: WeintCompanion
+        #
+
+        self.companion_installed_value.setText(state.companion_version)
+        self.companion_installed_meta.setText("installiert")
+
+        self.companion_latest_value.setText(
+            state.companion_latest_version
+        )
+
+        self.companion_latest_meta.setText(
+            "Update verfügbar"
+            if state.companion_update_available
+            else "installiert"
+        )
+
+        commits = state.companion_changelog
+
+        if commits is None:
+
+            self.companion_changelog.setPlainText(
+                "Changelog nicht verfügbar (kein passendes Release "
+                "gefunden oder GitHub nicht erreichbar)."
+            )
+
+        elif not commits:
+
+            self.companion_changelog.setPlainText(
+                "Keine Änderungen gefunden."
+            )
+
+        else:
+
+            self.companion_changelog.setPlainText(
+                "\n".join(
+                    f"• {commit}" for commit in commits
+                )
+            )
+
+        if state.companion_update_available:
+
+            self.companion_update_button.setText(
+                f"Auf {state.companion_latest_version} aktualisieren"
+            )
+            self.companion_update_button.setEnabled(True)
+
+        else:
+
+            self.companion_update_button.setText("Companion aktuell")
+            self.companion_update_button.setEnabled(False)
 
         #
         # WoW Client
@@ -577,6 +791,77 @@ class AddonPage(QWidget):
         except Exception as e:
 
             self.manager.logger.error(f"Fehler: {e}")
+
+    # --------------------------------------------------
+    # Companion-Update (Download + Installation im Hintergrund)
+    # --------------------------------------------------
+    # Gleiches Muster wie DashboardPage._start_companion_update: der
+    # eigentliche Download/Install-Aufruf läuft in einem Hintergrund-
+    # Thread, damit die GUI währenddessen nicht einfriert. Das Ergebnis
+    # kommt über ein Qt-Signal thread-sicher in den Hauptthread zurück.
+
+    def update_companion(self):
+
+        self.companion_update_button.setEnabled(False)
+        self.companion_update_button.setText("Wird aktualisiert...")
+
+        self.manager.logger.info(
+            "Companion-Update wird heruntergeladen..."
+        )
+
+        #
+        # stop_auto_sync() fasst ein QTimer-Objekt an, das dem Haupt-
+        # thread gehört - muss deshalb HIER passieren, nicht im Worker.
+        #
+
+        self.manager.stop_auto_sync()
+
+        thread = threading.Thread(
+            target=self._companion_update_worker,
+            daemon=True,
+            name="AddonPageCompanionUpdateThread",
+        )
+
+        thread.start()
+
+    def _companion_update_worker(self):
+
+        try:
+
+            success = (
+                self.manager.companion_updater
+                .install_update()
+            )
+
+        except Exception as exc:
+
+            self.manager.logger.error(
+                f"Companion-Update fehlgeschlagen: {exc}"
+            )
+
+            success = False
+
+        self._update_bridge.finished.emit(success)
+
+    def _on_companion_update_finished(self, success: bool):
+
+        if success:
+
+            QTimer.singleShot(
+                300,
+                QApplication.quit,
+            )
+
+            return
+
+        #
+        # Fehlschlag: Auto-Sync wieder anlaufen lassen und die echte
+        # Kartenanzeige (weiterhin "Update verfügbar") wiederherstellen.
+        #
+
+        self.manager.start_auto_sync()
+
+        self.refresh()
 
     # --------------------------------------------------
     # WoW-Ordner auswählen
