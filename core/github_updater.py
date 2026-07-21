@@ -4,6 +4,8 @@ import platform
 
 import httpx
 
+from core.version import parse_version
+
 
 @dataclass
 class GitHubRelease:
@@ -251,15 +253,6 @@ class GitHubUpdater:
         Fehler (z. B. Rate-Limit, kein Netzwerk).
         """
 
-        def normalize(value):
-
-            return (
-                (value or "")
-                .strip()
-                .lower()
-                .removeprefix("v")
-            )
-
         try:
 
             response = self.client.get(
@@ -285,12 +278,19 @@ class GitHubUpdater:
             for release in releases
         ]
 
-        wanted = normalize(tag_name)
+        #
+        # Tag-Vergleich per parse_version statt reinem String-
+        # Vergleich: ein Tag wie "v0.8" muss dieselbe Version wie
+        # "0.8.0" treffen, sonst findet z. B. der Changelog-Abruf
+        # kein passendes Release, obwohl es eines gibt.
+        #
+
+        wanted = parse_version(tag_name)
 
         index = next(
             (
                 i for i, tag in enumerate(tags)
-                if normalize(tag) == wanted
+                if parse_version(tag) == wanted
             ),
             None,
         )

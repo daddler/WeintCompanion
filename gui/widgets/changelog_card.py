@@ -68,8 +68,8 @@ class ChangelogCard(Card):
         if commits is None:
 
             self.text.setPlainText(
-                "Changelog konnte nicht geladen werden "
-                "(GitHub nicht erreichbar)."
+                "Changelog nicht verfügbar (kein passendes "
+                "Release gefunden oder GitHub nicht erreichbar)."
             )
 
             return

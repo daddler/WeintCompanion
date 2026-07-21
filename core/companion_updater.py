@@ -8,7 +8,7 @@ from core.linux_updater import LinuxUpdater
 from core.paths import Paths
 from core.windows_updater import WindowsUpdater
 from core.runtime import Runtime
-from core.version import VERSION
+from core.version import VERSION, versions_equal
 
 
 class CompanionUpdater:
@@ -26,21 +26,6 @@ class CompanionUpdater:
         self.windows = WindowsUpdater()
 
         self._changelog_commits = None
-
-    # --------------------------------------------------
-
-    @staticmethod
-    def normalize(version):
-
-        if not version:
-            return ""
-
-        return (
-            version
-            .strip()
-            .lower()
-            .removeprefix("v")
-        )
 
     # --------------------------------------------------
     # Auf Updates prüfen
@@ -71,11 +56,9 @@ class CompanionUpdater:
         state.companion_download_url = release.download_url
         state.companion_asset_name = release.asset_name
 
-        current = self.normalize(VERSION)
-        latest = self.normalize(release.version)
-
-        state.companion_update_available = (
-            current != latest
+        state.companion_update_available = not versions_equal(
+            VERSION,
+            release.version,
         )
 
         if state.companion_update_available:
