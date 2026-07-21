@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 from core.platform import is_linux, is_windows, open_folder
 from gui.widgets.activity_panel import ActivityPanel
+from gui.widgets.changelog_card import ChangelogCard
 from gui.widgets.dashboard_cards import DashboardCards
 from gui.widgets.hero_banner import HeroButton
 from gui.widgets.priority_banner import PriorityBanner
@@ -155,6 +156,14 @@ class DashboardPage(QWidget):
         main_column.addWidget(self.cards)
 
         #
+        # Changelog der installierten Companion-Version
+        #
+
+        self.changelog = ChangelogCard()
+
+        main_column.addWidget(self.changelog)
+
+        #
         # Quick Actions
         #
 
@@ -229,6 +238,10 @@ class DashboardPage(QWidget):
         self.cards.refresh()
 
         self.hero.updateFromState(
+            self.manager.state
+        )
+
+        self.changelog.refresh(
             self.manager.state
         )
 

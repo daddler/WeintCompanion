@@ -63,6 +63,8 @@ class AppState:
 
     companion_update_available: bool = False
 
+    companion_changelog: list[str] | None = None
+
     # --------------------------------------------------
     # Discord Bot
     # --------------------------------------------------

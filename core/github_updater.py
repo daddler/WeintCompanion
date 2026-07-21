@@ -233,3 +233,113 @@ class GitHubUpdater:
             )
 
             return None
+
+    # --------------------------------------------------
+    # Commits eines Releases ("was wurde committed")
+    # --------------------------------------------------
+
+    def get_release_commits(self, tag_name):
+        """
+        Liefert die Commit-Titel, die im Release "tag_name" enthalten
+        sind - verglichen mit dem direkt davor veröffentlichten
+        Release (GitHubs eigene Release-Notes listen bei Direkt-
+        Pushes auf den Standardbranch ohne Pull-Request oft nur den
+        Vergleichslink, keine einzelnen Änderungen).
+
+        Rückgabe: Liste von Commit-Titeln, [] wenn es kein
+        vorheriges Release gibt (erstes Release), None bei einem
+        Fehler (z. B. Rate-Limit, kein Netzwerk).
+        """
+
+        def normalize(value):
+
+            return (
+                (value or "")
+                .strip()
+                .lower()
+                .removeprefix("v")
+            )
+
+        try:
+
+            response = self.client.get(
+                f"https://api.github.com/repos/"
+                f"{self.owner}/{self.repo}/releases",
+                params={"per_page": 100},
+            )
+
+            response.raise_for_status()
+
+            releases = response.json()
+
+        except Exception as e:
+
+            print(
+                f"GitHubUpdater: {e}"
+            )
+
+            return None
+
+        tags = [
+            release.get("tag_name", "")
+            for release in releases
+        ]
+
+        wanted = normalize(tag_name)
+
+        index = next(
+            (
+                i for i, tag in enumerate(tags)
+                if normalize(tag) == wanted
+            ),
+            None,
+        )
+
+        if index is None:
+            return None
+
+        if index + 1 >= len(tags):
+            return []
+
+        current_tag = tags[index]
+        previous_tag = tags[index + 1]
+
+        try:
+
+            response = self.client.get(
+                f"https://api.github.com/repos/"
+                f"{self.owner}/{self.repo}/compare/"
+                f"{previous_tag}...{current_tag}"
+            )
+
+            response.raise_for_status()
+
+            data = response.json()
+
+        except Exception as e:
+
+            print(
+                f"GitHubUpdater: {e}"
+            )
+
+            return None
+
+        commits = []
+
+        for commit in data.get("commits", []):
+
+            message = (
+                commit.get("commit", {})
+                .get("message", "")
+            )
+
+            title = (
+                message.splitlines()[0]
+                if message
+                else ""
+            )
+
+            if title:
+                commits.append(title)
+
+        return commits

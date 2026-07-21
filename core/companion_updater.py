@@ -25,6 +25,8 @@ class CompanionUpdater:
         self.linux = LinuxUpdater()
         self.windows = WindowsUpdater()
 
+        self._changelog_commits = None
+
     # --------------------------------------------------
 
     @staticmethod
@@ -87,6 +89,29 @@ class CompanionUpdater:
             self.manager.logger.success(
                 "Companion ist aktuell."
             )
+
+        state.companion_changelog = self._get_changelog()
+
+    # --------------------------------------------------
+    # Changelog der installierten Version
+    # --------------------------------------------------
+
+    def _get_changelog(self):
+        """
+        Ergebnis wird für die Laufzeit des Prozesses zwischen-
+        gespeichert - VERSION ändert sich erst nach einem Neustart.
+        Ein Fehlschlag (None) wird NICHT zwischengespeichert, damit
+        ein erneuter Update-Check (z. B. "Nach Updates suchen") nach
+        einem vorübergehenden Netzwerkproblem erneut versuchen kann.
+        """
+
+        if self._changelog_commits is None:
+
+            self._changelog_commits = (
+                self.github.get_release_commits(VERSION)
+            )
+
+        return self._changelog_commits
 
     # --------------------------------------------------
     # Vorheriges Update prüfen
