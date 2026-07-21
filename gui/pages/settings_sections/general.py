@@ -1,5 +1,7 @@
 from PySide6.QtWidgets import QLabel, QVBoxLayout
 
+from core.autostart import Autostart
+
 from gui.theme.colors import Colors
 from gui.widgets.segmented_control import SegmentedControl
 from gui.widgets.toggle_switch import ToggleSwitch
@@ -79,26 +81,46 @@ class GeneralSection(SectionContent):
         self.addRow(interval_col)
 
         #
-        # Geplante Einstellungen (kein Backend - deaktiviert)
+        # Beim Systemstart öffnen (echt, Windows-Registry bzw.
+        # XDG-Autostart unter Linux)
         #
+
+        self.autostart_toggle = ToggleSwitch()
+
+        self.autostart_toggle.toggled.connect(
+            self._save_autostart
+        )
 
         self.addRow(
             toggle_row(
                 "Beim Systemstart öffnen",
-                "Geplant - Autostart ist noch nicht implementiert.",
-                self._disabled_toggle(),
-                enabled=False,
+                "Startet WeintCompanion automatisch, sobald du dich anmeldest.",
+                self.autostart_toggle,
             )
+        )
+
+        #
+        # In Tray minimieren (echt, config.minimize_to_tray)
+        #
+
+        self.tray_toggle = ToggleSwitch()
+
+        self.tray_toggle.toggled.connect(
+            self._save_minimize_to_tray
         )
 
         self.addRow(
             toggle_row(
                 "In Tray minimieren",
-                "Geplant - Tray-Unterstützung ist noch nicht implementiert.",
-                self._disabled_toggle(),
-                enabled=False,
+                "Companion bleibt beim Schließen/Minimieren im "
+                "System-Tray aktiv, statt sich zu beenden.",
+                self.tray_toggle,
             )
         )
+
+        #
+        # Telemetrie senden (kein Backend - deaktiviert)
+        #
 
         self.addRow(
             toggle_row(
@@ -136,6 +158,25 @@ class GeneralSection(SectionContent):
             config.data.get("sync_interval", 5)
         )
 
+        #
+        # Autostart: tatsächlicher Registry-/Autostart-Zustand ist
+        # die Wahrheit (nicht nur der zuletzt gespeicherte Wunsch) -
+        # so bleibt der Schalter korrekt, auch wenn der Eintrag von
+        # außerhalb entfernt wurde.
+        #
+
+        self.autostart_toggle.blockSignals(True)
+        self.autostart_toggle.setChecked(
+            Autostart.is_enabled()
+        )
+        self.autostart_toggle.blockSignals(False)
+
+        self.tray_toggle.blockSignals(True)
+        self.tray_toggle.setChecked(
+            config.data.get("minimize_to_tray", False)
+        )
+        self.tray_toggle.blockSignals(False)
+
     # --------------------------------------------------
 
     def _save_auto_sync(self, checked: bool):
@@ -162,3 +203,31 @@ class GeneralSection(SectionContent):
 
             self.manager.stop_auto_sync()
             self.manager.start_auto_sync()
+
+    def _save_autostart(self, checked: bool):
+
+        success = Autostart.set_enabled(checked)
+
+        if not success:
+
+            self.manager.logger.error(
+                "Autostart konnte nicht geändert werden."
+            )
+
+            self.autostart_toggle.blockSignals(True)
+            self.autostart_toggle.setChecked(not checked)
+            self.autostart_toggle.blockSignals(False)
+
+            return
+
+        self.manager.config.data["start_on_boot"] = checked
+
+        self.manager.config.save()
+
+    def _save_minimize_to_tray(self, checked: bool):
+
+        self.manager.config.data["minimize_to_tray"] = checked
+
+        self.manager.config.save()
+
+        self.manager.tray_settings_changed.emit(checked)

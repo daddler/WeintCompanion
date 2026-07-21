@@ -42,9 +42,20 @@ class _AutoSyncStarter(QObject):
     requested = Signal()
 
 
-class CompanionManager:
+class CompanionManager(QObject):
+
+    #
+    # Wird ausgelöst, wenn die "In Tray minimieren"-Einstellung
+    # geändert wird - MainWindow hält das eigentliche
+    # QSystemTrayIcon und reagiert live darauf, ohne dass ein
+    # Neustart nötig ist.
+    #
+
+    tray_settings_changed = Signal(bool)
 
     def __init__(self):
+
+        super().__init__()
 
         self.state = AppState()
 
