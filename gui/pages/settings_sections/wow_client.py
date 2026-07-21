@@ -20,9 +20,10 @@ from ._common import SectionContent
 
 LINUX_LAUNCHER_PLACEHOLDERS = {
 
-    "custom": "z. B. faugus-launcher --start \"Battle.net\"",
+    "custom": "Vollständiger Start-Befehl, z. B. für Bottles/Heroic",
     "lutris": "Lutris-Spiel-Slug, z. B. battlenet",
     "steam": "Steam App-ID, z. B. 123456789",
+    "faugus": "Faugus Game-ID, z. B. battlenet",
 
 }
 
@@ -121,7 +122,9 @@ class WowClientSection(SectionContent):
         description = QLabel(
             "Unter Linux gibt es kein einheitliches Battle.net - "
             "hinterlege, wie dein Launcher (Lutris, Steam, Faugus, "
-            "Bottles, ...) gestartet wird."
+            "Bottles, ...) gestartet wird. Die Faugus Game-ID findest "
+            "du in ~/.local/share/faugus-launcher/games.json oder am "
+            "Namen des WINEPREFIX-Ordners unter ~/Faugus/."
         )
 
         description.setWordWrap(True)
@@ -137,6 +140,7 @@ class WowClientSection(SectionContent):
             ("Eigener Befehl", "custom"),
             ("Lutris", "lutris"),
             ("Steam", "steam"),
+            ("Faugus", "faugus"),
 
         ])
 

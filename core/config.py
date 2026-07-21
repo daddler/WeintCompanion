@@ -168,9 +168,9 @@ class Config:
     def get_linux_launch_command(self):
         """
         Baut aus Launcher-Typ + Wert den tatsächlich auszuführenden
-        Befehl. "lutris" und "steam" kennen ein festes URI-Schema,
-        bei "custom" (z. B. Faugus, Bottles, Heroic, ...) ist der
-        Wert bereits der vollständige Befehl.
+        Befehl. "lutris"/"steam"/"faugus" kennen eine feste
+        CLI-Syntax, bei "custom" (z. B. Bottles, Heroic, ...) ist
+        der Wert bereits der vollständige Befehl.
         """
 
         launcher_type = self.get_linux_launcher_type()
@@ -184,5 +184,8 @@ class Config:
 
         if launcher_type == "steam":
             return f"steam steam://rungameid/{value}"
+
+        if launcher_type == "faugus":
+            return f"faugus-launcher --game {value}"
 
         return value
