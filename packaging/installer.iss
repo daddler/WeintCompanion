@@ -1,5 +1,5 @@
 #define MyAppName "WeintCompanion"
-#define MyAppVersion "0.7.4"
+#define MyAppVersion "0.8.0"
 #define MyAppPublisher "Fabi (daddler2419)"
 #define MyAppExeName "WeintCompanion.exe"
 
