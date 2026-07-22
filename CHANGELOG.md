@@ -1,6 +1,13 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 0.8.8.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 0.8.9.
+
+## 0.8.9
+
+- Neu: Bridge "Loot-Verteilung" - vom Addon erfasste Item-Zuteilungen
+  (Episch+, per Würfel oder Meisterlooter vergeben) werden bei aktivierter
+  Bridge automatisch an einen Discord-Kanal gemeldet. Standardmäßig
+  deaktiviert, Umschaltung über die Sync-Seite.
 
 ## 0.8.8
 
