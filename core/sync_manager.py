@@ -79,6 +79,23 @@ class SyncManager:
                     message["payload"]
                 )
 
+            #
+            # Loot-Meldungen sind ein neues, standardmäßig deaktiviertes
+            # Feature (Bridge-Karte "Loot-Verteilung"). Das Addon erfasst
+            # sie unabhängig davon immer - ist die Bridge hier ausgeschaltet,
+            # wird die Nachricht nur verworfen statt an den Bot gesendet.
+            #
+
+            elif message.get("type") == "loot" and not self.manager.config.data.get(
+                "loot_sync_enabled",
+                False,
+            ):
+
+                self.reader.remove_message(
+                    message["id"]
+                )
+                continue
+
             else:
 
                 success = self.client.send(

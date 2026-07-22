@@ -302,7 +302,10 @@ class SyncPage(QWidget):
         self.loot_bridge = _BridgeCard(
             "Loot-Verteilung",
             "Loot-Log → Discord-Channel #loot",
-            real=False,
+            real=True,
+            checked=self.manager.config.data.get(
+                "loot_sync_enabled", False,
+            ),
         )
 
         self.chat_bridge = _BridgeCard(
@@ -341,6 +344,10 @@ class SyncPage(QWidget):
 
         self.roster_bridge.toggle.toggled.connect(
             self.set_roster_sync_enabled
+        )
+
+        self.loot_bridge.toggle.toggled.connect(
+            self.set_loot_sync_enabled
         )
 
         self.refresh()
@@ -405,6 +412,26 @@ class SyncPage(QWidget):
 
             self.manager.logger.info(
                 "Charakter-Roster-Sync deaktiviert."
+            )
+
+    # --------------------------------------------------
+
+    def set_loot_sync_enabled(self, enabled: bool):
+
+        self.manager.config.data["loot_sync_enabled"] = enabled
+
+        self.manager.config.save()
+
+        if enabled:
+
+            self.manager.logger.success(
+                "Loot-Sync aktiviert."
+            )
+
+        else:
+
+            self.manager.logger.info(
+                "Loot-Sync deaktiviert."
             )
 
     # --------------------------------------------------
