@@ -1,6 +1,16 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 0.8.9.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 0.9.0.
+
+## 0.9.0
+
+- Fix: Die Bridge-Karten "Charakter-Roster" und "Gilden-Kalender" auf der
+  Sync-Seite waren vertauscht - die als "Charakter-Roster" aktiv markierte
+  Bridge trieb tatsächlich schon den Export der Raid-Anmeldung in den
+  Ingame-Kalender an (Gilden-Kalender), während "Charakter-Roster" als
+  Feature (Online-Status je Charakter) noch gar nicht existiert. Jetzt
+  korrekt beschriftet: "Gilden-Kalender" ist aktiv, "Charakter-Roster"
+  ist als geplant markiert.
 
 ## 0.8.9
 

@@ -284,18 +284,18 @@ class SyncPage(QWidget):
         bridge_grid.setHorizontalSpacing(14)
         bridge_grid.setVerticalSpacing(14)
 
-        self.roster_bridge = _BridgeCard(
-            "Charakter-Roster",
-            "Wer online ist, welcher Char, welche Rolle",
+        self.calendar_bridge = _BridgeCard(
+            "Gilden-Kalender",
+            "Raid-Anmeldungen → Ingame-Kalender",
             real=True,
             checked=self.manager.config.data.get(
                 "roster_sync_enabled", True,
             ),
         )
 
-        self.calendar_bridge = _BridgeCard(
-            "Gilden-Kalender",
-            "Raid-Termine → Discord-Events",
+        self.roster_bridge = _BridgeCard(
+            "Charakter-Roster",
+            "Wer online ist, welcher Char, welche Rolle",
             real=False,
         )
 
@@ -314,8 +314,8 @@ class SyncPage(QWidget):
             real=False,
         )
 
-        bridge_grid.addWidget(self.roster_bridge, 0, 0)
-        bridge_grid.addWidget(self.calendar_bridge, 0, 1)
+        bridge_grid.addWidget(self.calendar_bridge, 0, 0)
+        bridge_grid.addWidget(self.roster_bridge, 0, 1)
         bridge_grid.addWidget(self.loot_bridge, 1, 0)
         bridge_grid.addWidget(self.chat_bridge, 1, 1)
 
@@ -342,7 +342,7 @@ class SyncPage(QWidget):
 
         self.sync_button.clicked.connect(self.sync_now)
 
-        self.roster_bridge.toggle.toggled.connect(
+        self.calendar_bridge.toggle.toggled.connect(
             self.set_roster_sync_enabled
         )
 
@@ -397,6 +397,13 @@ class SyncPage(QWidget):
     # --------------------------------------------------
 
     def set_roster_sync_enabled(self, enabled: bool):
+        """
+        Der Config-Key heißt weiterhin "roster_sync_enabled" (siehe
+        core/companion_manager.py: DiscordRosterSync), auch wenn er hier
+        über die Gilden-Kalender-Karte gesteuert wird - er bezeichnete
+        historisch die Roster-Übertragung, tatsächlich treibt er aber
+        den Raid-Anmeldung-zu-Ingame-Kalender-Export an.
+        """
 
         self.manager.config.data["roster_sync_enabled"] = enabled
 
@@ -405,13 +412,13 @@ class SyncPage(QWidget):
         if enabled:
 
             self.manager.logger.success(
-                "Charakter-Roster-Sync aktiviert."
+                "Gilden-Kalender-Sync aktiviert."
             )
 
         else:
 
             self.manager.logger.info(
-                "Charakter-Roster-Sync deaktiviert."
+                "Gilden-Kalender-Sync deaktiviert."
             )
 
     # --------------------------------------------------

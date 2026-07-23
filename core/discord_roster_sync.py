@@ -100,5 +100,5 @@ class DiscordRosterSync:
         self._last_delivered = fingerprint
 
         self.manager.logger.success(
-            "Raid-Roster an das Addon übergeben."
+            "Gilden-Kalender: Raid-Roster an das Addon übergeben."
         )

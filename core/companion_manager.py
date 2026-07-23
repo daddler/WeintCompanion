@@ -246,7 +246,7 @@ class CompanionManager(QObject):
         except Exception as exc:
 
             self.logger.error(
-                f"Discord-Raid-Roster-Sync fehlgeschlagen: {exc}"
+                f"Gilden-Kalender-Sync fehlgeschlagen: {exc}"
             )
 
         finally:
