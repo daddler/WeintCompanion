@@ -3,5 +3,6 @@
     "check_updates": true,
     "auto_sync": false,
     "sync_interval": 5,
-    "roster_sync_enabled": true
+    "roster_sync_enabled": true,
+    "character_roster_sync_enabled": true
 }

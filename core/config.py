@@ -29,6 +29,8 @@ class Config:
 
             "roster_sync_enabled": True,
 
+            "character_roster_sync_enabled": True,
+
             "start_on_boot": False,
 
             "minimize_to_tray": False,
@@ -78,6 +80,7 @@ class Config:
                     "auto_sync": True,
                     "sync_interval": 5,
                     "roster_sync_enabled": True,
+                    "character_roster_sync_enabled": True,
                     "start_on_boot": False,
                     "minimize_to_tray": False,
                     "linux_launcher_type": "custom",

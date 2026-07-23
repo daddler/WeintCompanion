@@ -68,6 +68,25 @@ class SyncManager:
 
             if message.get("type") == "character":
 
+                #
+                # Bridge-Karte "Charakter-Roster": meldet die in der
+                # Twinkverwaltung ausgewählten Charaktere an den Bot
+                # (Grundlage für den Klassen-Abgleich beim Kalender-Invite,
+                # siehe services/companion_characters.py im Bot). Ist die
+                # Bridge ausgeschaltet, wird die Nachricht nur verworfen -
+                # das Addon erfasst sie unabhängig davon immer.
+                #
+
+                if not self.manager.config.data.get(
+                    "character_roster_sync_enabled",
+                    True,
+                ):
+
+                    self.reader.remove_message(
+                        message["id"]
+                    )
+                    continue
+
                 if not self.character_client.is_linked():
 
                     self.reader.remove_message(

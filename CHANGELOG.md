@@ -1,6 +1,15 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 0.9.0.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 0.9.1.
+
+## 0.9.1
+
+- Neu: Bridge "Charakter-Roster" ist jetzt aktiv. Wer in der Twinkverwaltung
+  (WeintCodex-Addon) einen Charakter auswählt, wird automatisch an die
+  Charakter-Datenbank des Bots gemeldet (Grundlage für den Klassen-Abgleich
+  beim Gilden-Kalender-Invite). Standardmäßig aktiviert, Umschaltung über
+  die Sync-Seite. Erfordert WeintCodex ab v0.9.9.26 (Auswahl wird sofort statt
+  erst beim nächsten Login gemeldet).
 
 ## 0.9.0
 

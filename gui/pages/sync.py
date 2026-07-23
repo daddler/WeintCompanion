@@ -295,8 +295,11 @@ class SyncPage(QWidget):
 
         self.roster_bridge = _BridgeCard(
             "Charakter-Roster",
-            "Wer online ist, welcher Char, welche Rolle",
-            real=False,
+            "Twinkverwaltung → Charakter-Datenbank des Bots",
+            real=True,
+            checked=self.manager.config.data.get(
+                "character_roster_sync_enabled", True,
+            ),
         )
 
         self.loot_bridge = _BridgeCard(
@@ -348,6 +351,10 @@ class SyncPage(QWidget):
 
         self.loot_bridge.toggle.toggled.connect(
             self.set_loot_sync_enabled
+        )
+
+        self.roster_bridge.toggle.toggled.connect(
+            self.set_character_roster_sync_enabled
         )
 
         self.refresh()
@@ -439,6 +446,26 @@ class SyncPage(QWidget):
 
             self.manager.logger.info(
                 "Loot-Sync deaktiviert."
+            )
+
+    # --------------------------------------------------
+
+    def set_character_roster_sync_enabled(self, enabled: bool):
+
+        self.manager.config.data["character_roster_sync_enabled"] = enabled
+
+        self.manager.config.save()
+
+        if enabled:
+
+            self.manager.logger.success(
+                "Charakter-Roster-Sync aktiviert."
+            )
+
+        else:
+
+            self.manager.logger.info(
+                "Charakter-Roster-Sync deaktiviert."
             )
 
     # --------------------------------------------------
