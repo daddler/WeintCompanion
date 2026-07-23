@@ -4,7 +4,11 @@ on:
   push:
     tags:
       - "v*"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag, für das das Release erstellt werden soll (z. B. v0.9.0)"
+        required: true
 
 permissions:
   contents: write
@@ -112,6 +116,14 @@ jobs:
       - name: GitHub Release erstellen
         uses: softprops/action-gh-release@v2
         with:
+          #
+          # Bei einem echten Tag-Push (v*) ist github.ref_name bereits der
+          # Tag-Name. Bei manuellem workflow_dispatch (z. B. weil der
+          # eigentliche Tag-Push keinen Workflow-Run ausgelöst hat) läuft
+          # der Job stattdessen gegen einen Branch - ohne den expliziten
+          # "tag"-Input würde die Action mangels Tag-Kontext fehlschlagen.
+          #
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           generate_release_notes: true
           fail_on_unmatched_files: false
           files: |
