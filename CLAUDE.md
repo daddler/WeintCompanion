@@ -36,7 +36,7 @@ CI (`.github/workflows/build.yml`) builds Linux (AppImage) and Windows (Inno Set
 ### Layering
 
 - **`core/`** – all business logic, framework-agnostic where possible (Qt is used for `QObject`/`Signal` in a few places like `CompanionManager` and `AppState`).
-- **`gui/`** – PySide6 UI: `main_window.py`, `pages/` (Dashboard, Addon, Sync, Settings, Logs), `widgets/`, `theme/` (colors/typography/stylesheet), `controllers/`.
+- **`gui/`** – PySide6 UI: `main_window.py`, `pages/` (Dashboard, Addon, Sync, Settings, Logs), `widgets/`, `theme/` (colors/typography/stylesheet), `controllers/`, `dialogs/` (currently `whats_new_dialog.py` – the onboarding/changelog popup, see below).
 - **`addon/`** – reads the WoW addon's Lua `SavedVariables` files (`finder.py` locates the WoW install, `reader.py` reads the addon's own version/state, `sync_reader.py` reads the outbound message queue).
 - **`discord/`** – `sync_client.py`, a thin HTTP client for the material-sync bridge.
 
@@ -74,3 +74,7 @@ The bot backend base URL is centralized as `BOT_BASE_URL` in `core/backend_confi
 ### Config and auth
 
 `core/config.py` is a flat JSON-backed settings store (`config.json` in `Paths.config()`) with a defaults dict merged on load so new settings get backfilled into existing installs. Discord account linking is fully implemented: `core/discord_auth.py`'s `DiscordAuth.login()` runs the real OAuth2 flow (local callback server, system browser to Discord, code exchange against the bot's `/companion/auth/exchange`), and `core/discord_account.py`'s `DiscordAccountStore` persists the resulting identity plus a bot-issued `companion_token` (never the real Discord OAuth token) to `discord_account.json`. That `companion_token` is the bearer credential used everywhere downstream (`CharacterSyncClient`, `DiscordRosterSync`, generic sync) to check "is a Discord account linked" and to authenticate against the bot.
+
+### "What's new" popup
+
+`gui/dialogs/whats_new_dialog.py`'s `show_whats_new_if_needed()` is triggered once via `QTimer.singleShot(0, ...)` at the end of `MainWindow.__init__` (independent of `CompanionManager`'s async init, since its content is local/bundled, not network-fetched). It compares `config.data["onboarding_seen_version"]` against `core.version.VERSION`: empty (fresh install or an upgrade from any pre-1.0 version, since the key never existed before) shows the hardcoded multi-page `TOUR_PAGES` feature walkthrough; any other mismatch shows the changelog entries between the two versions, read from the bundled `CHANGELOG.md` via `core/changelog_reader.py` (must stay listed in `WeintCompanion.spec`'s `datas`). Either way the dialog updates `onboarding_seen_version` on close; its "don't show again" checkbox sets `config.data["whats_new_enabled"] = False`, which short-circuits the whole check on future starts. Both are user-reversible via the "Willkommens-Tour" toggle/button in Settings → Allgemein (`gui/pages/settings_sections/general.py`), which calls `show_tour()` unconditionally (bypassing the seen-version check).
