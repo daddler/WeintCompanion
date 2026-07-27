@@ -1,8 +1,10 @@
-from PySide6.QtWidgets import QLabel, QVBoxLayout
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from core.autostart import Autostart
 
+from gui.dialogs.whats_new_dialog import show_tour
 from gui.theme.colors import Colors
+from gui.widgets.hero_banner import HeroButton
 from gui.widgets.segmented_control import SegmentedControl
 from gui.widgets.toggle_switch import ToggleSwitch
 
@@ -119,6 +121,69 @@ class GeneralSection(SectionContent):
         )
 
         #
+        # "Was ist neu"-Popup (echt, config.whats_new_enabled)
+        #
+
+        self.whats_new_toggle = ToggleSwitch()
+
+        self.whats_new_toggle.toggled.connect(
+            self._save_whats_new_enabled
+        )
+
+        self.addRow(
+            toggle_row(
+                "Update-Hinweise automatisch anzeigen",
+                "Zeigt nach einem Update automatisch, was sich geändert hat.",
+                self.whats_new_toggle,
+            )
+        )
+
+        #
+        # Tour erneut anzeigen (unabhängig vom gespeicherten Zustand)
+        #
+
+        tour_row = QWidget()
+
+        tour_layout = QHBoxLayout(tour_row)
+
+        tour_layout.setContentsMargins(0, 0, 0, 0)
+        tour_layout.setSpacing(20)
+
+        tour_text_col = QVBoxLayout()
+
+        tour_text_col.setSpacing(4)
+
+        tour_label = QLabel("Willkommens-Tour")
+
+        tour_label.setStyleSheet(
+            f"font-size:14px;font-weight:600;color:{Colors.WHITE};"
+        )
+
+        tour_text_col.addWidget(tour_label)
+
+        tour_desc = QLabel(
+            "Zeigt den Rundgang durch die Grundfunktionen erneut."
+        )
+
+        tour_desc.setWordWrap(True)
+
+        tour_desc.setStyleSheet(
+            f"font-size:13px;color:{Colors.TEXT_MUTED};"
+        )
+
+        tour_text_col.addWidget(tour_desc)
+
+        tour_layout.addLayout(tour_text_col, 1)
+
+        self.tour_button = HeroButton("Tour anzeigen", primary=False)
+
+        self.tour_button.clicked.connect(self._show_tour)
+
+        tour_layout.addWidget(self.tour_button)
+
+        self.addRow(tour_row)
+
+        #
         # Telemetrie senden (kein Backend - deaktiviert)
         #
 
@@ -177,6 +242,12 @@ class GeneralSection(SectionContent):
         )
         self.tray_toggle.blockSignals(False)
 
+        self.whats_new_toggle.blockSignals(True)
+        self.whats_new_toggle.setChecked(
+            config.data.get("whats_new_enabled", True)
+        )
+        self.whats_new_toggle.blockSignals(False)
+
     # --------------------------------------------------
 
     def _save_auto_sync(self, checked: bool):
@@ -231,3 +302,21 @@ class GeneralSection(SectionContent):
         self.manager.config.save()
 
         self.manager.tray_settings_changed.emit(checked)
+
+    def _save_whats_new_enabled(self, checked: bool):
+
+        self.manager.config.data["whats_new_enabled"] = checked
+
+        self.manager.config.save()
+
+    def _show_tour(self):
+
+        show_tour(self.manager, self)
+
+        #
+        # show_tour() kann das "Nicht mehr automatisch anzeigen"-
+        # Häkchen im Dialog selbst gesetzt haben - Schalter hier
+        # synchron halten.
+        #
+
+        self.refresh()

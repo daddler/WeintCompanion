@@ -44,6 +44,14 @@ class Config:
 
             "linux_launcher_value": "",
 
+            #
+            # "Was ist neu"-Popup (gui/dialogs/whats_new_dialog.py)
+            #
+
+            "whats_new_enabled": True,
+
+            "onboarding_seen_version": "",
+
         }
 
         self.load()
@@ -86,6 +94,8 @@ class Config:
                     "minimize_to_tray": False,
                     "linux_launcher_type": "custom",
                     "linux_launcher_value": "",
+                    "whats_new_enabled": True,
+                    "onboarding_seen_version": "",
 
                 }
 

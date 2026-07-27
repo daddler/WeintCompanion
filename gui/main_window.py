@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
 from core.companion_manager import CompanionManager
 from core.resources import Resources
 
+from gui.dialogs.whats_new_dialog import show_whats_new_if_needed
+
 from gui.theme.colors import Colors
 from gui.theme.metrics import Metrics
 
@@ -278,6 +280,21 @@ class MainWindow(QMainWindow):
         #
 
         self.change_page(0)
+
+        #
+        # "Was ist neu"-Popup - unabhängig vom asynchronen
+        # CompanionManager-Init (siehe CLAUDE.md: initialize()
+        # läuft über einen eigenen QTimer.singleShot), da der Inhalt
+        # (Tour-Text bzw. gebündeltes CHANGELOG.md) rein lokal ist
+        # und nicht auf full_refresh() warten muss. singleShot(0, ...)
+        # statt eines direkten Aufrufs, damit das Fenster zuerst
+        # sichtbar wird, bevor der modale Dialog erscheint.
+        #
+
+        QTimer.singleShot(
+            0,
+            lambda: show_whats_new_if_needed(self.manager, self),
+        )
 
     # --------------------------------------------------
     # Scroll Wrapper
