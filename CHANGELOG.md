@@ -1,6 +1,39 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 0.9.1.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.0.0.
+
+## 1.0.0
+
+Erster offizieller Release. Neben allgemeiner Politur enthält dieser Release
+mehrere Härtungen, die vor einem offiziellen 1.0-Release notwendig waren:
+
+- Sicherheit: Downloads (Companion-Self-Update und WeintCodex-Addon-Update)
+  werden jetzt per SHA-256-Prüfsumme verifiziert, bevor sie ausgeführt bzw.
+  installiert werden. Für das Companion-Self-Update ist eine gültige
+  Prüfsumme jetzt zwingend erforderlich - ohne sie wird kein Update mehr
+  heruntergeladen.
+- Fix: Die Addon-Installation (core/installer.py) ersetzte die bestehende
+  Version bisher per "erst löschen, dann kopieren" - ein Absturz mitten
+  im Update konnte den Nutzer komplett ohne installiertes Addon
+  zurücklassen. Die Installation läuft jetzt über einen atomaren Swap
+  (neue Version erst vollständig danebenbauen, dann in einem Schritt
+  tauschen); schlägt selbst das fehl, wird automatisch versucht, aus dem
+  zuvor erstellten Backup wiederherzustellen.
+- Fix: config.json und die WoW-SavedVariables-Datei werden jetzt
+  atomar geschrieben (write-temp-then-rename) statt direkt überschrieben -
+  ein Absturz mitten im Schreiben kann keine der beiden Dateien mehr
+  beschädigen. Eine dennoch beschädigte config.json wird beim nächsten
+  Start nach "config.json.bak" verschoben statt stillschweigend mit
+  Standardwerten überschrieben zu werden.
+- Fix: Ein einzelner fehlerhafter/abgeschnittener Eintrag in der
+  Sync-Warteschlange des Addons (z. B. durch einen Lesezugriff mitten in
+  einem Schreibvorgang von WoWs Lua-VM) bricht nicht mehr den kompletten
+  Sync-Zyklus ab, sondern wird übersprungen.
+- Aufräumen: totes, nicht mehr funktionierendes Auth-Scaffolding
+  (core/auth/) entfernt - die tatsächliche Discord-Verknüpfung läuft
+  bereits vollständig über core/discord_auth.py.
+- macOS wird für 1.0 nicht offiziell unterstützt (kein Build/CI-Ziel,
+  bestehende Codepfade sind ungetestet).
 
 ## 0.9.1
 

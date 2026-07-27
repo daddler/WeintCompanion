@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 
+from core.downloader import ChecksumError
 from core.github_updater import GitHubUpdater
 from core.linux_updater import LinuxUpdater
 from core.paths import Paths
@@ -44,6 +45,7 @@ class CompanionUpdater:
             state.companion_latest_version = "-"
             state.companion_download_url = ""
             state.companion_asset_name = ""
+            state.companion_sha256 = ""
             state.companion_update_available = False
 
             self.manager.logger.error(
@@ -55,6 +57,7 @@ class CompanionUpdater:
         state.companion_latest_version = release.version
         state.companion_download_url = release.download_url
         state.companion_asset_name = release.asset_name
+        state.companion_sha256 = release.sha256 or ""
 
         state.companion_update_available = not versions_equal(
             VERSION,
@@ -151,6 +154,26 @@ class CompanionUpdater:
 
             return None
 
+        #
+        # Der Companion-Self-Updater ersetzt eine ausführbare Binary
+        # und startet sie danach automatisch neu - ein Update ohne
+        # verifizierbare Prüfsumme wird deshalb bewusst NICHT
+        # heruntergeladen, statt es "trotzdem" zu versuchen. Die CI
+        # (build.yml) veröffentlicht seit Einführung dieser Prüfung
+        # zu jedem Release ein "<asset>.sha256" - fehlt sie, ist das
+        # Release entweder älter als diese Änderung oder wurde
+        # manipuliert.
+        #
+
+        if not state.companion_sha256:
+
+            self.manager.logger.error(
+                "Keine Prüfsumme für das Companion-Update verfügbar - "
+                "Update wird aus Sicherheitsgründen abgebrochen."
+            )
+
+            return None
+
         filename = (
             state.companion_asset_name
             or f"WeintCompanion-{state.companion_latest_version}"
@@ -189,7 +212,16 @@ class CompanionUpdater:
             file = self.manager.downloader.download(
                 state.companion_download_url,
                 destination,
+                expected_sha256=state.companion_sha256,
             )
+
+        except ChecksumError as exc:
+
+            self.manager.logger.error(
+                f"Prüfsummen-Verifikation fehlgeschlagen: {exc}"
+            )
+
+            return None
 
         except Exception as exc:
 
@@ -504,8 +536,20 @@ class CompanionUpdater:
                 return True
 
             #
-            # macOS
+            # macOS - für 1.0 NICHT offiziell unterstützt: es gibt
+            # weder ein Build-Skript noch einen CI-Job für ein
+            # .dmg-Release, dieser Zweig ist ungetestet und läuft nur
+            # noch mit, falls ihn jemand manuell aus dem Quellcode
+            # startet. Vor einer echten macOS-Unterstützung braucht
+            # es mindestens einen eigenen Build-/CI-Prozess (siehe
+            # scripts/build_linux.sh bzw. build_windows.ps1 als
+            # Vorbild) sowie einen Test auf echter Hardware.
             #
+
+            self.manager.logger.warning(
+                "macOS wird von WeintCompanion aktuell nicht offiziell "
+                "unterstützt - der Installer-Start ist ungetestet."
+            )
 
             self.manager.logger.info(
                 "Starte Installer..."

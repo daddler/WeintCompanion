@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 from core.paths import Paths
@@ -101,14 +102,60 @@ class Config:
 
         except Exception:
 
+            #
+            # Eine kaputte config.json (z. B. durch einen Absturz
+            # mitten im Schreiben) wird NICHT stillschweigend mit
+            # den In-Memory-Defaults überschrieben - das würde
+            # sämtliche Nutzereinstellungen kommentarlos löschen.
+            # Stattdessen wird die kaputte Datei beiseite gelegt,
+            # damit der Verlust sichtbar/nachvollziehbar bleibt.
+            #
+
+            backup_path = self.file.with_suffix(
+                self.file.suffix + ".bak"
+            )
+
+            try:
+
+                self.file.replace(backup_path)
+
+                print(
+                    f"config.json war beschädigt und wurde nach "
+                    f"{backup_path.name} verschoben - Einstellungen "
+                    f"wurden auf Standardwerte zurückgesetzt."
+                )
+
+            except OSError as exc:
+
+                print(
+                    f"config.json war beschädigt und konnte nicht "
+                    f"gesichert werden ({exc}) - Einstellungen werden "
+                    f"auf Standardwerte zurückgesetzt."
+                )
+
             self.save()
 
     # --------------------------------------------------
 
     def save(self):
+        """
+        Schreibt zuerst in eine temporäre Datei im selben Verzeichnis
+        und ersetzt config.json danach atomar (os.replace) - ein
+        Absturz/Stromausfall mitten im Schreiben kann so nie eine
+        halbgeschriebene, kaputte config.json hinterlassen.
+        """
+
+        self.file.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        tmp_path = self.file.with_suffix(
+            self.file.suffix + ".tmp"
+        )
 
         with open(
-            self.file,
+            tmp_path,
             "w",
             encoding="utf-8",
         ) as f:
@@ -119,6 +166,8 @@ class Config:
                 indent=4,
                 ensure_ascii=False,
             )
+
+        os.replace(tmp_path, self.file)
 
     # --------------------------------------------------
     # Classic-Pfad

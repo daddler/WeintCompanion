@@ -55,7 +55,7 @@ The addon writes outbound messages into its WoW SavedVariables Lua file (`WeintC
 
 `DiscordRosterSync` (`core/discord_roster_sync.py`) runs the opposite direction: it polls the bot's `/companion/raid-roster` endpoint (bearer-token-authenticated via the stored `companion_token`) and, on new data, writes a `raid_import` message *into* the addon via `InboxWriter` — this is how the addon receives raid-roster/calendar data from Discord. It runs in the same sync cycle as the material sync but is isolated in its own try/except so a roster-sync failure never blocks material sync or vice versa.
 
-The bot backend base URL is hardcoded as `BOT_BASE_URL` in `core/discord_roster_sync.py`.
+The bot backend base URL is centralized as `BOT_BASE_URL` in `core/backend_config.py`, imported by `core/discord_auth.py`, `core/character_sync_client.py`, and `core/discord_roster_sync.py`.
 
 ### GitHub-based updates (two independent update channels)
 
@@ -73,4 +73,4 @@ The bot backend base URL is hardcoded as `BOT_BASE_URL` in `core/discord_roster_
 
 ### Config and auth
 
-`core/config.py` is a flat JSON-backed settings store (`config.json` in `Paths.config()`) with a defaults dict merged on load so new settings get backfilled into existing installs. `core/auth/` (`AuthManager`, `TokenStore`, `models.py`) manages the Discord-linked-account state; OAuth2 login/refresh are stubbed (not yet implemented — see the docstrings in `auth_manager.py`).
+`core/config.py` is a flat JSON-backed settings store (`config.json` in `Paths.config()`) with a defaults dict merged on load so new settings get backfilled into existing installs. Discord account linking is fully implemented: `core/discord_auth.py`'s `DiscordAuth.login()` runs the real OAuth2 flow (local callback server, system browser to Discord, code exchange against the bot's `/companion/auth/exchange`), and `core/discord_account.py`'s `DiscordAccountStore` persists the resulting identity plus a bot-issued `companion_token` (never the real Discord OAuth token) to `discord_account.json`. That `companion_token` is the bearer credential used everywhere downstream (`CharacterSyncClient`, `DiscordRosterSync`, generic sync) to check "is a Discord account linked" and to authenticate against the bot.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 
@@ -119,4 +120,18 @@ def upsert_variable(path: Path, var_name: str, body: str) -> None:
 
         text = text[:start] + new_block + text[close_index + 1:]
 
-    path.write_text(text, encoding="utf-8")
+    #
+    # Write-Temp-Then-Rename: diese Datei ist WoWs SavedVariables-
+    # Datei, die ALLE Variablen des Addons enthält, nicht nur die
+    # hier bearbeitete. Ein Crash mitten in einem direkten
+    # path.write_text() würde die komplette Datei (samt unrelated
+    # Spielstand) abschneiden/beschädigen - os.replace() ist auf dem
+    # jeweiligen Dateisystem atomar, es gibt also nie einen
+    # sichtbaren Zwischenzustand.
+    #
+
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+
+    tmp_path.write_text(text, encoding="utf-8")
+
+    os.replace(tmp_path, path)

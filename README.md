@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Die offizielle Desktop-Anwendung für WeintCodex.</strong><br>
-  Installieren, aktualisieren und zukünftig mit Discord synchronisieren – alles über eine zentrale Oberfläche.
+  Installieren, aktualisieren und mit Discord synchronisieren – alles über eine zentrale Oberfläche.
 </p>
 
 ---
@@ -15,7 +15,7 @@
 
 **WeintCompanion** ist die offizielle Desktop-Anwendung für das World of Warcraft Addon **WeintCodex**.
 
-Die Anwendung übernimmt die Installation und Aktualisierung des Addons, erstellt automatisch Backups und bildet die Grundlage für die zukünftige Kommunikation zwischen Addon und Discord-Bot.
+Die Anwendung übernimmt die Installation und Aktualisierung des Addons, erstellt automatisch Backups und verbindet Addon und Discord-Bot über eine Discord-Kontoverknüpfung.
 
 Langfristig entsteht dadurch ein geschlossenes Ökosystem aus:
 
@@ -52,16 +52,20 @@ Dadurch gehören manuelle Downloads, das Kopieren von Dateien und komplizierte I
 
 ## 🔄 Synchronisation
 
-Die aktuelle Version enthält bereits die technische Grundlage für die spätere Synchronisation.
+WeintCompanion verbindet sich per Discord-Login mit dem WeintCodex-Bot und tauscht darüber automatisch Daten mit dem Addon aus.
 
-Geplante Funktionen:
+Bereits aktiv:
 
-* Synchronisation zwischen Addon und Discord-Bot
+* Discord-Konto verknüpfen (Login über den Bot, in den Einstellungen)
+* Bridge "Gilden-Kalender": Raid-Anmeldungen aus dem Addon werden in den Discord-Kalender übertragen
+* Bridge "Charakter-Roster": die im Addon gewählten Twinks werden an den Bot gemeldet (Grundlage für den Klassen-Abgleich beim Gilden-Kalender-Invite)
+* Bridge "Loot-Verteilung": erfasste Item-Zuteilungen werden an einen Discord-Kanal gemeldet (standardmäßig deaktiviert, umschaltbar über die Sync-Seite)
+
+Geplant:
+
 * Materialien
-* Kalender
-* Raidinformationen
 * Bossdaten
-* WeakAuren
+* WeakAuras
 
 ---
 
@@ -107,20 +111,15 @@ Zusätzlich wird eine Logdatei erstellt, die bei der Fehlersuche unterstützt.
 
 * Dashboard
 * Addon-Installation
-* Update-System
+* Update-System (inkl. Prüfsummen-Verifikation)
 * Backup-System
 * Logging
-* Grundlage für Synchronisation
+* Discord-Verknüpfung, Gilden-Kalender-, Charakter-Roster- und Loot-Verteilung-Bridge
 
 ## Version 1.1
 
-* Automatische Updates für WeintCompanion
+* Weitere Sync-Bridges (Materialien, Bossdaten, WeakAuras)
 * Verbesserter Installer
-
-## Version 1.2
-
-* Verbindung zum Discord-Bot
-* Automatische Synchronisation zwischen Bot und Addon
 
 ## Version 2.0
 

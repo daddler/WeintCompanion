@@ -386,6 +386,7 @@ class CompanionManager(QObject):
             self.state.github_download_url = ""
             self.state.github_asset_name = ""
             self.state.github_published = ""
+            self.state.github_sha256 = ""
             self.state.update_available = False
 
             self.logger.error(
@@ -400,6 +401,7 @@ class CompanionManager(QObject):
         self.state.github_download_url = release.download_url
         self.state.github_asset_name = release.asset_name
         self.state.github_published = release.published_at
+        self.state.github_sha256 = release.sha256 or ""
 
         github = self.normalize_version(
             self.state.github_version

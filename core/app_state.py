@@ -43,6 +43,8 @@ class AppState:
 
     github_published: str = ""
 
+    github_sha256: str = ""
+
     # --------------------------------------------------
     # Addon Update
     # --------------------------------------------------
@@ -60,6 +62,8 @@ class AppState:
     companion_download_url: str = ""
 
     companion_asset_name: str = ""
+
+    companion_sha256: str = ""
 
     companion_update_available: bool = False
 

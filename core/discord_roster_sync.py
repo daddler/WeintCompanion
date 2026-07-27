@@ -3,9 +3,8 @@ from __future__ import annotations
 import httpx
 
 from addon.inbox_writer import InboxWriter
+from core.backend_config import BOT_BASE_URL
 from core.discord_account import DiscordAccountStore
-
-BOT_BASE_URL = "https://weintcodex-a1d.b.jrnm.app"
 
 
 class DiscordRosterSync:

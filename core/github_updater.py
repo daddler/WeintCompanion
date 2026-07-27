@@ -16,6 +16,7 @@ class GitHubRelease:
     download_url: str
     published_at: str
     asset_name: str
+    sha256: str | None = None
 
 
 class GitHubUpdater:
@@ -87,6 +88,65 @@ class GitHubUpdater:
             return ".dmg"
 
         return None
+
+    # --------------------------------------------------
+    # Prüfsumme des gewählten Assets
+    # --------------------------------------------------
+
+    def _find_sha256(self, assets, asset_name: str) -> str | None:
+        """
+        Sucht in "assets" nach einer zu "asset_name" gehörenden
+        "<name>.sha256"-Datei (von der CI neben dem eigentlichen
+        Release-Asset veröffentlicht) und lädt deren Inhalt. Gibt
+        None zurück, wenn kein passendes Asset existiert oder der
+        Abruf fehlschlägt (z. B. bei einem Release, das vor
+        Einführung der Prüfsummen gebaut wurde) - ein fehlender
+        Hash blockiert hier bewusst nicht den restlichen Update-
+        Check, die Verwertung des fehlenden Hashes obliegt den
+        Aufrufern (CompanionUpdater/InstallerWorkflow).
+        """
+
+        if not asset_name:
+            return None
+
+        wanted = f"{asset_name.lower()}.sha256"
+
+        checksum_url = next(
+            (
+                asset.get("browser_download_url", "")
+                for asset in assets
+                if asset.get("name", "").lower() == wanted
+            ),
+            None,
+        )
+
+        if not checksum_url:
+            return None
+
+        try:
+
+            response = self.client.get(checksum_url)
+            response.raise_for_status()
+
+            #
+            # Format ist entweder nur der Hex-Digest oder
+            # "sha256sum"-Stil ("<hash>  <dateiname>").
+            #
+
+            first_token = response.text.strip().split()[0]
+
+            if len(first_token) == 64:
+                return first_token.lower()
+
+            return None
+
+        except Exception as e:
+
+            print(
+                f"GitHubUpdater: Prüfsumme konnte nicht geladen werden: {e}"
+            )
+
+            return None
 
     # --------------------------------------------------
 
@@ -173,6 +233,8 @@ class GitHubUpdater:
                     "",
                 )
 
+            sha256 = self._find_sha256(assets, asset_name)
+
             release = GitHubRelease(
 
                 version=data.get(
@@ -198,6 +260,8 @@ class GitHubUpdater:
                 ),
 
                 asset_name=asset_name,
+
+                sha256=sha256,
 
             )
 

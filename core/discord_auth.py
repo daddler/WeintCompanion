@@ -7,6 +7,7 @@ import webbrowser
 
 import httpx
 
+from core.backend_config import BOT_BASE_URL
 from core.runtime import Runtime
 
 # --------------------------------------------------
@@ -28,8 +29,6 @@ REDIRECT_PORT = 53682
 REDIRECT_URI = f"http://127.0.0.1:{REDIRECT_PORT}/callback"
 
 DISCORD_AUTHORIZE_URL = "https://discord.com/api/oauth2/authorize"
-
-BOT_BASE_URL = "https://weintcodex-a1d.b.jrnm.app"
 
 
 class DiscordAuthError(Exception):

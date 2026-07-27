@@ -73,10 +73,29 @@ class SyncReader:
             errors="ignore",
         )
 
-        return extract_variable_body(
-            text,
-            "WeintCompanionDB",
-        ) or ""
+        try:
+
+            return extract_variable_body(
+                text,
+                "WeintCompanionDB",
+            ) or ""
+
+        except ValueError as exc:
+
+            #
+            # Unausgeglichene Klammern - z. B. weil die Datei genau
+            # während eines Lese-Zugriffs von WoWs Lua-VM
+            # überschrieben wurde. Ein leerer Queue-Inhalt für diesen
+            # einen Zyklus ist besser als ein Absturz des kompletten
+            # Sync-Laufs; der nächste Zyklus liest die Datei erneut.
+            #
+
+            print(
+                f"SyncReader: WeintCompanionDB konnte nicht gelesen "
+                f"werden ({exc})."
+            )
+
+            return ""
 
     # --------------------------------------------------
     # Nachrichten lesen
@@ -127,7 +146,7 @@ class SyncReader:
 
             if line == "},":
 
-                if current:
+                if current and not current.get("_malformed"):
 
                     if "type" in current and "payload" in current:
                         messages.append(current)
@@ -139,83 +158,102 @@ class SyncReader:
                 continue
 
             #
-            # id
+            # Ein einzelnes malformed/abgeschnittenes Feld (z. B.
+            # durch einen Lese-Zugriff mitten in einem Schreibvorgang
+            # von WoWs Lua-VM) darf nicht den kompletten Sync-Zyklus
+            # abbrechen - stattdessen wird nur diese eine Nachricht
+            # verworfen, die übrigen werden normal weiterverarbeitet.
             #
 
-            if line.startswith('["id"]'):
+            try:
 
-                current["id"] = int(
-                    line.split("=")[1]
-                    .strip()
-                    .rstrip(",")
+                #
+                # id
+                #
+
+                if line.startswith('["id"]'):
+
+                    current["id"] = int(
+                        line.split("=")[1]
+                        .strip()
+                        .rstrip(",")
+                    )
+
+                    continue
+
+                #
+                # created
+                #
+
+                if line.startswith('["created"]'):
+
+                    current["created"] = int(
+                        line.split("=")[1]
+                        .strip()
+                        .rstrip(",")
+                    )
+
+                    continue
+
+                #
+                # version
+                #
+
+                if line.startswith('["version"]'):
+
+                    current["version"] = int(
+                        line.split("=")[1]
+                        .strip()
+                        .rstrip(",")
+                    )
+
+                    continue
+
+                #
+                # type
+                #
+
+                if line.startswith('["type"]'):
+
+                    current["type"] = (
+                        line.split("=",1)[1]
+                        .strip()
+                        .rstrip(",")
+                        .strip('"')
+                    )
+
+                    continue
+
+                #
+                # payload
+                #
+
+                if line.startswith('["payload"]'):
+
+                    payload = (
+                        line.split("=",1)[1]
+                        .strip()
+                        .rstrip(",")
+                    )
+
+                    if payload.startswith('"'):
+                        payload = payload[1:]
+
+                    if payload.endswith('"'):
+                        payload = payload[:-1]
+
+                    payload = payload.replace('\\"','"')
+
+                    current["payload"] = payload
+
+            except (ValueError, IndexError) as exc:
+
+                print(
+                    f"SyncReader: malformed Queue-Eintrag übersprungen "
+                    f"({exc})."
                 )
 
-                continue
-
-            #
-            # created
-            #
-
-            if line.startswith('["created"]'):
-
-                current["created"] = int(
-                    line.split("=")[1]
-                    .strip()
-                    .rstrip(",")
-                )
-
-                continue
-
-            #
-            # version
-            #
-
-            if line.startswith('["version"]'):
-
-                current["version"] = int(
-                    line.split("=")[1]
-                    .strip()
-                    .rstrip(",")
-                )
-
-                continue
-
-            #
-            # type
-            #
-
-            if line.startswith('["type"]'):
-
-                current["type"] = (
-                    line.split("=",1)[1]
-                    .strip()
-                    .rstrip(",")
-                    .strip('"')
-                )
-
-                continue
-
-            #
-            # payload
-            #
-
-            if line.startswith('["payload"]'):
-
-                payload = (
-                    line.split("=",1)[1]
-                    .strip()
-                    .rstrip(",")
-                )
-
-                if payload.startswith('"'):
-                    payload = payload[1:]
-
-                if payload.endswith('"'):
-                    payload = payload[:-1]
-
-                payload = payload.replace('\\"','"')
-
-                current["payload"] = payload
+                current["_malformed"] = True
 
         return messages
 
@@ -260,11 +298,20 @@ class SyncReader:
 
             if line.startswith('["lastId"]'):
 
-                last_id = int(
-                    line.split("=")[1]
-                    .strip()
-                    .rstrip(",")
-                )
+                try:
+
+                    last_id = int(
+                        line.split("=")[1]
+                        .strip()
+                        .rstrip(",")
+                    )
+
+                except (ValueError, IndexError) as exc:
+
+                    print(
+                        f"SyncReader: lastId konnte nicht gelesen werden "
+                        f"({exc}), verwende 0."
+                    )
 
                 break
 

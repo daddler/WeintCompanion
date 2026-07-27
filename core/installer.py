@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import shutil
 import tempfile
@@ -33,7 +34,31 @@ class Installer:
             )
 
         #
-        # ZIP entpacken
+        # ".new"/".old"-Arbeitsordner neben dem eigentlichen
+        # Zielordner, für den atomaren Swap unten. Reste eines
+        # vorherigen, abgebrochenen Installationsversuchs zuerst
+        # aufräumen.
+        #
+
+        new_path = addon_path.with_name(
+            addon_path.name + ".new"
+        )
+
+        old_path = addon_path.with_name(
+            addon_path.name + ".old"
+        )
+
+        if new_path.exists():
+            shutil.rmtree(new_path)
+
+        if old_path.exists():
+            shutil.rmtree(old_path)
+
+        #
+        # ZIP entpacken und die neue Version komplett in "new_path"
+        # aufbauen, OHNE die bestehende Installation anzufassen -
+        # schlägt hier irgendetwas fehl (korruptes ZIP, volle
+        # Platte, ...), bleibt die alte Version unangetastet.
         #
 
         with tempfile.TemporaryDirectory() as temp:
@@ -66,30 +91,51 @@ class Installer:
                     "WeintCodex.toc wurde im ZIP nicht gefunden."
                 )
 
-            #
-            # Ziel sichern
-            #
+            print(
+                "Bereite neue Version vor..."
+            )
 
-            if addon_path.exists():
+            shutil.copytree(
+                source,
+                new_path,
+            )
 
-                print(
-                    "Entferne alte Version..."
-                )
+        #
+        # Atomarer Swap: alte Version (falls vorhanden) beiseite
+        # schieben, neue Version an ihre Stelle verschieben. Beide
+        # os.rename()-Aufrufe liegen im selben Verzeichnis (also
+        # garantiert im selben Dateisystem) und sind damit atomar -
+        # es gibt keinen Zwischenzustand, in dem addon_path weder
+        # die alte noch die neue Version enthält. Schlägt der zweite
+        # rename() fehl, wird die alte Version aus old_path
+        # zurückgeschoben, statt den Nutzer ohne Addon dastehen zu
+        # lassen.
+        #
 
-                shutil.rmtree(addon_path)
-
-            #
-            # Neue Version kopieren
-            #
+        try:
 
             print(
                 "Installiere neue Version..."
             )
 
-            shutil.copytree(
-                source,
-                addon_path,
-                dirs_exist_ok=True,
-            )
+            if addon_path.exists():
+                os.rename(addon_path, old_path)
+
+            os.rename(new_path, addon_path)
+
+        except Exception:
+
+            if old_path.exists() and not addon_path.exists():
+                os.rename(old_path, addon_path)
+
+            raise
+
+        finally:
+
+            if old_path.exists():
+                shutil.rmtree(old_path, ignore_errors=True)
+
+            if new_path.exists():
+                shutil.rmtree(new_path, ignore_errors=True)
 
         return True
