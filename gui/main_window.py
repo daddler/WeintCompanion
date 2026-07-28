@@ -25,11 +25,7 @@ from gui.theme.metrics import Metrics
 
 from gui.widgets.sidebar import Sidebar
 
-from gui.pages.dashboard import DashboardPage
-from gui.pages.addon import AddonPage
-from gui.pages.sync import SyncPage
-from gui.pages.settings import SettingsPage
-from gui.pages.logs import LogsPage
+from gui.navigation import PageId, build_page_specs
 
 
 class MainWindow(QMainWindow):
@@ -132,12 +128,29 @@ class MainWindow(QMainWindow):
 
         #
         # --------------------------------------------------
+        # Seitenregistrierung
+        # --------------------------------------------------
+        #
+        # Eine einzige Liste beschreibt Reihenfolge, Icon, Tooltip
+        # und Klasse jeder Seite (siehe gui/navigation.py). Sowohl
+        # die Rail als auch der Seitenstapel entstehen daraus -
+        # dadurch können beide nicht mehr auseinanderlaufen.
+        #
+
+        self.page_specs = build_page_specs()
+
+        #
+        # --------------------------------------------------
         # Sidebar
         # --------------------------------------------------
         #
 
         self.sidebar = Sidebar(
-            self.manager
+            self.manager,
+            [
+                (spec.icon_factory(), spec.tooltip)
+                for spec in self.page_specs
+            ],
         )
 
         self.root_layout.addWidget(
@@ -194,66 +207,55 @@ class MainWindow(QMainWindow):
             self.pages
         )
 
-        self.dashboard = DashboardPage(
-            self.manager
-        )
-
-        self.addon = AddonPage(
-            self.manager
-        )
-
-        self.sync = SyncPage(
-            self.manager
-        )
-
-        self.settings = SettingsPage(
-            self.manager
-        )
-
-        self.logs = LogsPage(
-            self.manager
-        )
-
         #
         # ScrollContainer
         #
-        # Das Dashboard bekommt bewusst KEINEN Scroll-Wrapper: das
-        # Fenster ist auf Metrics.WINDOW_MIN_HEIGHT dimensioniert,
-        # damit der komplette Dashboard-Inhalt (inkl. Changelog-Karte)
-        # immer ohne Scrollen der Hauptseite passt - lediglich die
-        # Changelog-Karte selbst darf bei längerem Text intern
-        # scrollen (siehe ChangelogCard/QTextEdit).
+        # Das Dashboard bekommt bewusst KEINEN Scroll-Wrapper (in der
+        # Registry als scroll=False markiert): das Fenster ist auf
+        # Metrics.WINDOW_MIN_HEIGHT dimensioniert, damit der komplette
+        # Dashboard-Inhalt (inkl. Changelog-Karte) immer ohne Scrollen
+        # der Hauptseite passt - lediglich die Changelog-Karte selbst
+        # darf bei längerem Text intern scrollen (siehe
+        # ChangelogCard/QTextEdit).
         #
 
-        self.pages.addWidget(
-            self.dashboard
-        )
+        self.pages_by_id: dict[PageId, QWidget] = {}
 
-        self.pages.addWidget(
-            self.wrap_page(
-                self.addon
+        for spec in self.page_specs:
+
+            page = spec.page_factory(self.manager)
+
+            self.pages_by_id[spec.page_id] = page
+
+            #
+            # Zusätzlich als benanntes Attribut ablegen
+            # (self.dashboard, self.settings, ...) - bestehender Code
+            # spricht die Seiten so an.
+            #
+
+            if spec.attribute:
+
+                setattr(self, spec.attribute, page)
+
+            self.pages.addWidget(
+                self.wrap_page(page)
+                if spec.scroll
+                else page
             )
-        )
 
-        self.pages.addWidget(
-            self.wrap_page(
-                self.sync
-            )
-        )
+        #
+        # Bleibt als Attribut erhalten, wird aber nicht mehr aus der
+        # Einfügereihenfolge abgeleitet, sondern aus der Registry.
+        #
 
-        self.SETTINGS_PAGE_INDEX = self.pages.count()
+        self.SETTINGS_PAGE_INDEX = int(PageId.SETTINGS)
 
-        self.pages.addWidget(
-            self.wrap_page(
-                self.settings
-            )
-        )
+        #
+        # Die zuletzt gezeigte Seite - nur nötig, um ihr beim
+        # Verlassen on_leave() melden zu können.
+        #
 
-        self.pages.addWidget(
-            self.wrap_page(
-                self.logs
-            )
-        )
+        self._current_page = None
 
         #
         # Navigation
@@ -279,7 +281,7 @@ class MainWindow(QMainWindow):
         # Startseite
         #
 
-        self.change_page(0)
+        self.change_page(PageId.DASHBOARD)
 
         #
         # "Was ist neu"-Popup - unabhängig vom asynchronen
@@ -342,6 +344,8 @@ class MainWindow(QMainWindow):
 
     def change_page(self, index: int):
 
+        index = int(index)
+
         #
         # Sidebar aktualisieren
         #
@@ -349,6 +353,19 @@ class MainWindow(QMainWindow):
         for i, item in enumerate(self.sidebar.items):
 
             item.setActive(i == index)
+
+        #
+        # Die verlassene Seite abmelden, bevor die neue kommt.
+        # Seiten mit laufender Datenquelle (WeintTV, Academy) beenden
+        # so ihren Poll, sobald sie nicht mehr sichtbar sind.
+        #
+
+        if (
+            self._current_page is not None
+            and hasattr(self._current_page, "on_leave")
+        ):
+
+            self._current_page.on_leave()
 
         #
         # Seite wechseln
@@ -377,9 +394,15 @@ class MainWindow(QMainWindow):
             else current
         )
 
+        self._current_page = page
+
         #
-        # Refresh
+        # Anmelden (optional) und aktualisieren
         #
+
+        if hasattr(page, "on_enter"):
+
+            page.on_enter()
 
         if hasattr(page, "refresh"):
 
@@ -504,7 +527,23 @@ class MainWindow(QMainWindow):
 
         self._force_quit = True
 
+        self._shutdown_services()
+
         QApplication.quit()
+
+    # --------------------------------------------------
+
+    def _shutdown_services(self):
+        """
+        Hintergrunddienste beim Beenden geordnet stoppen.
+
+        Der RaidDataThread ist zwar ein Daemon und würde den Prozess
+        nicht am Leben halten - ihn trotzdem sauber zu beenden
+        verhindert, dass er noch einen Snapshot veröffentlicht,
+        während die Widgets bereits abgebaut werden.
+        """
+
+        self.manager.raid_data.shutdown()
 
     # --------------------------------------------------
     # Fenster minimieren/schließen -> Tray
@@ -568,6 +607,8 @@ class MainWindow(QMainWindow):
                 self._tray_hint_shown = True
 
             return
+
+        self._shutdown_services()
 
         super().closeEvent(event)
 

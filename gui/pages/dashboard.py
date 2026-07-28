@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from core.platform import is_linux, is_windows, open_folder
+from gui.navigation import PageId
 from gui.widgets.activity_panel import ActivityPanel
 from gui.widgets.changelog_card import ChangelogCard
 from gui.widgets.dashboard_cards import DashboardCards
@@ -219,7 +220,7 @@ class DashboardPage(QWidget):
         self.activity = ActivityPanel(manager.logger)
 
         self.activity.openLogsRequested.connect(
-            lambda: self.pageRequested.emit(4)
+            lambda: self.pageRequested.emit(PageId.LOGS)
         )
 
         root.addWidget(self.activity)
@@ -521,7 +522,7 @@ class DashboardPage(QWidget):
 
     def open_addon(self):
 
-        self.pageRequested.emit(1)
+        self.pageRequested.emit(PageId.ADDON)
 
     # --------------------------------------------------
 

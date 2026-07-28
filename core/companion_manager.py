@@ -21,6 +21,8 @@ from core.discord_status import DiscordStatus
 from core.discord_account import DiscordAccountStore
 from core.discord_auth import DiscordAuth
 from core.discord_roster_sync import DiscordRosterSync
+from core.raid_data_service import RaidDataService
+from core.academy_service import AcademyService
 
 
 class _AutoSyncStarter(QObject):
@@ -80,6 +82,19 @@ class CompanionManager(QObject):
         self.discord_account = DiscordAccountStore()
         self.discord_auth = DiscordAuth()
         self.discord_roster_sync = DiscordRosterSync(self)
+
+        #
+        # WeintTV und WeintAcademy hängen beide am selben
+        # RaidDataService - er ist die einzige Stelle, an der Raid-
+        # Daten beschafft werden. Beide Dienste arbeiten träge: sie
+        # starten weder einen Thread noch einen Netzwerkzugriff,
+        # solange keine Seite sie anfordert, und verlängern damit
+        # den Anwendungsstart nicht.
+        #
+
+        self.raid_data = RaidDataService(self)
+        self.academy = AcademyService(self)
+
         self.sync_timer = QTimer()
 
         self.sync_timer.timeout.connect(
