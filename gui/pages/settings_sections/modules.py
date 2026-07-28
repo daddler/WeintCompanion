@@ -1,12 +1,30 @@
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout
 
-from core.raid_data_service import SOURCE_MOCK
+from core.raid_data_service import (
+    SOURCE_DESCRIPTIONS,
+    SOURCE_LABELS,
+    SOURCE_MOCK,
+    SOURCE_WARCRAFTLOGS,
+)
 
 from gui.theme.colors import Colors
 from gui.widgets.hero_banner import HeroButton
+from gui.widgets.segmented_control import SegmentedControl
 from gui.widgets.toggle_switch import ToggleSwitch
 
 from ._common import SectionContent, toggle_row
+
+
+#
+# Reihenfolge der Auswahl. Die Simulation steht vorn, weil sie ohne
+# jede Einrichtung funktioniert und damit der sichere Rückfallwert
+# ist.
+#
+
+SOURCE_ORDER = (
+    SOURCE_MOCK,
+    SOURCE_WARCRAFTLOGS,
+)
 
 
 def _format_size(size: int) -> str:
@@ -91,6 +109,17 @@ class ModulesSection(SectionContent):
 
         source_col.addWidget(source_title)
 
+        self.source_select = SegmentedControl([
+            (SOURCE_LABELS[source], source)
+            for source in SOURCE_ORDER
+        ])
+
+        self.source_select.valueChanged.connect(
+            self._save_source
+        )
+
+        source_col.addWidget(self.source_select)
+
         self.source_value = QLabel("-")
 
         self.source_value.setWordWrap(True)
@@ -100,6 +129,23 @@ class ModulesSection(SectionContent):
         )
 
         source_col.addWidget(self.source_value)
+
+        #
+        # Zustand der gewählten Quelle (erkannter Bericht, Grund für
+        # "keine Daten"). Kommt direkt aus dem Provider, damit hier
+        # keine zweite Fehlerbehandlung entsteht.
+        #
+
+        self.source_status = QLabel("")
+
+        self.source_status.setWordWrap(True)
+
+        self.source_status.setStyleSheet(
+            'font-family:"JetBrains Mono";'
+            f"font-size:11px;color:{Colors.TEXT_MUTED};"
+        )
+
+        source_col.addWidget(self.source_status)
 
         self.addRow(source_col)
 
@@ -192,6 +238,87 @@ class ModulesSection(SectionContent):
             self.manager.logger.info("WeintAcademy deaktiviert.")
 
     # --------------------------------------------------
+    # Datenquelle
+    # --------------------------------------------------
+
+    def _save_source(self, source: str):
+
+        config = self.manager.config.data
+
+        if config.get("raid_data_source") == source:
+            return
+
+        config["raid_data_source"] = source
+
+        self.manager.config.save()
+
+        #
+        # Die alte Quelle sauber beenden und die Historie verwerfen -
+        # das erledigt der Service, damit WeintTV und Academy beide
+        # sofort auf der neuen Quelle stehen.
+        #
+
+        self.manager.raid_data.reload_provider()
+
+        self.manager.logger.info(
+            f"Raid-Datenquelle: {SOURCE_LABELS.get(source, source)}."
+        )
+
+        self._update_source()
+
+    def _update_source(self):
+
+        source = self.manager.config.data.get(
+            "raid_data_source",
+            SOURCE_MOCK,
+        )
+
+        self.source_value.setText(
+            SOURCE_DESCRIPTIONS.get(
+                source,
+                f"Eingestellt: {source}",
+            )
+        )
+
+        self.source_status.setText(
+            self._source_status(source)
+        )
+
+    def _source_status(self, source: str) -> str:
+        """
+        Zustandstext der Quelle.
+
+        Läuft sie gerade (WeintTV oder Academy sind geöffnet), ist
+        ihr eigener status_text die genaueste Auskunft. Andernfalls
+        wird wenigstens die Voraussetzung geprüft, die der Nutzer von
+        hier aus erfüllen kann - alles andere entsteht erst beim
+        ersten Abruf.
+        """
+
+        status = self.manager.raid_data.status_text()
+
+        if status:
+            return status
+
+        if source == SOURCE_WARCRAFTLOGS:
+
+            from core.warcraftlogs_client import WarcraftLogsClient
+
+            if not WarcraftLogsClient().is_linked():
+
+                return (
+                    "Kein Discord-Konto verknüpft - die Verbindung "
+                    "läuft über den Bot."
+                )
+
+            return (
+                "Der Zustand erscheint, sobald WeintTV oder die "
+                "Academy geöffnet ist."
+            )
+
+        return ""
+
+    # --------------------------------------------------
     # Combat-Log
     # --------------------------------------------------
 
@@ -267,18 +394,12 @@ class ModulesSection(SectionContent):
 
         source = config.get("raid_data_source", SOURCE_MOCK)
 
-        if source == SOURCE_MOCK:
+        self.source_select.blockSignals(True)
 
-            self.source_value.setText(
-                "Simulation - WeintTV zeigt einen vollständigen, "
-                "berechneten Beispiel-Pull. So lassen sich alle "
-                "Ansichten auch außerhalb der Raidzeiten prüfen."
-            )
+        self.source_select.setValue(source)
 
-        else:
+        self.source_select.blockSignals(False)
 
-            self.source_value.setText(
-                f"Eingestellt: {source}"
-            )
+        self._update_source()
 
         self._update_combat_log()

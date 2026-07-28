@@ -33,6 +33,7 @@ from PySide6.QtCore import QObject, Signal
 from analyzer.combatlog.locator import CombatLogLocation, find_combat_log
 from analyzer.models import PullSummary, RaidSnapshot
 from analyzer.providers.mock import MockRaidDataProvider
+from analyzer.providers.warcraftlogs import WarcraftLogsProvider
 
 
 #
@@ -50,10 +51,62 @@ SOURCE_MOCK = "mock"
 
 SOURCE_COMBATLOG = "combatlog"
 
+SOURCE_WARCRAFTLOGS = "warcraftlogs"
+
+
+def _create_warcraftlogs_provider():
+    """
+    Verdrahtet die WarcraftLogs-Quelle mit ihrem Abruf.
+
+    Die Trennung ist Absicht: der Provider liegt im Analyzer und
+    kennt nur ein Callable, der HTTP-Teil liegt in core. So bleibt
+    der Analyzer frei von Netzwerk und Bot-Wissen - und die Fabrik
+    hier bleibt trotzdem argumentlos, wie die Registry es verlangt.
+    """
+
+    from core.warcraftlogs_client import WarcraftLogsClient
+
+    return WarcraftLogsProvider(WarcraftLogsClient().fetch)
+
 
 PROVIDER_FACTORIES = {
 
     SOURCE_MOCK: MockRaidDataProvider,
+
+    SOURCE_WARCRAFTLOGS: _create_warcraftlogs_provider,
+
+}
+
+
+#
+# Anzeigenamen der Quellen für die Einstellungen. Hier und nicht in
+# der Oberfläche, damit eine neue Quelle wirklich nur diese eine
+# Datei berührt.
+#
+
+SOURCE_LABELS = {
+
+    SOURCE_MOCK: "Simulation",
+
+    SOURCE_WARCRAFTLOGS: "WarcraftLogs",
+
+}
+
+
+SOURCE_DESCRIPTIONS = {
+
+    SOURCE_MOCK: (
+        "WeintTV zeigt einen vollständigen, berechneten "
+        "Beispiel-Pull. So lassen sich alle Ansichten auch außerhalb "
+        "der Raidzeiten prüfen."
+    ),
+
+    SOURCE_WARCRAFTLOGS: (
+        "Liest den laufenden Livelog-Bericht über den WeintCodex-Bot. "
+        "Gilt für den ganzen Raid - dieser Rechner muss nicht selbst "
+        "mitschreiben. Die Werte sind einige Sekunden alt, weil "
+        "WarcraftLogs in Abständen überträgt."
+    ),
 
 }
 
