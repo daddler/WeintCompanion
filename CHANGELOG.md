@@ -1,6 +1,14 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.1.3.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.1.4.
+
+## 1.1.4
+
+- Fix: Das Report-Dropdown des Archiv-Modus (WeintTV/WeintAcademy) zeigte bei
+  mehreren gleichnamigen Berichten (z.B. wiederholt
+  "Siege of Orgrimmar · Siege of Orgrimmar") keine Möglichkeit, sie
+  auseinanderzuhalten. Zeigt jetzt Datum und Uhrzeit (lokal umgerechnet) vor
+  Titel/Zone an.
 
 ## 1.1.3
 
