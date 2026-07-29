@@ -1,6 +1,16 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.1.1.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.1.2.
+
+## 1.1.2
+
+- Neu: **Archiv-Modus** für WeintTV und die WeintAcademy - zusätzlich zum
+  Live-Feed lässt sich jetzt ein vergangener WarcraftLogs-Bericht auswählen
+  und ein bestimmter Pull daraus ansehen (Bericht wählen, Pull darin wählen).
+  Der Umschalter ist geteilt: ein Wechsel wirkt auf beiden Seiten gleich,
+  damit WeintTV und Academy immer denselben Log betrachten. Setzt eine
+  Discord-Verknüpfung voraus und wird erst nutzbar, sobald die
+  entsprechende Bot-Anbindung live ist.
 
 ## 1.1.1
 
