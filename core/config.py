@@ -52,6 +52,20 @@ class Config:
 
             "onboarding_seen_version": "",
 
+            #
+            # Module (WeintTV / WeintAcademy)
+            #
+
+            "weinttv_enabled": True,
+
+            "academy_enabled": True,
+
+            "raid_data_source": "mock",
+
+            "combatlog_path": "",
+
+            "academy_player_name": "",
+
         }
 
         self.load()
@@ -96,6 +110,11 @@ class Config:
                     "linux_launcher_value": "",
                     "whats_new_enabled": True,
                     "onboarding_seen_version": "",
+                    "weinttv_enabled": True,
+                    "academy_enabled": True,
+                    "raid_data_source": "mock",
+                    "combatlog_path": "",
+                    "academy_player_name": "",
 
                 }
 

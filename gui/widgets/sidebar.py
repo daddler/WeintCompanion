@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
 )
 
 from gui.widgets.rail_item import RailItem
-from core.resources import Resources
 from gui.theme.colors import Colors
 from gui.theme.metrics import Metrics
 
@@ -127,7 +126,16 @@ class Sidebar(QFrame):
     pageChanged = Signal(int)
     avatarClicked = Signal()
 
-    def __init__(self, manager):
+    def __init__(self, manager, entries):
+        """
+        `entries` ist eine Liste aus (Icon-Pfad, Tooltip) in
+        Navigationsreihenfolge - der Listenindex IST der Seitenindex.
+
+        Die Liste wird bewusst übergeben und nicht hier definiert:
+        Reihenfolge und Bestand der Seiten stehen in
+        gui/navigation.py, damit Rail und Seitenstapel aus derselben
+        Quelle entstehen.
+        """
 
         super().__init__()
 
@@ -195,17 +203,7 @@ class Sidebar(QFrame):
 
         self.items: list[RailItem] = []
 
-        pages = [
-
-            (Resources.dashboard(), "Dashboard"),
-            (Resources.software(), "Software"),
-            (Resources.sync(), "Synchronisation"),
-            (Resources.settings(), "Einstellungen"),
-            (Resources.logs(), "Logs"),
-
-        ]
-
-        for index, (icon, tooltip) in enumerate(pages):
+        for index, (icon, tooltip) in enumerate(entries):
 
             item = RailItem(icon, tooltip)
 

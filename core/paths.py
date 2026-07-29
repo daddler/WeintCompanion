@@ -122,6 +122,31 @@ class Paths:
     # --------------------------------------------------
 
     @staticmethod
+    def reports() -> Path:
+        """
+        Ausgewertete Kämpfe des Raidlog Analyzers.
+
+        Bewusst unterhalb von cache(): die Berichte lassen sich aus
+        dem Combat-Log jederzeit neu erzeugen und dürfen deshalb
+        gelöscht werden. Nutzerdaten (z. B. der Academy-Fortschritt)
+        gehören dagegen nach config().
+        """
+
+        path = (
+            Paths.cache()
+            / "reports"
+        )
+
+        path.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        return path
+
+    # --------------------------------------------------
+
+    @staticmethod
     def config() -> Path:
 
         path = (

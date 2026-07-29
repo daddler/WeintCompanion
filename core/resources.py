@@ -207,6 +207,18 @@ class Resources:
         )
 
     @staticmethod
+    def weinttv():
+        return Resources.path(
+            "resources/icons/weinttv.svg"
+        )
+
+    @staticmethod
+    def academy():
+        return Resources.path(
+            "resources/icons/academy.svg"
+        )
+
+    @staticmethod
     def wow():
         return Resources.game()
 

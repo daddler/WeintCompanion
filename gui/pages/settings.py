@@ -16,6 +16,7 @@ from .settings_sections.auto_update import AutoUpdateSection
 from .settings_sections.backups import BackupsSection
 from .settings_sections.discord import DiscordSection
 from .settings_sections.general import GeneralSection
+from .settings_sections.modules import ModulesSection
 from .settings_sections.wow_client import WowClientSection
 
 
@@ -24,6 +25,7 @@ SECTIONS = [
     ("general", "Allgemein", GeneralSection),
     ("wow_client", "WoW-Client", WowClientSection),
     ("discord", "Discord", DiscordSection),
+    ("modules", "Module", ModulesSection),
     ("auto_update", "Auto-Update", AutoUpdateSection),
     ("backups", "Backups", BackupsSection),
     ("appearance", "Erscheinungsbild", AppearanceSection),

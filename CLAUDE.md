@@ -19,7 +19,7 @@ pip install -r requirements.txt   # install dependencies
 python app.py                     # run the app
 ```
 
-There is no test suite, linter, or formatter configured in this repo.
+Tests live in `tests/` and run with pytest (`pip install -r requirements-dev.txt && python -m pytest tests/ -q`). They cover the framework-agnostic parts only — config, installer, Lua/sync parsing, the analyzer and its academy evaluation, and the navigation registry. There is no linter or formatter configured.
 
 ### Building distributables
 
@@ -35,8 +35,9 @@ CI (`.github/workflows/build.yml`) builds Linux (AppImage) and Windows (Inno Set
 
 ### Layering
 
-- **`core/`** – all business logic, framework-agnostic where possible (Qt is used for `QObject`/`Signal` in a few places like `CompanionManager` and `AppState`).
-- **`gui/`** – PySide6 UI: `main_window.py`, `pages/` (Dashboard, Addon, Sync, Settings, Logs), `widgets/`, `theme/` (colors/typography/stylesheet), `controllers/`, `dialogs/` (currently `whats_new_dialog.py` – the onboarding/changelog popup, see below).
+- **`core/`** – all business logic, framework-agnostic where possible (Qt is used for `QObject`/`Signal` in a few places like `CompanionManager`, `RaidDataService` and `AppState`).
+- **`gui/`** – PySide6 UI: `main_window.py`, `navigation.py` (the page registry, see below), `pages/` (Dashboard, Addon, Sync, WeintTV, Academy, Settings, Logs), `widgets/`, `theme/` (colors/typography/metrics/stylesheet/wow_colors), `controllers/`, `dialogs/` (currently `whats_new_dialog.py` – the onboarding/changelog popup, see below).
+- **`analyzer/`** – the Raidlog Analyzer. **Contains no Qt import at all**, deliberately: it must stay testable without a running UI and extractable into its own package later. Holds the data models, the combat-log locator, the encounter/lesson reference data, the data providers, and the academy evaluation.
 - **`addon/`** – reads the WoW addon's Lua `SavedVariables` files (`finder.py` locates the WoW install, `reader.py` reads the addon's own version/state, `sync_reader.py` reads the outbound message queue).
 - **`discord/`** – `sync_client.py`, a thin HTTP client for the material-sync bridge.
 
@@ -45,6 +46,32 @@ CI (`.github/workflows/build.yml`) builds Linux (AppImage) and Windows (Inno Set
 `core/companion_manager.py` wires together nearly every subsystem (config, logger, GitHub updater, backup, installer, self-updater, launcher, sync manager, Discord status/auth/roster-sync) and is owned by the GUI layer. Its `full_refresh()` is the app's main "check everything" entry point: detect WoW install → detect addon → check GitHub for addon updates → check Discord bot status → check for Companion self-updates → run sync. `refresh_update_status()` is the lighter variant used by the manual "check for updates" button (skips Discord/sync).
 
 Initialization pattern to preserve: `initialize()` schedules `_initialize_async` via `QTimer.singleShot` so the window renders before the background `InitThread` runs `full_refresh()`. Because that thread has no Qt event loop of its own, it can't reliably reach the main thread with `QTimer.singleShot(0, ...)` — it signals `_AutoSyncStarter.requested`, a cross-thread Qt signal, to invoke `start_auto_sync()` back on the main thread instead. Auto-sync itself runs on a recurring `QTimer` (`sync_interval` from config) that spawns a new `SyncThread` per tick, guarded by `_sync_busy` + a lock so overlapping syncs never run concurrently.
+
+### Navigation: one registry, never raw indices
+
+Pages live in a `QStackedWidget` whose index *is* the position in the sidebar rail. Both are built from a single source: `PageId` (an `IntEnum`) and `build_page_specs()` in `gui/navigation.py`. `MainWindow` iterates the specs to create the stack and hands the same list to `Sidebar(manager, entries)`, so rail and stack cannot drift apart. Adding a main area = one enum member + one `PageSpec`.
+
+Never write a bare integer as a navigation target: `pageRequested.emit(PageId.ADDON)`, not `emit(1)`. `PageId` inherits from `int`, so it works unchanged with `Signal(int)` and `setCurrentIndex()`. `build_page_specs()` imports the page classes *inside the function body* — the pages import `PageId` themselves, so a module-level import would be circular.
+
+`MainWindow.change_page()` calls three duck-typed hooks on a page if present: `on_leave()` on the outgoing page, then `on_enter()` and `refresh()` on the incoming one. WeintTV and the Academy use `on_enter`/`on_leave` to subscribe to and release the raid data feed, so nothing polls while its page is hidden.
+
+### WeintTV and WeintAcademy: one service, one snapshot
+
+Both modules read the **same** `RaidSnapshot` (`analyzer/models.py`) — an immutable, complete picture of one moment (boss health, pull timer, deaths, battle-res, heroism, DPS/HPS rankings, tanks, cooldowns, consumables, mechanic errors, warnings). No widget ever sees a combat-log event, and no page computes a metric. That is what structurally prevents WeintTV and the Academy from growing two divergent evaluations.
+
+`core/raid_data_service.py`'s `RaidDataService` is the single place that picks and polls a data source. Key points:
+- Sources are registered in `PROVIDER_FACTORIES` keyed by the `raid_data_source` config value, alongside `SOURCE_LABELS`/`SOURCE_DESCRIPTIONS` for the picker in Settings → Module. A new source (live combat log, bot backend) is one entry plus a class implementing `analyzer/providers/base.py`'s `RaidDataProvider` — no change to the service or the pages. Factories are called with no arguments; anything a provider needs is wired in the factory (see `_create_warcraftlogs_provider`). An unknown key logs a warning and falls back to the mock, so the UI always stays usable.
+- `attach()`/`detach()` are reference-counted; the `RaidDataThread` (a plain `threading.Thread`, matching the rest of the repo) runs only while at least one page is subscribed, on its own ~1s cadence — deliberately *not* on `CompanionManager`'s 5-second sync timer, which is for HTTP sync.
+- Results reach the GUI through the `snapshotChanged = Signal(object)` cross-thread signal; the service is constructed in `CompanionManager.__init__` (main thread) so its thread affinity is right.
+- It also owns the pull history (`PullSummary`), so the history view and any later analysis see the same completed pulls.
+
+`analyzer/providers/mock.py` produces a fully deterministic 25-player pull from elapsed time — no randomness, so the same moment always yields the same snapshot. It is what makes WeintTV reviewable outside raid hours and is the proof that the UI really only reads snapshots.
+
+The Academy adds `analyzer/academy/`: `evaluator.py` turns a snapshot into a `PlayerProfile` (star ratings for Rotation/Movement/Cooldowns/Mechaniken) and a `TrainingPlan`, using the `MECHANIC_*` category on each `MechanicIssue` to attribute errors to a trainable area. Ratings are **relative to the player's own role** — comparing a tank against the damage ranking would permanently score them one star. `core/academy_service.py` only handles character selection and persistence (`academy_progress.json` in `Paths.config()`, because completed lessons are user data, not cache).
+
+The second real source is **WarcraftLogs**, read through the bot rather than directly: the bot sees the Discord webhook the live-logging uploader posts, holds the WarcraftLogs API credentials, and serves the result at `/companion/warcraftlogs/live`. That split keeps credentials off 25 player machines and shares one API quota. Three files, deliberately separated so the analyzer stays dependency-free: `analyzer/providers/warcraftlogs_payload.py` is a pure response → `RaidSnapshot` mapper (no I/O, reads defensively — an incomplete response is never an error); `analyzer/providers/warcraftlogs.py` is the provider, which takes its fetch as an injected callable and runs its **own** 15-second fetch thread so `snapshot()` reads a cache and never blocks the service's 1-second poll; `core/warcraftlogs_client.py` is the HTTP half, wired to the provider in the factory. Unlike the combat log it lags by tens of seconds (the provider advances the pull clock locally between fetches and warns past 45s) but covers the whole raid without this machine logging. **The bot endpoint does not exist yet** — its full contract is `docs/warcraftlogs-bridge.md`; until then the source reports "kein Livelog" and the mock stays selected.
+
+Live combat-log parsing does not exist yet either: `analyzer/combatlog/` currently contains only `locator.py` (which really does find `Logs/WoWCombatLog*.txt` and is surfaced in Settings → Module). The tailer, event parser and aggregators are the next step; the provider contract is already in place for them.
 
 ### Data flow: addon ↔ Companion ↔ Bot
 
@@ -64,7 +91,9 @@ The bot backend base URL is centralized as `BOT_BASE_URL` in `core/backend_confi
 
 ### Platform-specific paths and Qt workarounds
 
-`core/paths.py` centralizes all on-disk locations (config/cache/downloads/backups/logs), branching on `platform.system()`: `~/.local/share/WeintCompanion` on Linux, `%LOCALAPPDATA%/WeintCompanion` on Windows.
+`core/paths.py` centralizes all on-disk locations (config/cache/downloads/backups/logs/reports), branching on `platform.system()`: `~/.local/share/WeintCompanion` on Linux, `%LOCALAPPDATA%/WeintCompanion` on Windows. Rule of thumb for new files: anything reproducible goes under `cache()`, anything the user would be upset to lose goes under `config()`.
+
+One Qt rendering trap worth knowing: the global stylesheet sets `QWidget { background: transparent; }`, so any widget that must paint its own background needs `setObjectName(...)` + `setAttribute(Qt.WA_StyledBackground, True)` + an ID-scoped rule. And at ~10px, QLabel's computed height clips the dots on capital umlauts ("NÄCHSTE" renders as "NACHSTE") — small mono eyebrow labels should therefore be created with `gui/widgets/eyebrow.py`'s `eyebrow_label()`, which measures the real ink extent and sets a minimum height.
 
 `app.py` sets up crash diagnostics and several Linux/Qt workarounds *before* importing PySide6 — read the inline comments there before touching Qt platform env vars, they encode hard-won fixes for real crash reports:
 - `faulthandler` writes native (non-Python) crash tracebacks to `cache/logs/crash.log`, since a SIGSEGV in Qt's xcb plugin never raises a Python exception.

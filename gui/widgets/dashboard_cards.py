@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from gui.navigation import PageId
 from gui.widgets.status_card import StatusCard
 from core.paths import Paths
 from core.resources import Resources
@@ -49,7 +50,7 @@ class DashboardCards(QWidget):
         )
 
         self.wow.clicked.connect(
-            lambda: self.pageRequested.emit(3)
+            lambda: self.pageRequested.emit(PageId.SETTINGS)
         )
 
         #
@@ -64,7 +65,7 @@ class DashboardCards(QWidget):
         )
 
         self.addon.clicked.connect(
-            lambda: self.pageRequested.emit(1)
+            lambda: self.pageRequested.emit(PageId.ADDON)
         )
 
         #
@@ -79,7 +80,7 @@ class DashboardCards(QWidget):
         )
 
         self.github.clicked.connect(
-            lambda: self.pageRequested.emit(1)
+            lambda: self.pageRequested.emit(PageId.ADDON)
         )
 
         #
@@ -94,7 +95,7 @@ class DashboardCards(QWidget):
         )
 
         self.backup.clicked.connect(
-            lambda: self.pageRequested.emit(3)
+            lambda: self.pageRequested.emit(PageId.SETTINGS)
         )
 
         #
