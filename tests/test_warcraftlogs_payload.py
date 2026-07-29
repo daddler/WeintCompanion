@@ -16,7 +16,9 @@ from analyzer.models import (
 )
 from analyzer.providers.warcraftlogs_payload import (
     STALE_AFTER,
+    build_fight_list,
     build_metrics,
+    build_report_list,
     class_name,
     report_label,
     role_name,
@@ -455,3 +457,160 @@ def test_build_metrics_handles_an_empty_roster():
 
     assert damage == ()
     assert healing == ()
+
+
+# --------------------------------------------------
+# Archiv: live-Flag
+# --------------------------------------------------
+
+
+def test_archived_fights_are_never_marked_live():
+    """
+    Ein aus dem Archiv geladener Fight ist per Definition beendet -
+    selbst wenn `in_progress` aus historischen Gründen zufällig
+    true wäre, darf das WeintTV nicht als "LIVE" anzeigen.
+    """
+
+    payload = _payload()
+
+    payload["fight"]["in_progress"] = True
+
+    snapshot = snapshot_from_payload(payload, LABEL, live=False)
+
+    assert snapshot.live is False
+    assert snapshot.in_combat is True
+
+
+def test_live_defaults_to_true_for_backward_compatibility():
+    """
+    Der Live-Provider ruft snapshot_from_payload() ohne das neue
+    live-Argument auf - das darf sein bisheriges Verhalten nicht
+    ändern.
+    """
+
+    snapshot = snapshot_from_payload(_payload(), LABEL)
+
+    assert snapshot.live is True
+
+
+# --------------------------------------------------
+# Archiv: Report- und Fight-Listen
+# --------------------------------------------------
+
+
+def test_build_report_list_maps_known_fields():
+
+    reports = build_report_list({
+        "reports": [
+            {
+                "code": "aBcDeF12",
+                "title": "Mittwochsraid",
+                "zone": "Thron des Donners",
+                "start": "2026-07-23T19:05:00Z",
+            },
+        ],
+    })
+
+    assert len(reports) == 1
+
+    report = reports[0]
+
+    assert report.code == "aBcDeF12"
+    assert report.title == "Mittwochsraid"
+    assert report.zone == "Thron des Donners"
+    assert report.label == "Mittwochsraid · Thron des Donners"
+
+
+def test_build_report_list_drops_entries_without_a_code():
+    """
+    Ohne Code lässt sich der Report später nicht abrufen - ein
+    Eintrag wäre nur ein nutzloser Listenplatz.
+    """
+
+    reports = build_report_list({
+        "reports": [
+            {"title": "kein Code"},
+            {"code": "gueltig"},
+        ],
+    })
+
+    assert [report.code for report in reports] == ["gueltig"]
+
+
+def test_build_report_list_survives_malformed_input():
+
+    assert build_report_list({}) == ()
+    assert build_report_list({"reports": "kaputt"}) == ()
+    assert build_report_list({"reports": [None, "kaputt", {}]}) == ()
+
+
+def test_report_label_falls_back_to_the_code():
+
+    from analyzer.providers.warcraftlogs_payload import ReportSummary
+
+    report = ReportSummary(code="aBcDeF12")
+
+    assert report.label == "aBcDeF12"
+
+
+def test_build_fight_list_maps_known_fields():
+
+    fights = build_fight_list({
+        "fights": [
+            {
+                "id": 12,
+                "name": "Horridon",
+                "difficulty_id": 6,
+                "kill": False,
+                "boss_percentage": 42.5,
+                "duration": 187.4,
+                "pull_number": 7,
+            },
+        ],
+    })
+
+    assert len(fights) == 1
+
+    fight = fights[0]
+
+    assert fight.fight_id == 12
+    assert fight.encounter_name == "Horridon"
+    assert fight.difficulty == "25 Heroisch"
+    assert fight.kill is False
+    assert fight.boss_percentage == 42.5
+    assert fight.pull_number == 7
+    assert fight.label == "Pull 7 · Horridon · 42 % · 03:07"
+
+
+def test_build_fight_list_labels_a_kill_without_a_percentage():
+
+    fights = build_fight_list({
+        "fights": [
+            {"id": 1, "name": "Horridon", "kill": True, "duration": 200.0},
+        ],
+    })
+
+    assert "Kill" in fights[0].label
+
+
+def test_build_fight_list_drops_entries_without_a_usable_id():
+
+    fights = build_fight_list({
+        "fights": [
+            {"name": "ohne id"},
+            {"id": 3, "name": "gueltig"},
+        ],
+    })
+
+    assert [fight.fight_id for fight in fights] == [3]
+
+
+def test_build_fight_list_survives_malformed_input():
+    """
+    None/String-Einträge und ein leeres Dict (fehlende "id" -> -1,
+    wird verworfen) dürfen keine Ausnahme auslösen.
+    """
+
+    assert build_fight_list({}) == ()
+    assert build_fight_list({"fights": "kaputt"}) == ()
+    assert build_fight_list({"fights": [None, "kaputt", {}]}) == ()

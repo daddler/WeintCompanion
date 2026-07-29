@@ -289,6 +289,105 @@ Damit auf Bot-Seite nichts doppelt gebaut wird:
 
 ---
 
+## Archiv: vergangene Reports ansehen
+
+Zusätzlich zum Live-Endpunkt oben kann WeintTV/die WeintAcademy einen
+**Archiv-Modus** anbieten: Report auswählen, Pull darin auswählen,
+dessen Daten ansehen - unabhängig davon, ob gerade ein Livelog läuft.
+Das ist companion-seitig bereits vollständig umgesetzt
+(`core/warcraftlogs_archive_client.py`,
+`core/raid_data_service.py`'s Archiv-Zustandsmaschine,
+`gui/widgets/tv/archive_picker.py`) und wartet auf die drei folgenden
+Endpunkte.
+
+Alle drei verwenden dieselbe Authentifizierung wie der Live-Endpunkt
+(`Authorization: Bearer <companion_token>`) und dasselbe
+401/403-Verhalten (401 hebt die lokale Verknüpfung auf, 403 bedeutet
+"eingeloggt, aber keine Berechtigung").
+
+### Reportliste
+
+```
+GET /companion/warcraftlogs/reports
+```
+
+```json
+{
+  "status": "ok",
+  "reports": [
+    {
+      "code": "aBcDeF12",
+      "title": "Mittwochsraid",
+      "zone": "Thron des Donners",
+      "start": "2026-07-23T19:05:00Z"
+    }
+  ]
+}
+```
+
+Eine sinnvolle Grenze (z. B. die letzten 20-30 Reports der Gilde,
+neueste zuerst) reicht aus - die Companion-App zeigt sie in einem
+Dropdown, kein endloses Scrollen. `code` ist das einzige Pflichtfeld
+(ohne ihn ist ein Eintrag nicht abrufbar und wird verworfen); `title`
+und `zone` bilden zusammen die Anzeigebeschriftung, `start` wird
+aktuell nicht ausgewertet (für eine spätere Sortierung/Anzeige
+vorgesehen).
+
+### Fight-Liste eines Reports
+
+```
+GET /companion/warcraftlogs/reports/{code}/fights
+```
+
+```json
+{
+  "status": "ok",
+  "fights": [
+    {
+      "id": 12,
+      "encounter_id": 1640,
+      "name": "Horridon",
+      "difficulty_id": 6,
+      "kill": false,
+      "boss_percentage": 42.5,
+      "duration": 187.4,
+      "pull_number": 7
+    }
+  ]
+}
+```
+
+Ein `404` bedeutet "dieser Report-Code existiert nicht" und wird von
+der Companion-App entsprechend angezeigt. `id` ist das einzige
+Pflichtfeld (Einträge ohne nutzbare ID werden verworfen); `name`,
+`kill`, `boss_percentage`, `duration` und `pull_number` bilden
+zusammen die Zeilenbeschriftung im Dropdown (z. B.
+"Pull 7 · Horridon · 42 % · 03:07").
+
+### Einzelner Fight
+
+```
+GET /companion/warcraftlogs/reports/{code}/fights/{fight_id}
+```
+
+**Liefert bewusst exakt dieselbe JSON-Form wie die
+`"ok"`-Antwort des Live-Endpunkts weiter oben** (`report`/`fight`/
+`players`/`deaths`/`mechanics`/`consumables`/`warnings`) - nur eben
+für einen längst abgeschlossenen Fight statt den gerade laufenden.
+Das ist Absicht: die Companion-App verwendet für beide Wege
+(live und Archiv) dieselbe Übersetzungsfunktion
+(`snapshot_from_payload()`), ein separates Format hier würde nur
+doppelten Code auf beiden Seiten erzeugen. Ein `404` bedeutet
+"dieser Pull existiert in diesem Report nicht".
+
+Ein Unterschied zum Live-Endpunkt: `fight.in_progress` sollte bei
+einem archivierten Fight `false` sein (der Pull ist ja beendet) -
+die Companion-App verlässt sich hier ohnehin nicht darauf und
+markiert archivierte Fights immer explizit als "nicht live", aber ein
+korrektes `false` vermeidet trotzdem einen irreführenden Pull-Timer.
+
+---
+
 ## Umsetzungsskizze für den Bot
 
 1. **Webhook mitlesen:** im Livelog-Kanal auf Nachrichten mit einer
@@ -310,19 +409,31 @@ Damit auf Bot-Seite nichts doppelt gebaut wird:
    sich jede Companion-Instanz auf echte API-Anfragen.
 5. **Umrechnen und ausliefern** wie oben beschrieben.
 
+Für das Archiv oben kommt derselbe `reportData.reports(guildName:, ...)`-
+Aufruf wie in Schritt 2 zur Anwendung, nur ohne ihn auf den jüngsten
+Eintrag zu beschränken - die Liste selbst ist bereits die Antwort auf
+`GET /companion/warcraftlogs/reports`. Die Fight-Liste eines Reports
+kommt aus demselben `reportData.report(code:){ fights }`-Aufruf wie in
+Schritt 3; ein einzelner Fight braucht zusätzlich `table(dataType: ...)`
+mit dem jeweiligen `fightIDs: [id]`-Filter, exakt wie beim Live-Fight,
+nur eben für einen bestimmten statt den letzten Kampf.
+
 ---
 
 ## Gegenstellen in diesem Repo
 
 | Datei | Rolle |
 |-------|-------|
-| `core/warcraftlogs_client.py` | HTTP-Aufruf, Statuscodes, Token |
-| `analyzer/providers/warcraftlogs.py` | Abruf-Thread, Zwischenspeicher, Snapshot |
-| `analyzer/providers/warcraftlogs_payload.py` | Übersetzung Antwort → `RaidSnapshot` |
-| `core/raid_data_service.py` | Registrierung der Quelle |
-| `gui/pages/settings_sections/modules.py` | Auswahl und Statusanzeige |
+| `core/warcraftlogs_client.py` | Live-Endpunkt: HTTP-Aufruf, Statuscodes, Token |
+| `core/warcraftlogs_archive_client.py` | Archiv-Endpunkte: Report-/Fight-Listen, einzelner Fight |
+| `analyzer/providers/warcraftlogs.py` | Live-Provider: Abruf-Thread, Zwischenspeicher, Snapshot |
+| `analyzer/providers/warcraftlogs_payload.py` | Übersetzung Antwort → `RaidSnapshot`, Report-/Fight-Listen |
+| `core/raid_data_service.py` | Registrierung der Quelle, Live/Archiv-Zustandsmaschine |
+| `gui/widgets/tv/archive_picker.py` | Live/Archiv-Umschalter (WeintTV + Academy) |
+| `gui/pages/settings_sections/modules.py` | Auswahl der Live-Quelle und Statusanzeige |
 | `tests/test_warcraftlogs_payload.py` | Mapping und Robustheit |
-| `tests/test_warcraftlogs_provider.py` | Lebenszyklus und Fehlerfälle |
+| `tests/test_warcraftlogs_provider.py` | Lebenszyklus und Fehlerfälle (Live) |
+| `tests/test_raid_data_service.py` | Live/Archiv-Zusammenspiel |
 
 Zum Ausprobieren ohne fertigen Bot genügt es, in
 `core/backend_config.py` `BOT_BASE_URL` auf einen lokalen Server zu

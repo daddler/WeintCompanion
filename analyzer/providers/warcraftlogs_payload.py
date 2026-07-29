@@ -20,6 +20,8 @@ festgeschrieben; das ist zugleich die Vorlage für die Bot-Seite.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from analyzer.data import encounters
 from analyzer.models import (
     MECHANIC_OTHER,
@@ -511,6 +513,7 @@ def snapshot_from_payload(
     payload: dict,
     source_label: str,
     age_seconds: float = 0.0,
+    live: bool = True,
 ) -> RaidSnapshot:
     """
     Baut aus der Bot-Antwort das vollständige Bild eines Zeitpunkts.
@@ -520,6 +523,13 @@ def snapshot_from_payload(
     die Uhr in WeintTV weiterläuft, statt zwischen zwei Abrufen
     stehen zu bleiben. Alle übrigen Werte bleiben unangetastet - sie
     zu extrapolieren hieße, Zahlen zu erfinden.
+
+    `live` unterscheidet den Live-Provider (WarcraftLogsProvider) von
+    einem einzeln aus dem Archiv abgerufenen, längst beendeten Fight
+    (siehe build_report_list()/build_fight_list() unten) - beide
+    liefern exakt dieselbe JSON-Form, nur die Herkunft ist eine
+    andere. Ein archivierter Fight ist nie "live", auch wenn sein
+    `in_progress`-Feld aus historischen Gründen zufällig true wäre.
     """
 
     payload = _mapping(payload)
@@ -548,7 +558,7 @@ def snapshot_from_payload(
 
     return RaidSnapshot(
         source_label=source_label,
-        live=True,
+        live=live,
         in_combat=in_combat,
         encounter=_encounter(fight),
         pull_number=_count(fight.get("pull_number")),
@@ -598,3 +608,153 @@ def report_label(payload: dict) -> str:
         parts.append(f"Bericht {code}")
 
     return " · ".join(part for part in parts if part)
+
+
+#
+# --------------------------------------------------
+# Archiv: Report- und Fight-Listen
+# --------------------------------------------------
+#
+# Zwei zusätzliche, reine Mapping-Funktionen für den Archiv-Modus
+# (vergangene Logs auswählen statt live zuzusehen). Sie übersetzen
+# die Antworten von GET /companion/warcraftlogs/reports und
+# GET /companion/warcraftlogs/reports/{code}/fights - siehe
+# docs/warcraftlogs-bridge.md. Der eigentliche Fight selbst braucht
+# keine eigene Übersetzung: GET .../fights/{fight_id} liefert
+# bewusst dieselbe JSON-Form wie der Live-Endpunkt, damit
+# snapshot_from_payload() unverändert wiederverwendet werden kann
+# (nur mit live=False).
+#
+
+
+@dataclass(frozen=True)
+class ReportSummary:
+    """
+    Ein Eintrag der Report-Liste - genug, um ihn in einem Dropdown
+    anzuzeigen, ohne den ganzen Bericht zu laden.
+    """
+
+    code: str
+
+    title: str = ""
+
+    zone: str = ""
+
+    start: str = ""
+
+    @property
+    def label(self) -> str:
+
+        parts = [
+            part
+            for part in (self.title or self.zone, self.zone if self.title else "")
+            if part
+        ]
+
+        return " · ".join(parts) or self.code
+
+
+@dataclass(frozen=True)
+class FightSummary:
+    """
+    Ein Eintrag der Pull-Liste innerhalb eines Reports.
+    """
+
+    fight_id: int
+
+    encounter_name: str = ""
+
+    difficulty: str = ""
+
+    kill: bool = False
+
+    boss_percentage: float = 100.0
+
+    duration: float = 0.0
+
+    pull_number: int = 0
+
+    @property
+    def label(self) -> str:
+
+        total = max(0, int(self.duration))
+
+        clock = f"{total // 60:02d}:{total % 60:02d}"
+
+        outcome = "Kill" if self.kill else f"{self.boss_percentage:.0f} %"
+
+        pull = f"Pull {self.pull_number} · " if self.pull_number else ""
+
+        return f"{pull}{self.encounter_name} · {outcome} · {clock}"
+
+
+def build_report_list(payload: dict) -> tuple[ReportSummary, ...]:
+    """
+    Übersetzt die Antwort von GET /companion/warcraftlogs/reports.
+
+    Einträge ohne Code werden verworfen - ohne ihn lässt sich der
+    Report später nicht abrufen, ein Eintrag wäre also nur ein
+    nutzloser Listenplatz.
+    """
+
+    entries = []
+
+    for row in _sequence(_mapping(payload).get("reports")):
+
+        row = _mapping(row)
+
+        code = _text(row.get("code"))
+
+        if not code:
+            continue
+
+        entries.append(
+            ReportSummary(
+                code=code,
+                title=_text(row.get("title")),
+                zone=_text(row.get("zone")),
+                start=_text(row.get("start")),
+            )
+        )
+
+    return tuple(entries)
+
+
+def build_fight_list(payload: dict) -> tuple[FightSummary, ...]:
+    """
+    Übersetzt die Antwort von
+    GET /companion/warcraftlogs/reports/{code}/fights.
+
+    Einträge ohne verwendbare Fight-ID werden verworfen - dieselbe
+    Regel wie bei fehlendem Report-Code: ohne ID lässt sich der Fight
+    nicht einzeln nachladen.
+    """
+
+    entries = []
+
+    for row in _sequence(_mapping(payload).get("fights")):
+
+        row = _mapping(row)
+
+        fight_id = _count(row.get("id"), -1)
+
+        if fight_id < 0:
+            continue
+
+        entries.append(
+            FightSummary(
+                fight_id=fight_id,
+                encounter_name=_text(row.get("name")),
+                difficulty=(
+                    encounters.difficulty_name(_count(row.get("difficulty_id")))
+                    if row.get("difficulty_id")
+                    else ""
+                ),
+                kill=_flag(row.get("kill")),
+                boss_percentage=_percent(row.get("boss_percentage")),
+                duration=_number(row.get("duration")),
+                pull_number=_count(row.get("pull_number")),
+            )
+        )
+
+    return tuple(entries)
