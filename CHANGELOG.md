@@ -1,6 +1,19 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.0.0.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.0.1.
+
+## 1.0.1
+
+- Neu: "Was ist neu"-Popup - erscheint einmalig nach dem Start und zeigt bei
+  einer Neuinstallation eine kurze Tour durch Dashboard, Addon-Verwaltung,
+  Sync/Discord-Bridges und Einstellungen. Bei einem Update auf eine neue
+  Version werden stattdessen die Änderungen aus genau diesem Changelog
+  angezeigt. Über die Checkbox im Dialog oder den Schalter in
+  Einstellungen → Allgemein lässt sich das Popup dauerhaft abschalten bzw.
+  die Tour jederzeit erneut aufrufen.
+- Fix: Der Windows-Installer zeigte im Setup-Assistenten und unter "Apps &
+  Features" weiterhin Version 0.9.1 an, obwohl die App selbst bereits auf
+  1.0.0 stand.
 
 ## 1.0.0
 
