@@ -1,6 +1,14 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.1.0.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.1.1.
+
+## 1.1.1
+
+- Fix: Der Release-Build von 1.1.0 schlug im Test-Schritt fehl, weil zwei
+  neu hinzugekommene Tests `core/raid_data_service.py` importierten, das auf
+  Modulebene PySide6 lädt - die CI installiert für die Testsuite aber
+  bewusst nur pytest, keine GUI-Abhängigkeiten. Reiner Build-/Test-Fix,
+  keine Auswirkung auf die App selbst.
 
 ## 1.1.0
 
