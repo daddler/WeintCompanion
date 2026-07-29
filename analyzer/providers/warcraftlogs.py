@@ -129,14 +129,32 @@ class WarcraftLogsProvider(RaidDataProvider):
 
         self._thread: threading.Thread | None = None
 
+        #
+        # Das Weck-Event für die AKTUELLE Generation - siehe start().
+        # Nur als Platzhalter initialisiert; stop() vor dem ersten
+        # start() (siehe RaidDataProvider-Vertrag: muss folgenlos
+        # sein) darf kein None antreffen.
+        #
+
         self._wake = threading.Event()
 
         #
         # Zählt jeden Start durch. Folgen stop() und start() dicht
-        # aufeinander, kann der alte Worker das Weck-Signal verpassen
-        # (start() setzt es zurück, bevor er es sieht) und liefe dann
-        # neben dem neuen weiter. Ein Worker arbeitet deshalb nur, so
-        # lange seine eigene Nummer noch die aktuelle ist.
+        # aufeinander, darf der alte Worker nicht neben dem neuen
+        # weiterlaufen. Ein Worker arbeitet deshalb nur, so lange
+        # seine eigene Nummer noch die aktuelle ist.
+        #
+        # Das allein reicht aber nicht: die Prüfung passiert nur VOR
+        # jedem wait()-Aufruf, nicht währenddessen. Bekäme jede
+        # Generation dasselbe (wiederverwendete) Event-Objekt, könnte
+        # start() es per clear() zurücksetzen, während der alte
+        # Worker noch in dessen wait() hängt - genau das Signal, das
+        # stop() ihm gerade geschickt hat, wäre dann ausgelöscht,
+        # bevor er es sieht, und er bliebe bis zu fetch_interval lang
+        # als Zombie-Thread übrig. Deshalb bekommt jede Generation ihr
+        # EIGENES Event (siehe start()); es wird nie wiederverwendet
+        # oder zurückgesetzt, ein einmal gesetztes Event bleibt daher
+        # garantiert gesetzt, unabhängig von der Ausführungsreihenfolge.
         #
 
         self._generation = 0
@@ -158,9 +176,16 @@ class WarcraftLogsProvider(RaidDataProvider):
 
             generation = self._generation
 
-            self._reason = "Verbindung zum Bot wird aufgebaut ..."
+            #
+            # Ein frisches Event statt clear() auf dem alten - siehe
+            # die Erklärung bei self._generation in __init__.
+            #
 
-        self._wake.clear()
+            wake = threading.Event()
+
+            self._wake = wake
+
+            self._reason = "Verbindung zum Bot wird aufgebaut ..."
 
         #
         # Eigener Thread statt eines Abrufs in snapshot(): der
@@ -173,7 +198,7 @@ class WarcraftLogsProvider(RaidDataProvider):
 
         self._thread = threading.Thread(
             target=self._worker,
-            args=(generation,),
+            args=(generation, wake),
             daemon=True,
             name="WarcraftLogsFetch",
         )
@@ -195,12 +220,21 @@ class WarcraftLogsProvider(RaidDataProvider):
 
             self._reason = ""
 
+            #
+            # Dasselbe Event-Objekt, auf das der aktuell laufende
+            # Worker wartet (self._wake wird nur in start() ersetzt,
+            # und das erst beim nächsten Aufruf) - unter demselben
+            # Lock gelesen, mit dem start() es setzt.
+            #
+
+            wake = self._wake
+
         #
         # Weckt den Worker sofort aus seiner Wartezeit, statt bis zum
         # Ablauf des Intervalls zu warten.
         #
 
-        self._wake.set()
+        wake.set()
 
         self._thread = None
 
@@ -214,7 +248,7 @@ class WarcraftLogsProvider(RaidDataProvider):
 
             return self._running and self._generation == generation
 
-    def _worker(self, generation: int) -> None:
+    def _worker(self, generation: int, wake: threading.Event) -> None:
 
         while self._active(generation):
 
@@ -222,10 +256,14 @@ class WarcraftLogsProvider(RaidDataProvider):
 
             #
             # wait() statt sleep(): stop() beendet den Thread damit
-            # unmittelbar.
+            # unmittelbar. Bewusst das als Parameter übergebene Event
+            # dieser Generation, nicht self._wake - ein zwischen-
+            # zeitlicher Neustart ersetzt self._wake sonst durch das
+            # Event der NÄCHSTEN Generation, auf das dieser (alte)
+            # Worker gar nicht warten soll.
             #
 
-            if self._wake.wait(self._fetch_interval):
+            if wake.wait(self._fetch_interval):
                 return
 
     def _fetch_once(self, generation: int) -> None:

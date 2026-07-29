@@ -83,6 +83,55 @@ def _wait_for(event, timeout=5.0):
     assert event.wait(timeout), "Abruf ist nicht erfolgt"
 
 
+def _fetch_thread_count() -> int:
+    """
+    Zählt NUR lebende Threads mit dem Namen "WarcraftLogsFetch" (den
+    jeder WarcraftLogsProvider-Worker trägt), statt des gesamten
+    Prozesses wie `threading.active_count()`.
+
+    Der Unterschied ist wichtig, wenn die komplette Testsuite läuft:
+    andere Testdateien (z. B. tests/test_raid_data_service.py) spawnen
+    ihre eigenen, anders benannten Hintergrund-Threads, die zum
+    Prüfzeitpunkt noch nicht ganz abgebaut sind. Ein globaler
+    Prozesszähler würde dadurch gelegentlich fälschlich anschlagen -
+    unabhängig davon, ob DIESER Provider sich korrekt verhält.
+    """
+
+    return sum(
+        1
+        for thread in threading.enumerate()
+        if thread.name == "WarcraftLogsFetch" and thread.is_alive()
+    )
+
+
+def _wait_until_settled(predicate, timeout=2.0):
+    """
+    Wartet auf `predicate()`, statt sie nur einmal sofort zu prüfen.
+
+    Wichtig für die Restart-Tests: eine STALE Generation ruft
+    `fetch()` unter Umständen noch EINMAL auf, bevor sie beim
+    nächsten Schleifendurchlauf ihre eigene Generation-Nummer als
+    veraltet erkennt und sich beendet - das braucht eine kurze,
+    aber reale Zeitspanne. `fetch.called` ist zudem ein einziges,
+    nie zurückgesetztes Event: es wird von JEDER Generation gesetzt,
+    nicht nur von der letzten, sagt also nichts darüber aus, ob
+    ältere Worker-Threads schon fertig sind. Eine einzelne Prüfung
+    direkt nach `_wait_for(fetch.called)` wäre deshalb selbst dann
+    flakey, wenn der Provider sich korrekt verhält.
+    """
+
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+
+        if predicate():
+            return True
+
+        time.sleep(0.01)
+
+    return predicate()
+
+
 def _started(provider):
     """
     Startet den Provider und stellt sicher, dass er am Ende des
@@ -137,14 +186,16 @@ def test_start_is_idempotent_and_starts_only_one_worker():
 
     try:
 
-        before = threading.active_count()
+        before = _fetch_thread_count()
 
         for _ in range(5):
             provider.start()
 
         _wait_for(fetch.called)
 
-        assert threading.active_count() <= before + 1
+        assert _wait_until_settled(
+            lambda: _fetch_thread_count() <= before + 1
+        ), f"Threads uebrig: {_fetch_thread_count()}"
 
     finally:
         provider.stop()
@@ -189,7 +240,7 @@ def test_restart_does_not_leave_a_second_worker_behind():
 
     try:
 
-        before = threading.active_count()
+        before = _fetch_thread_count()
 
         for _ in range(5):
 
@@ -200,7 +251,9 @@ def test_restart_does_not_leave_a_second_worker_behind():
 
         _wait_for(fetch.called)
 
-        assert threading.active_count() <= before + 1
+        assert _wait_until_settled(
+            lambda: _fetch_thread_count() <= before + 1
+        ), f"Threads uebrig: {_fetch_thread_count()}"
 
     finally:
         provider.stop()
