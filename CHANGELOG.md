@@ -1,6 +1,34 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.0.1.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.1.0.
+
+## 1.1.0
+
+- Neu: **WeintTV** - ein Live-Dashboard für den Raid mit Bossleben,
+  Pull-Timer, Schadens-/Heilrangliste, Tank-Übersicht, Cooldown- und
+  Verbrauchsgüter-Status sowie erkannten Mechanikfehlern. Ein-/Ausschaltbar
+  über Einstellungen → Module.
+- Neu: **WeintAcademy** - leitet aus denselben Raiddaten ein persönliches
+  Lernprofil ab (Sternebewertung für Rotation, Bewegung, Cooldowns und
+  Mechaniken, relativ zur eigenen Rolle) und daraus einen Trainingsplan mit
+  den nächsten sinnvollen Lektionen. Ebenfalls über Einstellungen → Module
+  steuerbar.
+- Neu: WeintTV und die Academy teilen sich eine gemeinsame Datenquelle, die
+  sich in Einstellungen → Module umschalten lässt:
+  - **Simulation** - ein deterministischer Beispiel-Pull, mit dem sich
+    beide Ansichten jederzeit prüfen lassen, auch ohne laufenden Raid.
+  - **WarcraftLogs** - liest den laufenden Livelog-Bericht über den
+    WeintCodex-Bot (die App verbindet sich nicht selbst mit WarcraftLogs).
+    Gilt für den gesamten Raid, unabhängig davon, ob dieser Rechner selbst
+    mitloggt; die Werte sind durch die Art der Übertragung einige Sekunden
+    im Verzug, was in der Oberfläche offen ausgewiesen wird. Setzt eine
+    Discord-Verknüpfung voraus und wird erst nutzbar, sobald die
+    entsprechende Bot-Anbindung live ist.
+- Neu: Erkennung des WoW-Combat-Logs (Einstellungen → Module) als
+  Grundlage für eine spätere Live-Auswertung direkt aus dem Kampfprotokoll.
+- Aufräumen: Die Seitennavigation wurde auf eine einzige, zentrale Liste
+  (`gui/navigation.py`) umgestellt - Sidebar und Seitenstapel können damit
+  strukturell nicht mehr auseinanderlaufen.
 
 ## 1.0.1
 
