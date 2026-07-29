@@ -10,6 +10,8 @@ ausgegeben wird.
 import threading
 import time
 
+import pytest
+
 from analyzer.models import RaidSnapshot
 from analyzer.providers import warcraftlogs as module
 from analyzer.providers.base import RaidDataProvider
@@ -454,6 +456,17 @@ def test_snapshot_never_raises_even_if_the_mapper_fails(monkeypatch):
 # --------------------------------------------------
 # Registrierung
 # --------------------------------------------------
+#
+# core/raid_data_service.py importiert PySide6 auf Modulebene
+# (RaidDataService ist ein QObject) - die CI-Testumgebung installiert
+# laut CLAUDE.md aber bewusst kein PySide6, weil die Testsuite nur die
+# Qt-freien Teile abdecken soll. Die beiden Tests hier laufen deshalb
+# nur, wenn PySide6 tatsächlich verfügbar ist (z. B. lokal), und
+# werden andernfalls sauber übersprungen statt die CI zu brechen. Der
+# Import muss deshalb je Testfunktion übersprungen werden, nicht auf
+# Modulebene - sonst würde ein fehlendes PySide6 die gesamte Datei
+# überspringen, inklusive der Qt-freien Provider-Tests oben.
+#
 
 
 def test_the_source_is_registered_in_the_service():
@@ -462,6 +475,8 @@ def test_the_source_is_registered_in_the_service():
     auswählbar - und der Service fiele stillschweigend auf die
     Simulation zurück.
     """
+
+    pytest.importorskip("PySide6")
 
     from core.raid_data_service import (
         SOURCE_DESCRIPTIONS,
@@ -479,6 +494,8 @@ def test_the_factory_builds_a_provider_without_arguments():
     """
     Die Registry ruft jede Fabrik ohne Argumente auf.
     """
+
+    pytest.importorskip("PySide6")
 
     from core.raid_data_service import (
         SOURCE_WARCRAFTLOGS,
