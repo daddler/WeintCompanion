@@ -21,6 +21,7 @@ festgeschrieben; das ist zugleich die Vorlage für die Bot-Seite.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from analyzer.data import encounters
 from analyzer.models import (
@@ -118,6 +119,28 @@ def _text(value) -> str:
         return ""
 
     return str(value).strip()
+
+
+def _format_report_date(iso_timestamp: str) -> str:
+    """
+    ISO-Zeitstempel (UTC, vom Bot geliefert) in die lokale Zeitzone
+    dieses Rechners umgerechnet und kurz formatiert - fürs Report-
+    Dropdown im Archiv-Modus, wo sonst mehrere gleichnamige Berichte
+    (z.B. "Siege of Orgrimmar · Siege of Orgrimmar") nicht
+    unterscheidbar wären. Leerer String bei fehlendem/ungültigem Wert,
+    statt eine Ausnahme zu werfen - siehe Grundregel oben im Modul.
+    """
+
+    if not iso_timestamp:
+        return ""
+
+    try:
+        published = datetime.fromisoformat(iso_timestamp.replace("Z", "+00:00"))
+
+    except ValueError:
+        return ""
+
+    return published.astimezone().strftime("%d.%m.%Y %H:%M")
 
 
 def _number(value, default: float = 0.0) -> float:
@@ -651,7 +674,11 @@ class ReportSummary:
             if part
         ]
 
-        return " · ".join(parts) or self.code
+        text = " · ".join(parts) or self.code
+
+        date = _format_report_date(self.start)
+
+        return f"{date} · {text}" if date else text
 
 
 @dataclass(frozen=True)

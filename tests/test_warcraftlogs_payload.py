@@ -16,6 +16,7 @@ from analyzer.models import (
 )
 from analyzer.providers.warcraftlogs_payload import (
     STALE_AFTER,
+    _format_report_date,
     build_fight_list,
     build_metrics,
     build_report_list,
@@ -494,6 +495,38 @@ def test_live_defaults_to_true_for_backward_compatibility():
 
 
 # --------------------------------------------------
+# Archiv: Report-Datum im Dropdown-Label
+# --------------------------------------------------
+
+
+def test_format_report_date_parses_utc_timestamp():
+
+    import datetime
+
+    formatted = _format_report_date("2026-07-23T19:05:00Z")
+
+    parsed = datetime.datetime.strptime(formatted, "%d.%m.%Y %H:%M")
+
+    # In lokale Zeit umgerechnet - nur die Rundreise pruefen (zurueck
+    # nach UTC ergibt wieder den Ausgangszeitpunkt), da die konkrete
+    # Uhrzeit von der Zeitzone des Testrechners abhaengt.
+    assert parsed.astimezone(datetime.timezone.utc).replace(
+        tzinfo=None
+    ) == datetime.datetime(2026, 7, 23, 19, 5)
+
+
+def test_format_report_date_empty_for_missing_value():
+
+    assert _format_report_date("") == ""
+    assert _format_report_date(None) == ""
+
+
+def test_format_report_date_empty_for_invalid_value():
+
+    assert _format_report_date("nicht-ein-datum") == ""
+
+
+# --------------------------------------------------
 # Archiv: Report- und Fight-Listen
 # --------------------------------------------------
 
@@ -518,7 +551,14 @@ def test_build_report_list_maps_known_fields():
     assert report.code == "aBcDeF12"
     assert report.title == "Mittwochsraid"
     assert report.zone == "Thron des Donners"
-    assert report.label == "Mittwochsraid · Thron des Donners"
+    # Die Zeit selbst haengt von der lokalen Zeitzone des Testrechners
+    # ab (siehe _format_report_date) - hier wird nur geprueft, dass
+    # das Datum dem restlichen Label vorangestellt wird.
+    assert report.label == (
+        _format_report_date("2026-07-23T19:05:00Z")
+        + " · Mittwochsraid · Thron des Donners"
+    )
+    assert report.label.endswith("· Mittwochsraid · Thron des Donners")
 
 
 def test_build_report_list_drops_entries_without_a_code():
