@@ -26,6 +26,7 @@ zugestellt - der Service wird deshalb im Hauptthread erzeugt
 from __future__ import annotations
 
 import threading
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
@@ -33,7 +34,12 @@ from PySide6.QtCore import QObject, Signal
 from analyzer.combatlog.locator import CombatLogLocation, find_combat_log
 from analyzer.models import PullSummary, RaidSnapshot
 from analyzer.providers.mock import MockRaidDataProvider
-from analyzer.providers.warcraftlogs import WarcraftLogsProvider
+from analyzer.providers.warcraftlogs import FetchResult, WarcraftLogsProvider
+from analyzer.providers.warcraftlogs_payload import (
+    FightSummary,
+    ReportSummary,
+    snapshot_from_payload,
+)
 
 
 #
@@ -130,6 +136,66 @@ POLL_INTERVAL = 1.0
 HISTORY_LIMIT = 25
 
 
+#
+# --------------------------------------------------
+# Archiv-Modus
+# --------------------------------------------------
+#
+# Zusätzlich zum Live-Feed kann WeintTV/die Academy einen einzelnen,
+# längst abgeschlossenen WarcraftLogs-Fight ansehen (Report wählen ->
+# Pull darin wählen). "Verlauf" ist als Name bewusst vermieden - das
+# bezeichnet in WeintTV bereits die abgeschlossenen Pulls DIESER
+# Live-Sitzung (siehe history()/PullSummary oben); ein zweites
+# "Verlauf" für etwas völlig anderes (ein beliebiger vergangener
+# Report) wäre verwirrend.
+#
+# Der Modus ist bewusst global im Service verankert statt in einer
+# einzelnen Seite: WeintTV und die Academy sollen beim Blick ins
+# Archiv denselben Pull sehen, aus demselben Grund, aus dem sie schon
+# denselben Live-Snapshot teilen.
+#
+
+MODE_LIVE = "live"
+
+MODE_ARCHIVE = "archive"
+
+
+@dataclass(frozen=True)
+class ArchiveState:
+    """
+    Zustand der Archiv-Auswahl - ein Wert, den `ArchivePicker` in
+    beiden Seiten unverändert übernehmen kann.
+
+    Getrennte *_loading/*_error-Felder pro Schritt (Reports laden,
+    Fights eines Reports laden, einen Fight laden), weil jeder Schritt
+    unabhängig fehlschlagen oder noch laufen kann - ein einzelnes
+    "loading"-Flag könnte nicht ausdrücken, dass z. B. die Reportliste
+    längst da ist, aber gerade ein Fight nachlädt.
+    """
+
+    mode: str = MODE_LIVE
+
+    reports: tuple[ReportSummary, ...] = ()
+
+    reports_loading: bool = False
+
+    reports_error: str = ""
+
+    selected_report: str = ""
+
+    fights: tuple[FightSummary, ...] = ()
+
+    fights_loading: bool = False
+
+    fights_error: str = ""
+
+    selected_fight: int | None = None
+
+    fight_loading: bool = False
+
+    fight_error: str = ""
+
+
 class RaidDataService(QObject):
 
     #
@@ -139,6 +205,17 @@ class RaidDataService(QObject):
     #
 
     snapshotChanged = Signal(object)
+
+    #
+    # Wird bei jeder Änderung der Archiv-Auswahl emittiert (Modus,
+    # Report-/Fight-Liste, Auswahl, Lade-/Fehlerzustand) - `object`
+    # aus demselben Grund wie bei snapshotChanged. Ohne konkreten
+    # Payload, weil ArchivePicker ohnehin archive_state() neu abruft;
+    # ein eigener Payload würde nur zu einer zweiten Quelle für
+    # denselben Zustand führen.
+    #
+
+    archiveChanged = Signal()
 
     def __init__(self, manager):
 
@@ -169,6 +246,14 @@ class RaidDataService(QObject):
         self._thread = None
 
         self._stop_event = threading.Event()
+
+        #
+        # Archiv-Modus (siehe ArchiveState oben).
+        #
+
+        self._archive = ArchiveState()
+
+        self._archive_client = None
 
     # --------------------------------------------------
     # Datenquelle
@@ -250,10 +335,13 @@ class RaidDataService(QObject):
 
         #
         # Läuft gerade jemand mit, bekommt er sofort den neutralen
-        # Zustand der neuen Quelle statt der alten Werte.
+        # Zustand der neuen Quelle statt der alten Werte - außer im
+        # Archiv-Modus: eine Einstellungsänderung an der LIVE-Quelle
+        # hat mit dem gerade betrachteten vergangenen Fight nichts zu
+        # tun und darf ihn nicht verdrängen.
         #
 
-        if self._listeners > 0:
+        if self._listeners > 0 and self._archive.mode == MODE_LIVE:
 
             self._publish(RaidSnapshot.empty())
 
@@ -468,15 +556,36 @@ class RaidDataService(QObject):
 
             snapshot = RaidSnapshot.empty()
 
+        with self._lock:
+
+            #
+            # Im Archiv-Modus wird der gepinnte Snapshot NICHT vom
+            # Live-Poll überschrieben - der Poll läuft im Hintergrund
+            # trotzdem weiter (harmlos: Mock rechnet nur, der
+            # WarcraftLogs-Provider liest aus seinem eigenen Cache),
+            # damit beim Zurückwechseln auf Live sofort ein aktueller
+            # Wert bereitsteht, statt bis zum nächsten Takt zu warten.
+            #
+
+            if self._archive.mode == MODE_ARCHIVE:
+                return
+
         self._publish(snapshot)
 
-    def _publish(self, snapshot: RaidSnapshot):
+    def _publish(self, snapshot: RaidSnapshot, track: bool = True):
+        """
+        `track=False` für Snapshots, die keinem echten, gerade
+        laufenden Pull dieser Sitzung entsprechen (z. B. ein aus dem
+        Archiv geladener Fight) - sie gehören nicht in die
+        Pull-Historie von WeintTVs "Verlauf"-Tab.
+        """
 
         with self._lock:
 
             self._snapshot = snapshot
 
-            self._track_history(snapshot)
+            if track:
+                self._track_history(snapshot)
 
         self.snapshotChanged.emit(snapshot)
 
@@ -521,6 +630,333 @@ class RaidDataService(QObject):
         with self._lock:
 
             return tuple(reversed(self._history))
+
+    # --------------------------------------------------
+    # Archiv: vergangene Reports/Fights ansehen
+    # --------------------------------------------------
+    #
+    # Ablauf, das ArchivePicker-Widget bildet ihn direkt ab:
+    #
+    #   enter_archive_mode()               -> Reportliste lädt
+    #   select_archive_report(code)        -> Fightliste dieses Reports lädt
+    #   select_archive_fight(code, id)      -> Fight lädt, wird zum
+    #                                          angezeigten Snapshot
+    #   show_live()                        -> zurück zum Live-Feed
+    #
+    # Jeder Ladeschritt läuft in einem eigenen kurzlebigen Thread
+    # (dasselbe Muster wie WarcraftLogsProvider), damit ein HTTP-
+    # Abruf nie die Oberfläche einfriert. Zwischenstände werden über
+    # archiveChanged bekanntgegeben; die Seiten lesen archive_state()
+    # neu, statt Daten im Signal mitzuführen.
+    #
+
+    def _ensure_archive_client(self):
+
+        with self._lock:
+
+            if self._archive_client is None:
+
+                from core.warcraftlogs_archive_client import (
+                    WarcraftLogsArchiveClient,
+                )
+
+                self._archive_client = WarcraftLogsArchiveClient()
+
+            return self._archive_client
+
+    def archive_state(self) -> ArchiveState:
+
+        with self._lock:
+
+            return self._archive
+
+    # --------------------------------------------------
+
+    def enter_archive_mode(self):
+        """
+        Wechselt in den Archiv-Modus. Ist er es schon, passiert außer
+        einem eventuellen erneuten Nachladen der Reportliste nichts -
+        ein erneutes Öffnen des Tabs soll die laufende Auswahl nicht
+        verwerfen.
+        """
+
+        with self._lock:
+
+            already_active = self._archive.mode == MODE_ARCHIVE
+
+            if not already_active:
+
+                self._archive = replace(self._archive, mode=MODE_ARCHIVE)
+
+            need_reports = (
+                not self._archive.reports
+                and not self._archive.reports_loading
+                and not self._archive.reports_error
+            )
+
+        if not already_active:
+
+            self._publish(RaidSnapshot.empty("Archiv"), track=False)
+
+        self.archiveChanged.emit()
+
+        if need_reports:
+
+            self.refresh_reports()
+
+    def show_live(self):
+        """
+        Wechselt zurück zum Live-Feed und veröffentlicht sofort den
+        aktuellen Stand der konfigurierten Live-Quelle, statt bis zum
+        nächsten Poll-Takt zu warten.
+        """
+
+        with self._lock:
+
+            if self._archive.mode == MODE_LIVE:
+                return
+
+            self._archive = replace(self._archive, mode=MODE_LIVE)
+
+        self.archiveChanged.emit()
+
+        self._poll_once()
+
+    # --------------------------------------------------
+
+    def refresh_reports(self):
+
+        with self._lock:
+
+            if self._archive.reports_loading:
+                return
+
+            self._archive = replace(
+                self._archive,
+                reports_loading=True,
+                reports_error="",
+            )
+
+        self.archiveChanged.emit()
+
+        threading.Thread(
+            target=self._fetch_reports_worker,
+            daemon=True,
+            name="WarcraftLogsReportsFetch",
+        ).start()
+
+    def _fetch_reports_worker(self):
+
+        try:
+
+            result = self._ensure_archive_client().fetch_reports()
+
+            reports, reason = result.reports, result.reason
+
+        except Exception as exc:
+
+            reports, reason = (), f"Unerwarteter Fehler: {exc}"
+
+        with self._lock:
+
+            self._archive = replace(
+                self._archive,
+                reports=reports,
+                reports_loading=False,
+                reports_error=reason,
+            )
+
+        self.archiveChanged.emit()
+
+    # --------------------------------------------------
+
+    def select_archive_report(self, report_code: str):
+        """
+        Wählt einen Report aus und lädt seine Fight-Liste. Ist er
+        bereits gewählt (und geladen/am Laden), passiert nichts - ein
+        erneutes Antippen desselben Eintrags im Dropdown soll nicht
+        jedes Mal neu abfragen.
+
+        Setzt den Modus selbst auf Archiv, statt sich auf einen
+        vorherigen enter_archive_mode()-Aufruf zu verlassen - eine
+        Reportauswahl OHNE Archiv-Modus wäre ein inkonsistenter
+        Zustand, den kein Aufrufer erzeugen können soll.
+        """
+
+        with self._lock:
+
+            same_selection = (
+                self._archive.mode == MODE_ARCHIVE
+                and self._archive.selected_report == report_code
+                and (self._archive.fights or self._archive.fights_loading)
+            )
+
+            if same_selection:
+                return
+
+            self._archive = replace(
+                self._archive,
+                mode=MODE_ARCHIVE,
+                selected_report=report_code,
+                fights=(),
+                fights_loading=True,
+                fights_error="",
+                selected_fight=None,
+                fight_error="",
+            )
+
+        self.archiveChanged.emit()
+
+        threading.Thread(
+            target=self._fetch_fights_worker,
+            args=(report_code,),
+            daemon=True,
+            name="WarcraftLogsFightsFetch",
+        ).start()
+
+    def _fetch_fights_worker(self, report_code: str):
+
+        try:
+
+            result = self._ensure_archive_client().fetch_fights(report_code)
+
+            fights, reason = result.fights, result.reason
+
+        except Exception as exc:
+
+            fights, reason = (), f"Unerwarteter Fehler: {exc}"
+
+        with self._lock:
+
+            #
+            # Zwischenzeitlich könnte bereits ein anderer Report
+            # gewählt worden sein - dieses Ergebnis gehört dann nicht
+            # mehr zur aktuellen Auswahl und wird verworfen.
+            #
+
+            if self._archive.selected_report != report_code:
+                return
+
+            self._archive = replace(
+                self._archive,
+                fights=fights,
+                fights_loading=False,
+                fights_error=reason,
+            )
+
+        self.archiveChanged.emit()
+
+    # --------------------------------------------------
+
+    def select_archive_fight(self, report_code: str, fight_id: int):
+        """
+        Lädt einen einzelnen Fight und macht ihn zum angezeigten
+        Snapshot - der eigentliche Zweck des Archiv-Modus.
+
+        Setzt den Modus wie select_archive_report() defensiv selbst
+        auf Archiv.
+        """
+
+        with self._lock:
+
+            self._archive = replace(
+                self._archive,
+                mode=MODE_ARCHIVE,
+                selected_report=report_code,
+                selected_fight=fight_id,
+                fight_loading=True,
+                fight_error="",
+            )
+
+            label = self._archive_report_label(report_code)
+
+        self.archiveChanged.emit()
+
+        threading.Thread(
+            target=self._fetch_fight_worker,
+            args=(report_code, fight_id, label),
+            daemon=True,
+            name="WarcraftLogsFightFetch",
+        ).start()
+
+    def _archive_report_label(self, report_code: str) -> str:
+        """
+        Nur unter gehaltenem Lock aufrufen.
+        """
+
+        for report in self._archive.reports:
+
+            if report.code == report_code:
+                return report.label
+
+        return report_code
+
+    def _fetch_fight_worker(
+        self,
+        report_code: str,
+        fight_id: int,
+        label: str,
+    ):
+
+        try:
+
+            result = self._ensure_archive_client().fetch_fight(
+                report_code,
+                fight_id,
+            )
+
+        except Exception as exc:
+
+            result = FetchResult(reason=f"Unerwarteter Fehler: {exc}")
+
+        with self._lock:
+
+            #
+            # Zwischenzeitlich könnte bereits ein anderer Pull
+            # gewählt worden sein - ein spätes Ergebnis für eine alte
+            # Auswahl darf die inzwischen getroffene nicht
+            # überschreiben.
+            #
+
+            stale = (
+                self._archive.selected_report != report_code
+                or self._archive.selected_fight != fight_id
+            )
+
+        if stale:
+            return
+
+        if not result.ok:
+
+            with self._lock:
+
+                self._archive = replace(
+                    self._archive,
+                    fight_loading=False,
+                    fight_error=result.reason,
+                )
+
+            self.archiveChanged.emit()
+
+            return
+
+        snapshot = snapshot_from_payload(
+            result.payload,
+            source_label=f"Archiv · {label}",
+            live=False,
+        )
+
+        self._publish(snapshot, track=False)
+
+        with self._lock:
+
+            self._archive = replace(
+                self._archive,
+                fight_loading=False,
+                fight_error="",
+            )
+
+        self.archiveChanged.emit()
 
     # --------------------------------------------------
     # Abschluss

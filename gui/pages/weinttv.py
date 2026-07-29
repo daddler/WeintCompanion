@@ -41,6 +41,7 @@ from gui.theme.wow_colors import class_color, role_label
 from gui.widgets.card import Card
 from gui.widgets.section_card import SectionCard
 from gui.widgets.segmented_control import SegmentedControl
+from gui.widgets.tv.archive_picker import ArchivePicker
 from gui.widgets.tv.entry_list import EntryData, EntryList
 from gui.widgets.tv.meter_bar import MeterBar
 from gui.widgets.tv.meter_row_list import MeterRowData, MeterRowList
@@ -114,6 +115,18 @@ class WeintTvPage(QWidget):
         header.addWidget(self.feed_chip)
 
         root.addLayout(header)
+
+        #
+        # --------------------------------------------------
+        # Live/Archiv-Umschalter
+        # --------------------------------------------------
+        #
+        # Geteilt mit der Academy über denselben RaidDataService -
+        # ein Wechsel hier wirkt auch dort, siehe
+        # gui/widgets/tv/archive_picker.py.
+        #
+
+        root.addWidget(ArchivePicker(self.service))
 
         #
         # --------------------------------------------------

@@ -53,6 +53,7 @@ from gui.widgets.eyebrow import eyebrow_label
 from gui.widgets.hero_banner import HeroButton
 from gui.widgets.section_card import SectionCard
 from gui.widgets.segmented_control import SegmentedControl
+from gui.widgets.tv.archive_picker import ArchivePicker
 from gui.widgets.tv.entry_list import EntryData, EntryList
 from gui.widgets.tv.meter_bar import MeterBar
 
@@ -141,6 +142,18 @@ class AcademyPage(QWidget):
         header.addWidget(self.character_box)
 
         root.addLayout(header)
+
+        #
+        # --------------------------------------------------
+        # Live/Archiv-Umschalter
+        # --------------------------------------------------
+        #
+        # Geteilt mit WeintTV über denselben RaidDataService - ein
+        # Wechsel hier wirkt auch dort, siehe
+        # gui/widgets/tv/archive_picker.py.
+        #
+
+        root.addWidget(ArchivePicker(self.service))
 
         #
         # --------------------------------------------------
