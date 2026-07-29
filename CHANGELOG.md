@@ -1,6 +1,14 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.1.2.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.1.3.
+
+## 1.1.3
+
+- Fix: Der Release-Build von 1.1.2 schlug im Test-Schritt gelegentlich fehl
+  (Race Condition beim schnellen Neustart der WarcraftLogs-Datenquelle -
+  ein Hintergrund-Thread konnte unter ungünstigem Timing bis zu 60 Sekunden
+  als Karteileiche stehen bleiben, statt sich sofort zu beenden). Reiner
+  Build-/Interna-Fix, keine Auswirkung auf sichtbares App-Verhalten.
 
 ## 1.1.2
 
