@@ -703,3 +703,239 @@ def test_build_fight_list_survives_malformed_input():
     assert build_fight_list({}) == ()
     assert build_fight_list({"fights": "kaputt"}) == ()
     assert build_fight_list({"fights": [None, "kaputt", {}]}) == ()
+
+
+#
+# --------------------------------------------------
+# Tiefenauswertung
+# --------------------------------------------------
+#
+# Alle Blöcke sind optional. Der wichtigste Test dieser Gruppe ist
+# deshalb nicht, dass sie richtig gelesen werden - sondern dass ihr
+# Fehlen folgenlos bleibt. Der Bot liefert sie heute noch nicht, und
+# jede neue Karte in WeintTV muss trotzdem stumm auf "keine Daten"
+# gehen statt eine Ausnahme auszulösen.
+#
+
+
+def _deep_payload():
+
+    return _payload(
+        fight={
+            "name": "Horridon",
+            "duration": 200.0,
+            "raid_size": 2,
+            "in_progress": False,
+            "boss_percentage": 0.5,
+            "pull_number": 4,
+            "battle_res_max": 3,
+        },
+        players=[
+            {
+                "name": "Pyrothal",
+                "class": "Mage",
+                "spec": "Feuer",
+                "role": "dps",
+                "damage_total": 20000000.0,
+                "active_time": 190.0,
+                "casts": 300,
+                "movement_units": 43744.0,
+                "damage_taken_abilities": [
+                    {"ability": "Double Swipe", "amount": 96000.0, "hits": 2},
+                    {"ability": "Dire Call", "amount": 54000.0, "hits": 3},
+                ],
+                "dots": [
+                    {"aura": "Ignite", "uptime_percent": 86.0,
+                     "applications": 12, "expected_percent": 85.0},
+                ],
+                "cooldowns": [
+                    {"name": "Combustion", "casts": [22.0, 99.0],
+                     "cooldown": 45.0},
+                ],
+            },
+            {
+                "name": "Elvenne",
+                "class": "Druid",
+                "role": "healer",
+                "healing_total": 9000000.0,
+                "hots": [
+                    {"aura": "Lifebloom", "uptime_percent": 96.0},
+                ],
+            },
+        ],
+        heroism_windows=[
+            {"start": 90.0, "end": 130.0, "source": "Kaldrun"},
+        ],
+        resurrects=[
+            {"target": "Krallenwut", "caster": "Elvenne", "at": 78.0,
+             "ability": "Wiedergeburt"},
+        ],
+        interrupts=[
+            {"actor": "Pyrothal", "at": 40.0, "target": "Add",
+             "ability": "Counterspell"},
+        ],
+        dispels=[
+            {"actor": "Elvenne", "at": 55.0, "target": "Pyrothal"},
+        ],
+    )
+
+
+def test_deep_analysis_blocks_are_mapped():
+
+    snapshot = snapshot_from_payload(_deep_payload(), "Bot")
+
+    assert snapshot.has_analysis is True
+
+    activity = snapshot.activity_of("Pyrothal")
+
+    assert activity is not None
+    assert round(activity.active_percent) == 95
+    assert activity.casts == 300
+    assert round(activity.apm) == 90
+
+    assert snapshot.uptimes_of("Pyrothal")[0].ability == "Ignite"
+    assert snapshot.uptimes_of("Elvenne", "hot")[0].ability == "Lifebloom"
+
+    movement = snapshot.movement_of("Pyrothal")
+
+    assert movement is not None
+    assert round(movement.meters) == 400
+    assert movement.estimated is True
+
+    assert len(snapshot.interrupts) == 1
+    assert len(snapshot.dispels) == 1
+
+
+def test_damage_taken_is_classified_using_the_fight_name():
+    """
+    Die Einordnung macht der Companion, nicht der Bot - sie hängt
+    deshalb am Bossnamen aus dem Kampf.
+    """
+
+    snapshot = snapshot_from_payload(_deep_payload(), "Bot")
+
+    entry = snapshot.damage_taken_of("Pyrothal")
+
+    assert entry is not None
+    assert entry.avoidable == 96000.0
+    assert entry.unavoidable == 54000.0
+    assert entry.avoidable_hits == 2
+
+    #
+    # Und daraus entsteht ein Mechanikfehler mit Kategorie.
+    #
+
+    assert any(
+        issue.actor_name == "Pyrothal" and issue.category
+        for issue in snapshot.mechanics
+    )
+
+
+def test_cooldown_usage_counts_possible_uses_and_burst_alignment():
+
+    snapshot = snapshot_from_payload(_deep_payload(), "Bot")
+
+    usage = snapshot.cooldowns_of("Pyrothal")[0]
+
+    assert usage.ability == "Combustion"
+    assert usage.uses == 2
+
+    #
+    # 200 Sekunden Kampf, 45 Sekunden Abklingzeit: der erste Einsatz
+    # zählt immer mit (Kampfbeginn), danach je vollständig
+    # abgelaufener Abklingzeit einer mehr - also bei 0, 45, 90, 135
+    # und 180 Sekunden. Der Companion rechnet das selbst aus; der Bot
+    # liefert nur die Tatsachen.
+    #
+
+    assert usage.possible == 5
+
+    #
+    # Ein Einsatz lag im Heldentum-Fenster (90-130 s).
+    #
+
+    assert usage.in_burst == 1
+
+
+def test_heroism_is_derived_from_the_windows_when_the_flag_is_missing():
+
+    snapshot = snapshot_from_payload(_deep_payload(), "Bot")
+
+    assert snapshot.heroism_used is True
+    assert snapshot.heroism_windows[0].start == 90.0
+
+
+def test_battle_res_charges_are_derived_from_the_resurrections():
+    """
+    Fehlt die Restanzahl, ist die Differenz die ehrlichere Angabe als
+    eine Null - die sähe aus, als wären alle Ladungen verbraucht.
+    """
+
+    snapshot = snapshot_from_payload(_deep_payload(), "Bot")
+
+    assert snapshot.battle_res_max == 3
+    assert snapshot.battle_res_charges == 2
+
+
+def test_an_explicit_charge_count_wins_over_the_derivation():
+
+    payload = _deep_payload()
+
+    payload["fight"]["battle_res_charges"] = 1
+
+    assert snapshot_from_payload(payload, "Bot").battle_res_charges == 1
+
+
+def test_a_payload_without_any_deep_block_degrades_silently():
+    """
+    Der heutige Bot liefert nichts davon. Jede neue Karte muss dann
+    stumm auf "keine Daten" gehen.
+    """
+
+    snapshot = snapshot_from_payload(_payload(), "Bot")
+
+    assert snapshot.has_analysis is False
+
+    assert snapshot.activity == ()
+    assert snapshot.dot_uptimes == ()
+    assert snapshot.movement == ()
+    assert snapshot.damage_taken == ()
+    assert snapshot.cooldown_usage == ()
+    assert snapshot.heroism_windows == ()
+
+    #
+    # Und die vorhandenen Angaben bleiben unberührt.
+    #
+
+    assert snapshot.top_damage
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"heroism_windows": "kaputt"},
+        {"heroism_windows": [{"start": 50.0}]},
+        {"heroism_windows": [{"start": 100.0, "end": 20.0}]},
+        {"resurrects": [{"caster": "X"}]},
+        {"interrupts": [{}, None]},
+        {"players": [{"name": "A", "dots": "kaputt"}]},
+        {"players": [{"name": "A", "cooldowns": [{"casts": [1]}]}]},
+        {"players": [{"name": "A", "damage_taken_abilities": [{"amount": 5}]}]},
+        {"players": [{"name": "A", "movement_units": "viel"}]},
+    ],
+)
+def test_broken_deep_blocks_are_dropped_instead_of_raising(overrides):
+
+    snapshot = snapshot_from_payload(_payload(**overrides), "Bot")
+
+    assert isinstance(snapshot, RaidSnapshot)
+
+
+def test_a_window_without_a_usable_span_is_dropped():
+
+    snapshot = snapshot_from_payload(
+        _payload(heroism_windows=[{"start": 100.0, "end": 20.0}]),
+        "Bot",
+    )
+
+    assert snapshot.heroism_windows == ()
