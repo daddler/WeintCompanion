@@ -309,3 +309,132 @@ def test_bot_rows_come_first():
     merged = merge_mechanics(bot, derive_mechanics((entry,), "Horridon"))
 
     assert merged[0].source == MECHANIC_SOURCE_BOT
+
+
+#
+# --------------------------------------------------
+# Abdeckung
+# --------------------------------------------------
+#
+
+
+def test_every_siege_of_orgrimmar_boss_has_reference_data():
+    """
+    Ohne Referenzdaten bleibt der erhaltene Schaden eines Kampfes
+    unklassifiziert - die Überlebensbewertung entfällt dann komplett,
+    und der vermeidbare Schaden in WeintTVs Analyse bleibt leer.
+    """
+
+    from analyzer.data.encounters import (
+        INSTANCE_ENCOUNTERS,
+        SIEGE_OF_ORGRIMMAR,
+    )
+
+    missing = [
+        name
+        for name in INSTANCE_ENCOUNTERS[SIEGE_OF_ORGRIMMAR]
+        if not avoidable.rules_for(name)
+    ]
+
+    assert missing == []
+
+
+def test_every_boss_has_both_verdicts_represented():
+    """
+    Eine Tabelle mit ausschließlich vermeidbaren Fähigkeiten wäre
+    verdächtig: irgendetwas an einem Boss ist immer unvermeidbar, und
+    ohne diesen Anteil wirkt jeder Spieler schlechter als er ist.
+    """
+
+    for name in avoidable.known_encounters():
+
+        verdicts = {rule.verdict for rule in avoidable.rules_for(name)}
+
+        assert avoidable.VERDICT_AVOIDABLE in verdicts, name
+        assert avoidable.VERDICT_UNAVOIDABLE in verdicts, name
+
+
+def test_every_avoidable_rule_explains_what_to_do():
+    """
+    Ein Fehler ohne Hinweis ist ein Vorwurf ohne Lernwert - genau
+    das, was die Academy vermeiden soll.
+    """
+
+    for name in avoidable.known_encounters():
+
+        for rule in avoidable.rules_for(name):
+
+            if rule.verdict != avoidable.VERDICT_AVOIDABLE:
+                continue
+
+            assert rule.note.strip(), (name, rule.ability)
+            assert rule.label.strip(), (name, rule.ability)
+
+
+def test_ability_labels_are_unambiguous():
+    """
+    Die Übersetzungstabelle für Bot-Texte wird aus den Labels
+    abgeleitet. Zwei Fähigkeiten mit demselben deutschen Namen würden
+    dort aufeinander abgebildet - und die Entdopplung träfe die
+    falsche Zeile.
+    """
+
+    labels = {}
+
+    for name in avoidable.known_encounters():
+
+        for rule in avoidable.rules_for(name):
+
+            if not rule.label:
+                continue
+
+            key = rule.label.strip().lower()
+
+            assert labels.get(key, rule.ability) == rule.ability, key
+
+            labels[key] = rule.ability
+
+
+def test_the_alias_table_is_derived_from_the_labels():
+    """
+    Sie von Hand zu pflegen wäre bei über achtzig Regeln eine zweite
+    Liste, die unweigerlich auseinanderliefe - und das Symptom wäre
+    ein doppelt gezählter Fehler, den niemand als solchen erkennt.
+    """
+
+    for name in avoidable.known_encounters():
+
+        for rule in avoidable.rules_for(name):
+
+            if not rule.label:
+                continue
+
+            assert avoidable.alias_ability(rule.label) == rule.ability
+
+
+#
+# "Beute Pandarias" hat keinen einzelnen Boss und damit auch keinen
+# klassischen Tankangriff - der Schaden kommt aus den Kisten und
+# ihren Gegnern. Eine Fähigkeit dafür zu erfinden, nur damit die
+# Tabelle gleichmäßig aussieht, wäre genau das Raten, das diese
+# Referenzdaten vermeiden sollen.
+#
+
+WITHOUT_TANK_ABILITY = {"Spoils of Pandaria"}
+
+
+def test_tank_abilities_are_marked_as_such_on_every_boss():
+    """
+    Ohne die Tank-Ausnahme würde jeder Tank für den Schaden bestraft,
+    den anzunehmen seine Aufgabe ist.
+    """
+
+    for name in avoidable.known_encounters():
+
+        if name in WITHOUT_TANK_ABILITY:
+            continue
+
+        assert any(
+            rule.tank_exempt
+            for rule in avoidable.rules_for(name)
+        ), name

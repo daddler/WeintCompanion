@@ -79,6 +79,26 @@ SURVIVAL_TOLERANCE = 1.1
 
 
 #
+# Bis zu welchem Anteil vermeidbaren Schadens es unabhängig vom Raid
+# noch die volle Wertung gibt.
+#
+# Der Rollenvergleich allein genügt nicht: machen alle
+# Schadensausteiler denselben Fehler, liegt jeder genau im Schnitt und
+# alle bekämen fünf Sterne. Eine Bewertung, die Gleichförmigkeit
+# belohnt, sagt niemandem, dass der ganze Raid etwas falsch macht.
+#
+# Zehn Prozent sind bewusst kein Ideal, sondern eine erreichbare
+# Schwelle. Eine Bewertung, die nur bei nahezu perfektem Spiel volle
+# Sterne gibt, verliert ihre Aussagekraft - dann steht überall
+# dieselbe schlechte Note und niemand erfährt, woran er wirklich
+# arbeiten sollte. Der Wert wird sich mit echten Logs nachjustieren
+# lassen; er steht deshalb hier und nicht verstreut in der Rechnung.
+#
+
+ABSOLUTE_AVOIDABLE_SHARE = 0.10
+
+
+#
 # --------------------------------------------------
 # Hilfsfunktionen
 # --------------------------------------------------
@@ -851,29 +871,55 @@ def _rate_survival(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
             "diesen Boss fehlen noch Referenzdaten.",
         )
 
-    average = _role_average(
-        snapshot,
-        actor,
-        {
-            row.actor_name: row.avoidable_share
-            for row in snapshot.damage_taken
-            if has_usable_classification(row)
-        },
+    shares = {
+        row.actor_name: row.avoidable_share
+        for row in snapshot.damage_taken
+        if has_usable_classification(row)
+    }
+
+    peers = [
+        name
+        for name in _role_peers(snapshot, actor)
+        if name in shares and name != actor.name
+    ]
+
+    #
+    # Der Rollenvergleich braucht mindestens einen echten Vergleich.
+    # Ist man der einzige Spieler seiner Rolle mit Daten, wäre der
+    # "Schnitt" der eigene Wert - man würde mit sich selbst verglichen
+    # und bekäme immer die volle Wertung, egal wie schlecht der Wert
+    # ist.
+    #
+
+    average = (
+        _role_average(snapshot, actor, shares)
+        if peers
+        else None
     )
 
     share = entry.avoidable_share
 
-    if average and average > 0:
-        stars_share = _stars_from_excess(share / average, SURVIVAL_TOLERANCE)
+    #
+    # Absolut bewerten und, wo es eine Vergleichsgruppe gibt,
+    # zusätzlich relativ - und dann die STRENGERE von beiden nehmen.
+    #
+    # Nur relativ zu bewerten würde Gleichförmigkeit belohnen: machen
+    # alle Schadensausteiler denselben Fehler, läge jeder genau im
+    # Schnitt und alle bekämen die volle Wertung. Nur absolut zu
+    # bewerten würde umgekehrt Rollen bestrafen, die von der Aufstellung
+    # her mehr Vermeidbares abbekommen.
+    #
 
-    else:
-        #
-        # Ohne Vergleichsgruppe absolut messen: kein vermeidbarer
-        # Schaden ist die volle Wertung.
-        #
-        stars_share = _stars_from_excess(
-            share / 0.05 if share else 0.0,
-            1.0,
+    stars_share = _stars_from_excess(
+        share / ABSOLUTE_AVOIDABLE_SHARE if share else 0.0,
+        1.0,
+    )
+
+    if average and average > 0:
+
+        stars_share = min(
+            stars_share,
+            _stars_from_excess(share / average, SURVIVAL_TOLERANCE),
         )
 
     parts = (

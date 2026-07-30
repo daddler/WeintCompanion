@@ -13,6 +13,7 @@ from analyzer.academy.models import (
     CATEGORY_ORDER,
     CATEGORY_OUTPUT,
     CATEGORY_ROTATION,
+    CATEGORY_SURVIVAL,
     MAX_STARS,
 )
 from analyzer.models import (
@@ -22,6 +23,7 @@ from analyzer.models import (
     ROLE_HEALER,
     ROLE_TANK,
     Actor,
+    EncounterInfo,
     MechanicIssue,
     MetricEntry,
     RaidSnapshot,
@@ -282,3 +284,132 @@ def test_specialisation_lessons_are_preferred_over_generic_ones():
 
     assert plan.next_lesson.category == CATEGORY_COOLDOWNS
     assert plan.next_lesson.class_name == "Mage"
+
+
+#
+# --------------------------------------------------
+# Überleben
+# --------------------------------------------------
+#
+
+
+def _damage_snapshot(rows):
+    """
+    Ein Snapshot mit erhaltenem Schaden, eingeordnet nach Horridon.
+    """
+
+    from analyzer.analysis.damage import build_damage_taken
+
+    return _snapshot(
+        encounter=EncounterInfo(encounter_id=0, name="Horridon"),
+        damage_taken=tuple(
+            build_damage_taken(name, "Horridon", entries)
+            for name, entries in rows
+        ),
+    )
+
+
+#
+# "Double Swipe" ist vermeidbar, "Dire Call" nicht.
+#
+
+_AVOIDABLE = ("Double Swipe", 90000.0, 3, "")
+_UNAVOIDABLE = ("Dire Call", 10000.0, 1, "")
+
+
+def test_a_lone_player_of_their_role_is_still_rated_absolutely():
+    """
+    Der Fehler, den ein echter Garrosh-Pull aufgedeckt hat.
+
+    Ist jemand der einzige Spieler seiner Rolle mit Daten, wäre der
+    "Rollenschnitt" sein eigener Wert - er würde mit sich selbst
+    verglichen und bekäme immer die volle Wertung, egal wie schlecht
+    der Wert ist.
+    """
+
+    snapshot = _damage_snapshot([("Spitze", (_AVOIDABLE, _UNAVOIDABLE))])
+
+    rating = build_profile(snapshot, "Spitze").rating(CATEGORY_SURVIVAL)
+
+    assert rating.has_data is True
+
+    assert rating.stars < MAX_STARS
+
+
+def test_a_whole_role_making_the_same_mistake_is_not_excused():
+    """
+    Nur relativ zu bewerten würde Gleichförmigkeit belohnen: machen
+    alle Schadensausteiler denselben Fehler, liegt jeder genau im
+    Schnitt - und alle bekämen fünf Sterne, obwohl der ganze Raid
+    etwas falsch macht.
+    """
+
+    snapshot = _damage_snapshot([
+        ("Spitze", (_AVOIDABLE, _UNAVOIDABLE)),
+        ("Mitte", (_AVOIDABLE, _UNAVOIDABLE)),
+    ])
+
+    for name in ("Spitze", "Mitte"):
+
+        rating = build_profile(snapshot, name).rating(CATEGORY_SURVIVAL)
+
+        assert rating.stars < MAX_STARS, name
+
+
+def test_clean_play_still_earns_the_full_rating():
+
+    snapshot = _damage_snapshot([
+        ("Spitze", (_UNAVOIDABLE,)),
+        ("Mitte", (_AVOIDABLE, _UNAVOIDABLE)),
+    ])
+
+    assert build_profile(snapshot, "Spitze").rating(
+        CATEGORY_SURVIVAL
+    ).stars == MAX_STARS
+
+
+def test_survival_rates_the_share_not_the_absolute_sum():
+    """
+    Ein Tank bekommt zwangsläufig den meisten Schaden des Raids ab.
+    Nach Summe zu bewerten hieße, ihn für seine Aufgabe zu bestrafen.
+    """
+
+    snapshot = _damage_snapshot([
+        #
+        # Der Tank kassiert das Zehnfache - aber nichts davon
+        # vermeidbar.
+        #
+        ("Panzer", (("Dire Call", 1000000.0, 40, ""),)),
+        ("Spitze", (_AVOIDABLE, _UNAVOIDABLE)),
+    ])
+
+    tank = build_profile(snapshot, "Panzer").rating(CATEGORY_SURVIVAL)
+    dps = build_profile(snapshot, "Spitze").rating(CATEGORY_SURVIVAL)
+
+    assert tank.stars == MAX_STARS
+    assert tank.stars > dps.stars
+
+
+def test_survival_declines_to_rate_an_unclassified_boss():
+    """
+    Sonst bildete die Bewertung nur die Lücken der Referenzdaten ab
+    statt das Spiel des Spielers.
+    """
+
+    from analyzer.analysis.damage import build_damage_taken
+
+    snapshot = _snapshot(
+        encounter=EncounterInfo(encounter_id=0, name="Irgendein Boss"),
+        damage_taken=(
+            build_damage_taken(
+                "Spitze",
+                "Irgendein Boss",
+                (("Unbekannte Fähigkeit", 500000.0, 5, ""),),
+            ),
+        ),
+    )
+
+    rating = build_profile(snapshot, "Spitze").rating(CATEGORY_SURVIVAL)
+
+    assert rating.has_data is False
+    assert "Referenzdaten" in rating.detail

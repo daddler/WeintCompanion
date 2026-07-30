@@ -222,3 +222,50 @@ def test_the_catalog_actually_grew():
     ]
 
     assert len(measurable) > 30
+
+
+def test_every_siege_of_orgrimmar_boss_has_lessons():
+    """
+    Steht der Raid an einem Boss, soll die Academy dazu auch etwas zu
+    sagen haben - sonst fällt sie auf die allgemeinen Ratschläge
+    zurück, die notwendigerweise so allgemein sind, dass sie niemandem
+    konkret weiterhelfen.
+    """
+
+    from analyzer.data.encounters import (
+        INSTANCE_ENCOUNTERS,
+        SIEGE_OF_ORGRIMMAR,
+    )
+
+    missing = [
+        name
+        for name in INSTANCE_ENCOUNTERS[SIEGE_OF_ORGRIMMAR]
+        if name not in ENCOUNTER_LESSONS
+    ]
+
+    assert missing == []
+
+
+def test_encounter_lessons_are_reachable_for_every_role():
+    """
+    Bosslektionen tragen keine Rollenbeschränkung - was am Boden liegt,
+    schadet jedem gleich.
+    """
+
+    for role in (ROLE_TANK, ROLE_HEALER, ROLE_DPS):
+
+        ids = {
+            lesson.lesson_id
+            for lesson in lessons_for_actor(_actor(role=role), "Garrosh Hellscream")
+        }
+
+        assert any(key.startswith("boss-garrosh") for key in ids), role
+
+
+def test_encounter_lessons_declare_their_encounter():
+
+    for name, lessons in ENCOUNTER_LESSONS.items():
+
+        for lesson in lessons:
+
+            assert lesson.encounter == name, lesson.lesson_id

@@ -23,10 +23,22 @@ Nachschlagen läuft wie in analyzer.data.encounters über den
 kleingeschriebenen Namen, mit einem beim Import gebauten Index.
 Unbekannte Eingaben liefern None und werfen nie.
 
+Abdeckung: alle vierzehn Kämpfe der Schlacht um Orgrimmar sowie
+Horridon (den bildet die Simulation nach). Vollständig heißt hier
+"jeder Kampf ist vertreten", nicht "jede Fähigkeit jedes Bosses steht
+hier". Erfasst sind die Fähigkeiten, bei denen die Zuordnung
+eindeutig ist: Bodenflächen, angekündigte Kegel, Zauber mit
+Unterbrechungsfenster, Tankangriffe.
+
+Was fehlt, bleibt bewusst offen. Eine falsch als vermeidbar
+eingeordnete Fähigkeit ist schlimmer als eine Lücke: sie erzeugt
+einen Vorwurf gegen einen Spieler, der nichts falsch gemacht hat.
+
 Erweitern: einen Eintrag in ENCOUNTER_ABILITIES ergänzen. Die
 Fähigkeitsnamen sind die *englischen* aus dem Combat-Log bzw. der
 WarcraftLogs-Antwort, `label`/`note` sind der deutsche Text für die
-Oberfläche.
+Oberfläche. Die Übersetzungstabelle für Bot-Texte entsteht daraus von
+selbst - siehe ABILITY_ALIASES weiter unten.
 """
 
 from __future__ import annotations
@@ -150,9 +162,9 @@ GLOBAL_ABILITIES: tuple[AbilityRule, ...] = (
 # Horridon steht hier, weil der Simulations-Anbieter
 # (analyzer/providers/mock.py) diesen Kampf nachbildet - dadurch ist
 # die Verdrahtung zwischen Referenzdaten und Auswertung ohne Bot
-# vorführbar. Immerseus steht hier, weil der Bot für genau diesen
-# Kampf schon eine eigene Regel mitschickt: so wird das
-# Zusammenführen beider Quellen tatsächlich durchlaufen.
+# vorführbar. Der Bot schickt für Immerseus zusätzlich eine eigene
+# Regel mit: so wird das Zusammenführen beider Quellen tatsächlich
+# durchlaufen.
 #
 
 ENCOUNTER_ABILITIES: dict[str, tuple[AbilityRule, ...]] = {
@@ -208,6 +220,24 @@ ENCOUNTER_ABILITIES: dict[str, tuple[AbilityRule, ...]] = {
 
     ),
 
+    #
+    # --------------------------------------------------
+    # Schlacht um Orgrimmar
+    # --------------------------------------------------
+    #
+    # Vollständig in dem Sinn, dass jeder der vierzehn Kämpfe
+    # vertreten ist. Nicht vollständig in dem Sinn, dass jede
+    # Fähigkeit jedes Bosses hier stünde - das wäre geraten, und
+    # Geratenes ist hier schlimmer als eine Lücke: eine falsch als
+    # vermeidbar eingeordnete Fähigkeit erzeugt einen Vorwurf gegen
+    # einen Spieler, der nichts falsch gemacht hat.
+    #
+    # Erfasst sind deshalb die Fähigkeiten, bei denen die Zuordnung
+    # eindeutig ist: Bodenflächen, angekündigte Kegel, Zauber mit
+    # Unterbrechungsfenster, Tankangriffe. Was fehlt, bleibt "nicht
+    # eingeordnet" und senkt niemandes Bewertung.
+    #
+
     "Immerseus": (
 
         AbilityRule(
@@ -231,6 +261,574 @@ ENCOUNTER_ABILITIES: dict[str, tuple[AbilityRule, ...]] = {
             category=MECHANIC_POSITIONING,
             note="Nicht in die Pfütze laufen.",
         ),
+        AbilityRule(
+            ability="Sha Pool",
+            label="Sha-Lache",
+            category=MECHANIC_POSITIONING,
+            note="Nicht in der Lache stehen bleiben.",
+        ),
+        AbilityRule(
+            ability="Sha Bolt",
+            label="Sha-Blitz",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+
+    ),
+
+    "The Fallen Protectors": (
+
+        AbilityRule(
+            ability="Vengeful Strikes",
+            label="Rachsüchtige Schläge",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_DEFENSIVE,
+            note="Tankschaden - mit Defensive abfedern.",
+            tank_exempt=True,
+        ),
+        AbilityRule(
+            ability="Corrupted Brew",
+            label="Verderbtes Gebräu",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Dem geworfenen Fass ausweichen.",
+        ),
+        AbilityRule(
+            ability="Defiled Ground",
+            label="Besudelter Boden",
+            category=MECHANIC_POSITIONING,
+            note="Die verseuchte Fläche verlassen.",
+        ),
+        AbilityRule(
+            ability="Noxious Poison",
+            label="Schädliches Gift",
+            category=MECHANIC_POSITIONING,
+            note="Nicht in der Giftlache stehen bleiben.",
+        ),
+        AbilityRule(
+            ability="Calamity",
+            label="Unheil",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+        AbilityRule(
+            ability="Sha Sear",
+            label="Sha-Versengung",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+        AbilityRule(
+            ability="Shadow Word: Bane",
+            label="Schattenwort: Verderben",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+
+    ),
+
+    "Norushen": (
+
+        AbilityRule(
+            ability="Blind Hatred",
+            label="Blinder Hass",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Der kreisenden Kugel ausweichen.",
+        ),
+        AbilityRule(
+            ability="Titanic Smash",
+            label="Titanischer Schlag",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_DEFENSIVE,
+            note="Tankschaden - mit Defensive abfedern.",
+            tank_exempt=True,
+        ),
+        AbilityRule(
+            ability="Unleashed Anger",
+            label="Entfesselter Zorn",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+        AbilityRule(
+            ability="Burst of Corruption",
+            label="Ausbruch der Verderbnis",
+            category=MECHANIC_MOVEMENT,
+            note="Die Manifestation rechtzeitig töten oder ausweichen.",
+        ),
+
+    ),
+
+    "Sha of Pride": (
+
+        AbilityRule(
+            ability="Wounded Pride",
+            label="Verletzter Stolz",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_DEFENSIVE,
+            note="Tankschaden - nur der Tank darf getroffen werden.",
+            tank_exempt=True,
+        ),
+        AbilityRule(
+            ability="Mocking Blast",
+            label="Spöttischer Stoß",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+        AbilityRule(
+            ability="Swelling Pride",
+            label="Anschwellender Stolz",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+        AbilityRule(
+            ability="Projection",
+            label="Projektion",
+            category=MECHANIC_MOVEMENT,
+            note="Den Projektionen ausweichen.",
+        ),
+        AbilityRule(
+            ability="Self-Reflection",
+            label="Selbstreflexion",
+            category=MECHANIC_MOVEMENT,
+            note="Dem Spiegelbild aus dem Weg gehen.",
+        ),
+
+    ),
+
+    "Galakras": (
+
+        AbilityRule(
+            ability="Flames of Galakrond",
+            label="Flammen Galakronds",
+            category=MECHANIC_POSITIONING,
+            severity="error",
+            note="Nicht in den Flammen stehen bleiben.",
+        ),
+        AbilityRule(
+            ability="Flame Breath",
+            label="Flammenatem",
+            category=MECHANIC_POSITIONING,
+            note="Nicht vor dem Drachen stehen.",
+        ),
+        AbilityRule(
+            ability="Crush",
+            label="Zermalmen",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_DEFENSIVE,
+            note="Tankschaden - mit Defensive abfedern.",
+            tank_exempt=True,
+        ),
+        AbilityRule(
+            ability="Poison-Tipped Blades",
+            label="Giftbestrichene Klingen",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+
+    ),
+
+    "Iron Juggernaut": (
+
+        AbilityRule(
+            ability="Ignite Armor",
+            label="Rüstung entzünden",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_DEFENSIVE,
+            note="Tankschaden - Wechsel bei zu vielen Stapeln.",
+            tank_exempt=True,
+        ),
+        AbilityRule(
+            ability="Cutter Laser",
+            label="Schneidlaser",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Vor dem Laser weglaufen, nicht stehen bleiben.",
+        ),
+        AbilityRule(
+            ability="Laser Burn",
+            label="Laserbrand",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Die Laserspur verlassen.",
+        ),
+        AbilityRule(
+            ability="Borer Drill",
+            label="Bohrer",
+            category=MECHANIC_MOVEMENT,
+            note="Von der markierten Bohrstelle weglaufen.",
+        ),
+        AbilityRule(
+            ability="Explosive Tar",
+            label="Explosiver Teer",
+            category=MECHANIC_POSITIONING,
+            note="Nicht im Teer stehen.",
+        ),
+        AbilityRule(
+            ability="Flame Vents",
+            label="Flammenschlote",
+            category=MECHANIC_MOVEMENT,
+            note="Aus der Reichweite der Schlote laufen.",
+        ),
+        AbilityRule(
+            ability="Shock Pulse",
+            label="Schockpuls",
+            category=MECHANIC_POSITIONING,
+            note="Abstand halten - der Puls wirft nach hinten.",
+        ),
+        AbilityRule(
+            ability="Demolisher Cannon",
+            label="Zerstörerkanone",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+
+    ),
+
+    "Kor'kron Dark Shaman": (
+
+        AbilityRule(
+            ability="Froststorm Strike",
+            label="Froststurmschlag",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_DEFENSIVE,
+            note="Tankschaden - mit Defensive abfedern.",
+            tank_exempt=True,
+        ),
+        AbilityRule(
+            ability="Ashen Wall",
+            label="Aschewand",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Nicht durch die Aschewand laufen.",
+        ),
+        AbilityRule(
+            ability="Falling Ash",
+            label="Fallende Asche",
+            category=MECHANIC_MOVEMENT,
+            note="Aus dem markierten Bereich laufen.",
+        ),
+        AbilityRule(
+            ability="Foul Stream",
+            label="Übler Strom",
+            category=MECHANIC_POSITIONING,
+            note="Nicht in den Strahl stellen.",
+        ),
+        AbilityRule(
+            ability="Toxic Storm",
+            label="Giftiger Sturm",
+            category=MECHANIC_POSITIONING,
+            note="Der Wolke ausweichen.",
+        ),
+        AbilityRule(
+            ability="Iron Tomb",
+            label="Eisernes Grab",
+            category=MECHANIC_MOVEMENT,
+            note="Nicht neben dem Totem stehen bleiben.",
+        ),
+        AbilityRule(
+            ability="Toxic Mist",
+            label="Giftiger Nebel",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+
+    ),
+
+    "General Nazgrim": (
+
+        AbilityRule(
+            ability="Sundering Blow",
+            label="Spaltender Hieb",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_DEFENSIVE,
+            note="Tankschaden - Wechsel bei zu vielen Stapeln.",
+            tank_exempt=True,
+        ),
+        AbilityRule(
+            ability="Heroic Shockwave",
+            label="Heroische Schockwelle",
+            category=MECHANIC_POSITIONING,
+            severity="error",
+            note="Aus dem Kegel vor dem Boss heraus.",
+        ),
+        AbilityRule(
+            ability="Ravager",
+            label="Verwüster",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Vom rotierenden Verwüster weglaufen.",
+        ),
+        AbilityRule(
+            ability="War Song",
+            label="Kriegslied",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+        AbilityRule(
+            ability="Arcane Shock",
+            label="Arkaner Schock",
+            category=MECHANIC_INTERRUPT,
+            note="Den Arkanweber unterbrechen.",
+        ),
+
+    ),
+
+    "Malkorok": (
+
+        AbilityRule(
+            ability="Arcing Smash",
+            label="Bogenschlag",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_DEFENSIVE,
+            note="Tankschaden - mit Defensive abfedern.",
+            tank_exempt=True,
+        ),
+        AbilityRule(
+            ability="Seismic Slam",
+            label="Seismischer Schlag",
+            category=MECHANIC_MOVEMENT,
+            note="Vom markierten Ziel Abstand halten.",
+        ),
+        AbilityRule(
+            ability="Imploding Energy",
+            label="Implodierende Energie",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Von der Kugel wegbewegen, bevor sie implodiert.",
+        ),
+        AbilityRule(
+            ability="Displaced Energy",
+            label="Verschobene Energie",
+            category=MECHANIC_POSITIONING,
+            note="Vom Raid entfernt aufstellen.",
+        ),
+        AbilityRule(
+            ability="Breath of Y'Shaarj",
+            label="Atem Y'Shaarjs",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+
+    ),
+
+    "Spoils of Pandaria": (
+
+        AbilityRule(
+            ability="Set to Blow",
+            label="Zündbereit",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Die Ladung rechtzeitig abbauen oder Abstand nehmen.",
+        ),
+        AbilityRule(
+            ability="Bouncing Bolt",
+            label="Springender Blitz",
+            category=MECHANIC_MOVEMENT,
+            note="Den springenden Blitzen ausweichen.",
+        ),
+        AbilityRule(
+            ability="Massive Stomp",
+            label="Gewaltiges Stampfen",
+            category=MECHANIC_MOVEMENT,
+            note="Aus dem Stampfbereich laufen.",
+        ),
+        AbilityRule(
+            ability="Matter Scramble",
+            label="Materiewirrwarr",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+
+    ),
+
+    "Thok the Bloodthirsty": (
+
+        AbilityRule(
+            ability="Acid Breath",
+            label="Säureatem",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_DEFENSIVE,
+            note="Tankschaden - Wechsel bei zu vielen Stapeln.",
+            tank_exempt=True,
+        ),
+        AbilityRule(
+            ability="Tail Lash",
+            label="Schwanzhieb",
+            category=MECHANIC_POSITIONING,
+            severity="error",
+            note="Nicht hinter dem Boss stehen.",
+        ),
+        AbilityRule(
+            ability="Scorching Breath",
+            label="Sengender Atem",
+            category=MECHANIC_MOVEMENT,
+            note="Der Feuerspur ausweichen.",
+        ),
+        AbilityRule(
+            ability="Freezing Breath",
+            label="Eisiger Atem",
+            category=MECHANIC_MOVEMENT,
+            note="Der Eisspur ausweichen.",
+        ),
+        AbilityRule(
+            ability="Corrosive Blood",
+            label="Ätzende Blutspur",
+            category=MECHANIC_POSITIONING,
+            note="Nicht in der Blutspur stehen bleiben.",
+        ),
+        AbilityRule(
+            ability="Deafening Screech",
+            label="Ohrenbetäubender Schrei",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+        AbilityRule(
+            ability="Fearsome Roar",
+            label="Furchterregendes Brüllen",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+
+    ),
+
+    "Siegecrafter Blackfuse": (
+
+        AbilityRule(
+            ability="Magnetic Crush",
+            label="Magnetisches Zermalmen",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_DEFENSIVE,
+            note="Tankschaden - mit Defensive abfedern.",
+            tank_exempt=True,
+        ),
+        AbilityRule(
+            ability="Death from Above",
+            label="Tod von oben",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Aus dem markierten Bereich laufen.",
+        ),
+        AbilityRule(
+            ability="Shockwave Missile",
+            label="Schockwellenrakete",
+            category=MECHANIC_MOVEMENT,
+            note="Der Rakete ausweichen.",
+        ),
+        AbilityRule(
+            ability="Superheated Crawler Mine",
+            label="Überhitzte Kriechmine",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Die Mine nicht berühren.",
+        ),
+        AbilityRule(
+            ability="Electrostatic Charge",
+            label="Elektrostatische Ladung",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+        AbilityRule(
+            ability="Overload",
+            label="Überladung",
+            category=MECHANIC_INTERRUPT,
+            note="Den Häcksler rechtzeitig ausschalten.",
+        ),
+
+    ),
+
+    "Paragons of the Klaxxi": (
+
+        AbilityRule(
+            ability="Shield Bash",
+            label="Schildhieb",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_DEFENSIVE,
+            note="Tankschaden - mit Defensive abfedern.",
+            tank_exempt=True,
+        ),
+        AbilityRule(
+            ability="Caustic Blood",
+            label="Ätzendes Blut",
+            category=MECHANIC_POSITIONING,
+            note="Nicht in der Blutlache stehen bleiben.",
+        ),
+        AbilityRule(
+            ability="Toxic Catalyst",
+            label="Giftiger Katalysator",
+            category=MECHANIC_POSITIONING,
+            note="Die Giftfläche verlassen.",
+        ),
+        AbilityRule(
+            ability="Aim",
+            label="Zielen",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Aus der Schusslinie gehen oder Deckung suchen.",
+        ),
+        AbilityRule(
+            ability="Hurl Amber",
+            label="Bernstein schleudern",
+            category=MECHANIC_MOVEMENT,
+            note="Dem geworfenen Bernstein ausweichen.",
+        ),
+        AbilityRule(
+            ability="Mesmerize",
+            label="Hypnotisieren",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+
+    ),
+
+    "Garrosh Hellscream": (
+
+        AbilityRule(
+            ability="Gripping Despair",
+            label="Packende Verzweiflung",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_DEFENSIVE,
+            note="Tankschaden - Wechsel bei zu vielen Stapeln.",
+            tank_exempt=True,
+        ),
+        AbilityRule(
+            ability="Desecrate",
+            label="Entweihen",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Aus der entweihten Fläche laufen.",
+        ),
+        AbilityRule(
+            ability="Whirling Corruption",
+            label="Wirbelnde Verderbnis",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Den Wellen ausweichen.",
+        ),
+        AbilityRule(
+            ability="Iron Star",
+            label="Eiserner Stern",
+            category=MECHANIC_MOVEMENT,
+            severity="error",
+            note="Der Bahn des Sterns ausweichen.",
+        ),
+        AbilityRule(
+            ability="Malice",
+            label="Bosheit",
+            category=MECHANIC_POSITIONING,
+            note="Vom Raid entfernt aufstellen.",
+        ),
+        AbilityRule(
+            ability="Hellscream's Warsong",
+            label="Höllschreis Kriegslied",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
+        AbilityRule(
+            ability="Touch of Y'Shaarj",
+            label="Berührung Y'Shaarjs",
+            verdict=VERDICT_UNAVOIDABLE,
+            category=MECHANIC_OTHER,
+        ),
 
     ),
 
@@ -248,18 +846,43 @@ ENCOUNTER_ABILITIES: dict[str, tuple[AbilityRule, ...]] = {
 # Fehler zweimal in der Liste - einmal je Quelle. Siehe
 # analyzer.analysis.damage.merge_mechanics.
 #
+# Die Tabelle wird aus den `label`-Feldern oben **abgeleitet** und
+# nicht von Hand gepflegt. Bei einer Handvoll Bosse wäre beides
+# gleich gut; bei vierzehn Kämpfen mit über hundert Fähigkeiten
+# würde eine zweite Liste unweigerlich auseinanderlaufen - und das
+# Symptom wäre ein doppelt gezählter Fehler, den niemand als solchen
+# erkennt.
+#
+# EXTRA_ALIASES fängt die Fälle ab, in denen der Bot eine andere
+# Formulierung benutzt als das Label hier.
+#
 
-ABILITY_ALIASES: dict[str, str] = {
-    "ätzender schlag": "Corrosive Blast",
-    "dreifacher stich": "Triple Puncture",
+EXTRA_ALIASES: dict[str, str] = {
     "wirbel": "Swirl",
-    "zerfetzender ansturm": "Rending Charge",
-    "doppelhieb": "Double Swipe",
-    "loderndes sonnenlicht": "Blazing Sunlight",
-    "giftbolzensalve": "Venom Bolt Volley",
-    "tödliche seuche": "Deadly Plague",
     "sha-pfütze": "Sha Puddle",
+    "eisenstern": "Iron Star",
 }
+
+
+def _build_aliases() -> dict[str, str]:
+
+    table: dict[str, str] = {}
+
+    for rules in list(ENCOUNTER_ABILITIES.values()) + [GLOBAL_ABILITIES]:
+
+        for rule in rules:
+
+            if not rule.label:
+                continue
+
+            table.setdefault(rule.label.strip().lower(), rule.ability)
+
+    table.update(EXTRA_ALIASES)
+
+    return table
+
+
+ABILITY_ALIASES: dict[str, str] = _build_aliases()
 
 
 #

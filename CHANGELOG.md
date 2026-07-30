@@ -46,6 +46,10 @@ WeintTV und die WeintAcademy sind vollständig ausgebaut.
   nicht im Bot. Sie ist dreiwertig: was nicht hinterlegt ist, bleibt "nicht
   eingeordnet" - sonst bekäme jeder Boss ohne Referenzdaten automatisch eine
   tadellose Bewertung.
+- Referenzdaten für alle vierzehn Bosse der Schlacht um Orgrimmar: welcher
+  Schaden vermeidbar war, welcher zum Kampf gehört, was stattdessen zu tun
+  gewesen wäre. Dazu Lektionen zu jedem dieser Kämpfe, die der Trainingsplan
+  selbst gegen das Log prüft.
 - Die Simulation liefert alle neuen Auswertungen mit, sodass sich beides auch
   außerhalb der Raidzeit ansehen lässt.
 - Fix: Kampf-Wiederbelebungsladungen werden von den tatsächlich gewirkten
