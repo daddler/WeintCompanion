@@ -1,6 +1,14 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.1.4.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.1.5.
+
+## 1.1.5
+
+- Neu: Die Bot-Anbindung liefert jetzt echte Daten für den "Analyse"-Bereich
+  von WeintTV/WeintAcademy (Live und Archiv) - Heldentum, Verbrauchsgüter
+  (Flask/Nahrung, Näherung) sowie genutzte Raid-/Heil-Cooldowns. Ein erster
+  bossspezifischer Mechanikfehler (Immerseus) ist ebenfalls hinterlegt,
+  weitere Bosse folgen schrittweise.
 
 ## 1.1.4
 

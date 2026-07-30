@@ -143,6 +143,8 @@ Entweder `204`, oder:
 
   "mechanics": [],
   "consumables": [],
+  "raid_cooldowns": [],
+  "heal_cooldowns": [],
   "warnings": []
 }
 ```
@@ -264,6 +266,24 @@ fehlerfrei — die Auswertung funktioniert, sagt aber wenig aus.
 | `used` / `total` | Int | Wie viele von wie vielen |
 | `missing` | String[] | Namen der Spieler ohne diesen Buff |
 
+### `raid_cooldowns` / `heal_cooldowns` (optional)
+
+Anders als `CooldownState.progress` (Restzeit-Balken) es nahelegt, hat
+ein bereits beendeter WarcraftLogs-Pull kein sinnvolles "noch X
+Sekunden" - der Bot liefert deshalb nur, OB und WIE OFT ein Cooldown
+genutzt wurde, keinen echten Live-Countdown.
+
+| Feld | Typ | Bedeutung |
+|------|-----|-----------|
+| `name` | String | Fähigkeitsname (**Pflicht**) |
+| `actor_name` | String | Charaktername, ggf. mit Nutzungszähler wie `Kaldrun (2×)` (**Pflicht**) |
+| `ready` | Bool | Vom Bot immer `true` gesendet - kein erfundener Countdown |
+| `remaining` / `duration` | Float | Vom Bot derzeit nicht gesendet, Standard 0 |
+
+`raid_cooldowns` sind raidweite Cooldowns/Externals (z. B. `Rallying
+Cry`, `Anti-Magic Zone`, `Spirit Link Totem`), `heal_cooldowns`
+speziell Heiler-Cooldowns (z. B. `Tranquility`, `Divine Hymn`).
+
 ### `warnings` (optional)
 
 Freie Hinweistexte für die Raidleitung, die WeintTV unverändert
@@ -372,8 +392,9 @@ GET /companion/warcraftlogs/reports/{code}/fights/{fight_id}
 
 **Liefert bewusst exakt dieselbe JSON-Form wie die
 `"ok"`-Antwort des Live-Endpunkts weiter oben** (`report`/`fight`/
-`players`/`deaths`/`mechanics`/`consumables`/`warnings`) - nur eben
-für einen längst abgeschlossenen Fight statt den gerade laufenden.
+`players`/`deaths`/`mechanics`/`consumables`/`raid_cooldowns`/
+`heal_cooldowns`/`warnings`) - nur eben für einen längst
+abgeschlossenen Fight statt den gerade laufenden.
 Das ist Absicht: die Companion-App verwendet für beide Wege
 (live und Archiv) dieselbe Übersetzungsfunktion
 (`snapshot_from_payload()`), ein separates Format hier würde nur

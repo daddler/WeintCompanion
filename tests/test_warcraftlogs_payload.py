@@ -429,6 +429,55 @@ def test_mechanics_and_consumables_are_optional():
     assert with_data.consumables[0].missing == ("Seuchenherz",)
 
 
+def test_raid_and_heal_cooldowns_are_optional():
+    """
+    Wie mechanics/consumables liefert WarcraftLogs auch das nicht von
+    selbst - der Bot leitet es aus der Casts-Tabelle ab (siehe
+    services/warcraftlogs.py::_build_cooldowns).
+    """
+
+    without = snapshot_from_payload(_payload(), LABEL)
+
+    assert without.raid_cooldowns == ()
+    assert without.heal_cooldowns == ()
+
+    with_data = snapshot_from_payload(
+        _payload(
+            raid_cooldowns=[{
+                "name": "Rallying Cry",
+                "actor_name": "Grimmzahn",
+                "ready": True,
+            }],
+            heal_cooldowns=[{
+                "name": "Healing Tide Totem",
+                "actor_name": "Kaldrun (2×)",
+                "ready": True,
+            }],
+        ),
+        LABEL,
+    )
+
+    assert with_data.raid_cooldowns[0].name == "Rallying Cry"
+    assert with_data.raid_cooldowns[0].actor_name == "Grimmzahn"
+    assert with_data.raid_cooldowns[0].ready is True
+
+    assert with_data.heal_cooldowns[0].name == "Healing Tide Totem"
+    assert with_data.heal_cooldowns[0].actor_name == "Kaldrun (2×)"
+
+
+def test_cooldowns_without_name_or_actor_are_dropped():
+    snapshot = snapshot_from_payload(
+        _payload(raid_cooldowns=[
+            {"name": "", "actor_name": "Grimmzahn"},
+            {"name": "Rallying Cry", "actor_name": ""},
+            {"actor_name": "Grimmzahn"},
+        ]),
+        LABEL,
+    )
+
+    assert snapshot.raid_cooldowns == ()
+
+
 # --------------------------------------------------
 # Herkunft
 # --------------------------------------------------

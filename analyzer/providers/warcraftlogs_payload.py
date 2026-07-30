@@ -31,6 +31,7 @@ from analyzer.models import (
     ROLE_TANK,
     Actor,
     ConsumableState,
+    CooldownState,
     DeathEntry,
     MechanicIssue,
     MetricEntry,
@@ -484,6 +485,42 @@ def build_consumables(rows: list) -> tuple[ConsumableState, ...]:
     return tuple(entries)
 
 
+def build_cooldowns(rows: list) -> tuple[CooldownState, ...]:
+    """
+    Raid-/Heil-Cooldowns (siehe raid_cooldowns/heal_cooldowns in
+    docs/warcraftlogs-bridge.md). Der Bot liefert hier keinen echten
+    Live-Countdown (fuer einen bereits beendeten WarcraftLogs-Pull
+    ergibt "noch X Sekunden" keinen Sinn) - "ready" ist deshalb immer
+    wahr und eine etwaige Mehrfachnutzung steckt bereits lesbar im
+    Namen (z.B. "Kaldrun (2×)").
+    """
+
+    entries = []
+
+    for row in rows:
+
+        row = _mapping(row)
+
+        name = _text(row.get("name"))
+
+        actor_name = _text(row.get("actor_name"))
+
+        if not name or not actor_name:
+            continue
+
+        entries.append(
+            CooldownState(
+                name=name,
+                actor_name=actor_name,
+                ready=_flag(row.get("ready"), default=True),
+                remaining=_number(row.get("remaining")),
+                duration=_number(row.get("duration")),
+            )
+        )
+
+    return tuple(entries)
+
+
 #
 # --------------------------------------------------
 # Hinweise
@@ -601,6 +638,12 @@ def snapshot_from_payload(
         ),
         mechanics=build_mechanics(
             _sequence(payload.get("mechanics"))
+        ),
+        raid_cooldowns=build_cooldowns(
+            _sequence(payload.get("raid_cooldowns"))
+        ),
+        heal_cooldowns=build_cooldowns(
+            _sequence(payload.get("heal_cooldowns"))
         ),
         warnings=build_warnings(payload, age_seconds),
     )
