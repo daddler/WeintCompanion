@@ -1,8 +1,8 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.1.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.2.
 
-## 1.2.1
+## 1.2.2
 
 - Fix: Das Companion-Update blieb manchmal mit "Keine Prüfsumme für das
   Companion-Update verfügbar" stehen, obwohl der Release ganz normal eine
