@@ -22,24 +22,35 @@ import math
 import threading
 import time
 
+from dataclasses import replace
+
+from analyzer.analysis import damage as damage_analysis
 from analyzer.data import encounters
+from analyzer.providers import mock_schedule as schedule
 from analyzer.providers.base import RaidDataProvider
 from analyzer.models import (
-    MECHANIC_DEFENSIVE,
-    MECHANIC_INTERRUPT,
-    MECHANIC_MOVEMENT,
-    MECHANIC_POSITIONING,
     ROLE_DPS,
     ROLE_HEALER,
     ROLE_TANK,
+    SUPPORT_DISPEL,
+    SUPPORT_INTERRUPT,
+    UPTIME_DOT,
+    UPTIME_HOT,
+    ActivityEntry,
     Actor,
     ConsumableState,
     CooldownState,
+    CooldownUsage,
     DeathEntry,
+    HeroismWindow,
     MechanicIssue,
     MetricEntry,
+    MovementEntry,
     RaidSnapshot,
+    ResurrectionEvent,
+    SupportEvent,
     TankEntry,
+    UptimeEntry,
 )
 
 
@@ -154,73 +165,20 @@ _ACTORS = _build_actors()
 # Feste Ereignisse innerhalb eines Pulls
 # --------------------------------------------------
 #
-
-_DEATH_SCHEDULE: tuple[tuple[float, str, str], ...] = (
-
-    (63.0, "Krallenwut", "Verheerender Schlag"),
-    (129.0, "Bestienrufer", "Arkane Entladung"),
-
-)
-
-
-_MECHANIC_SCHEDULE: tuple[tuple[float, str, str, int, str, str], ...] = (
-
-    (
-        34.0, "Dolchtanz",
-        "Im Flächenschaden stehen geblieben",
-        2, "warning", MECHANIC_POSITIONING,
-    ),
-    (
-        71.0, "Frostgrimm",
-        "Unterbrechung verpasst",
-        1, "error", MECHANIC_INTERRUPT,
-    ),
-    (
-        108.0, "Windschritt",
-        "Wirbel nicht ausgewichen",
-        3, "warning", MECHANIC_MOVEMENT,
-    ),
-    (
-        147.0, "Arkanis",
-        "Defensivfähigkeit nicht genutzt",
-        1, "info", MECHANIC_DEFENSIVE,
-    ),
-    (
-        158.0, "Krallenwut",
-        "Zu spät aus der Zone gelaufen",
-        1, "warning", MECHANIC_MOVEMENT,
-    ),
-
-)
-
-
-#
-# Raid- und Heilcooldowns mit ihren Einsatzzeitpunkten.
-#
-# (Name, Spieler, Abklingzeit, Einsatzzeitpunkte)
+# Die Fahrpläne stehen in mock_schedule.py: mit der Tiefenauswertung
+# sind daraus über dreihundert Zeilen Festdaten geworden, in denen die
+# eigentliche Logik dieses Anbieters untergegangen wäre. Die Aliase
+# hier halten die bisherigen Namen am Leben, damit der Rest der Datei
+# unverändert lesbar bleibt.
 #
 
-_RAID_COOLDOWNS: tuple[tuple[str, str, float, tuple[float, ...]], ...] = (
+_DEATH_SCHEDULE = schedule.DEATH_SCHEDULE
 
-    ("Rallying Cry", "Grimmzahn", 180.0, (44.0,)),
-    ("Anti-Magic Zone", "Seuchenherz", 120.0, (58.0, 141.0)),
-    ("Spirit Link Totem", "Kaldrun", 180.0, (77.0,)),
-    ("Power Word: Barrier", "Miraia", 180.0, (112.0,)),
-    ("Smoke Bomb", "Silbermond", 180.0, (134.0,)),
-    ("Stampeding Roar", "Krallenwut", 120.0, (26.0,)),
+_MECHANIC_SCHEDULE = schedule.MECHANIC_SCHEDULE
 
-)
+_RAID_COOLDOWNS = schedule.RAID_COOLDOWNS
 
-
-_HEAL_COOLDOWNS: tuple[tuple[str, str, float, tuple[float, ...]], ...] = (
-
-    ("Tranquility", "Elvenne", 180.0, (52.0,)),
-    ("Divine Hymn", "Miraia", 180.0, (89.0,)),
-    ("Healing Tide Totem", "Kaldrun", 180.0, (38.0, 158.0)),
-    ("Revival", "Yunwei", 180.0, (121.0,)),
-    ("Aura Mastery", "Torvald", 180.0, (103.0,)),
-
-)
+_HEAL_COOLDOWNS = schedule.HEAL_COOLDOWNS
 
 
 #
@@ -372,28 +330,19 @@ class MockRaidDataProvider(RaidDataProvider):
 
         snapshot = self._combat_snapshot(pull_number, PULL_SECONDS)
 
-        return RaidSnapshot(
-            captured_at=snapshot.captured_at,
-            source_label=snapshot.source_label,
-            live=snapshot.live,
+        #
+        # `replace()` statt einer Feld-für-Feld-Kopie: die frühere
+        # Fassung listete jedes Feld einzeln auf, sodass ein neu zum
+        # Snapshot hinzugekommenes Feld hier stillschweigend
+        # verschwand - die gesamte Tiefenauswertung wäre nach dem
+        # Pull einfach leer gewesen, ohne dass irgendetwas
+        # fehlschlägt.
+        #
+
+        return replace(
+            snapshot,
             in_combat=False,
-            encounter=snapshot.encounter,
-            pull_number=snapshot.pull_number,
-            pull_seconds=snapshot.pull_seconds,
-            boss_health_percent=snapshot.boss_health_percent,
-            raid_size=snapshot.raid_size,
-            deaths=snapshot.deaths,
-            battle_res_charges=snapshot.battle_res_charges,
-            battle_res_max=snapshot.battle_res_max,
-            heroism_used=snapshot.heroism_used,
             heroism_remaining=0.0,
-            top_damage=snapshot.top_damage,
-            top_healing=snapshot.top_healing,
-            tanks=snapshot.tanks,
-            raid_cooldowns=snapshot.raid_cooldowns,
-            heal_cooldowns=snapshot.heal_cooldowns,
-            consumables=snapshot.consumables,
-            mechanics=snapshot.mechanics,
             warnings=(
                 "Pull beendet - Auswertung steht bis zum nächsten Pull.",
             ),
@@ -407,7 +356,26 @@ class MockRaidDataProvider(RaidDataProvider):
 
         deaths = self._deaths(seconds)
 
+        resurrections = self._resurrections(seconds)
+
         damage, healing = self._metrics(seconds, deaths)
+
+        windows = self._heroism_windows(seconds)
+
+        damage_taken = self._damage_taken(seconds)
+
+        #
+        # Dieselbe Verdrahtung wie beim echten Anbieter: die vom
+        # "Bot" gelieferten Mechanikfehler und die aus vermeidbaren
+        # Treffern abgeleiteten werden zusammengeführt, wobei der Bot
+        # gewinnt. Dadurch läuft in der Simulation auch die Regel
+        # gegen Doppelzählung tatsächlich durch.
+        #
+
+        mechanics = damage_analysis.merge_mechanics(
+            damage_analysis.bot_mechanics(self._mechanics(seconds)),
+            damage_analysis.derive_mechanics(damage_taken, self._encounter_name),
+        )
 
         return RaidSnapshot(
             source_label=self.source_label,
@@ -419,7 +387,10 @@ class MockRaidDataProvider(RaidDataProvider):
             boss_health_percent=self._boss_health(seconds),
             raid_size=RAID_SIZE,
             deaths=deaths,
-            battle_res_charges=max(0, BATTLE_RES_MAX - len(deaths)),
+            battle_res_charges=max(
+                0,
+                BATTLE_RES_MAX - len(resurrections),
+            ),
             battle_res_max=BATTLE_RES_MAX,
             heroism_used=seconds >= HEROISM_AT,
             heroism_remaining=self._heroism_remaining(seconds),
@@ -429,8 +400,26 @@ class MockRaidDataProvider(RaidDataProvider):
             raid_cooldowns=self._cooldowns(_RAID_COOLDOWNS, seconds),
             heal_cooldowns=self._cooldowns(_HEAL_COOLDOWNS, seconds),
             consumables=self._consumables(seconds),
-            mechanics=self._mechanics(seconds),
+            mechanics=mechanics,
             warnings=self._warnings(seconds, deaths),
+            activity=self._activity(seconds),
+            dot_uptimes=self._uptimes(seconds, UPTIME_DOT),
+            hot_uptimes=self._uptimes(seconds, UPTIME_HOT),
+            movement=self._movement(seconds, damage_taken),
+            damage_taken=damage_taken,
+            cooldown_usage=self._cooldown_usage(seconds, windows),
+            heroism_windows=windows,
+            resurrections=resurrections,
+            interrupts=self._support(
+                schedule.INTERRUPTS,
+                SUPPORT_INTERRUPT,
+                seconds,
+            ),
+            dispels=self._support(
+                schedule.DISPELS,
+                SUPPORT_DISPEL,
+                seconds,
+            ),
         )
 
     # --------------------------------------------------
@@ -721,6 +710,351 @@ class MockRaidDataProvider(RaidDataProvider):
             ),
 
         )
+
+    # --------------------------------------------------
+    # Tiefenauswertung
+    # --------------------------------------------------
+    #
+    # Alles ab hier wächst mit der Pull-Sekunde: nach zehn Sekunden
+    # ist ein Zehntel des Laufwegs gelaufen und noch kaum ein
+    # Cooldown gewirkt. Ohne dieses Mitwachsen sähe die Wiedergabe
+    # eines Pulls von der ersten Sekunde an fertig aus.
+    #
+
+    def _progress(self, seconds: float) -> float:
+        """
+        Anteil des Pulls, der vorbei ist (0.0 - 1.0).
+        """
+
+        return max(0.0, min(1.0, seconds / PULL_SECONDS))
+
+    # --------------------------------------------------
+
+    def _activity(self, seconds: float) -> tuple[ActivityEntry, ...]:
+
+        if seconds <= 0:
+            return ()
+
+        entries = []
+
+        for actor, _base in _ACTORS:
+
+            _meters, active = schedule.movement_for(actor.name)
+
+            if active <= 0:
+                continue
+
+            apm = schedule.APM_BY_ROLE.get(actor.role, 40.0)
+
+            #
+            # Ein Toter drückt keine Knöpfe mehr: seine Aktivzeit
+            # verwässert mit jeder weiteren Sekunde des Kampfes.
+            #
+
+            death_at = self._death_time(actor.name, seconds)
+
+            if death_at is not None and seconds > death_at:
+
+                factor = death_at / seconds
+
+                active *= factor
+
+                apm *= factor
+
+            entries.append(
+                ActivityEntry(
+                    actor_name=actor.name,
+                    active_percent=active,
+                    casts=int(apm * seconds / 60.0),
+                    apm=apm,
+                    longest_gap=max(
+                        0.0,
+                        (100.0 - active) / 100.0 * 12.0,
+                    ),
+                )
+            )
+
+        entries.sort(key=lambda entry: entry.active_percent, reverse=True)
+
+        return tuple(entries)
+
+    # --------------------------------------------------
+
+    def _uptimes(self, seconds: float, kind: str) -> tuple[UptimeEntry, ...]:
+
+        if seconds <= 0:
+            return ()
+
+        #
+        # Am Anfang eines Pulls ist jede Uptime unruhig (der erste
+        # Zauber muss erst laufen). Nach einer Aufbauphase pendelt sie
+        # sich auf den Zielwert ein - so wirkt die Kurve wie ein
+        # echter Kampf und die Bewertung wird nicht von den ersten
+        # Sekunden verzerrt.
+        #
+
+        ramp = max(0.0, min(1.0, seconds / 20.0))
+
+        entries = []
+
+        for actor, _base in _ACTORS:
+
+            for ability, reached, expected in schedule.uptimes_for(
+                actor.name,
+                kind,
+            ):
+
+                entries.append(
+                    UptimeEntry(
+                        actor_name=actor.name,
+                        ability=ability,
+                        uptime_percent=reached * ramp,
+                        kind=kind,
+                        applications=max(
+                            1,
+                            int(seconds / 18.0) + 1,
+                        ),
+                        target=(
+                            self._encounter_name
+                            if kind == UPTIME_DOT
+                            else ""
+                        ),
+                        expected_percent=expected,
+                    )
+                )
+
+        entries.sort(key=lambda entry: entry.uptime_percent, reverse=True)
+
+        return tuple(entries)
+
+    # --------------------------------------------------
+
+    def _movement(
+        self,
+        seconds: float,
+        damage_taken: tuple,
+    ) -> tuple[MovementEntry, ...]:
+
+        if seconds <= 0:
+            return ()
+
+        progress = self._progress(seconds)
+
+        hits_by_name = {
+            entry.actor_name: entry.avoidable_hits
+            for entry in damage_taken
+        }
+
+        entries = []
+
+        for actor, _base in _ACTORS:
+
+            meters, _active = schedule.movement_for(actor.name)
+
+            if meters <= 0:
+                continue
+
+            #
+            # Ein Toter läuft nicht weiter - sein Laufweg friert zum
+            # Todeszeitpunkt ein.
+            #
+
+            death_at = self._death_time(actor.name, seconds)
+
+            share = (
+                self._progress(death_at)
+                if death_at is not None
+                else progress
+            )
+
+            walked = meters * share
+
+            entries.append(
+                MovementEntry(
+                    actor_name=actor.name,
+                    meters=walked,
+                    meters_per_second=(
+                        walked / seconds
+                        if seconds > 0
+                        else 0.0
+                    ),
+                    avoidable_hits=hits_by_name.get(actor.name, 0),
+                    estimated=True,
+                )
+            )
+
+        entries.sort(key=lambda entry: entry.meters, reverse=True)
+
+        return tuple(entries)
+
+    # --------------------------------------------------
+
+    def _damage_taken(self, seconds: float) -> tuple:
+
+        if seconds <= 0:
+            return ()
+
+        entries = []
+
+        for actor, _base in _ACTORS:
+
+            rows = []
+
+            for ability, times, per_hit in schedule.damage_taken_for(
+                actor.name
+            ):
+
+                hits = sum(1 for at in times if at <= seconds)
+
+                if hits <= 0:
+                    continue
+
+                rows.append(
+                    (ability, per_hit * hits, hits, self._encounter_name)
+                )
+
+            if not rows:
+                continue
+
+            entries.append(
+                damage_analysis.build_damage_taken(
+                    actor_name=actor.name,
+                    encounter_name=self._encounter_name,
+                    rows=tuple(rows),
+                    role=actor.role,
+                )
+            )
+
+        entries.sort(key=lambda entry: entry.total, reverse=True)
+
+        return tuple(entries)
+
+    # --------------------------------------------------
+
+    def _cooldown_usage(
+        self,
+        seconds: float,
+        windows: tuple[HeroismWindow, ...],
+    ) -> tuple[CooldownUsage, ...]:
+
+        if seconds <= 0:
+            return ()
+
+        entries = []
+
+        for actor, _base in _ACTORS:
+
+            for ability, cooldown, category, casts in schedule.cooldowns_for(
+                actor.name
+            ):
+
+                used = tuple(at for at in casts if at <= seconds)
+
+                entries.append(
+                    CooldownUsage(
+                        actor_name=actor.name,
+                        ability=ability,
+                        cast_times=used,
+                        cooldown=cooldown,
+                        possible=(
+                            int(seconds // cooldown) + 1
+                            if cooldown > 0
+                            else 0
+                        ),
+                        in_burst=sum(
+                            1
+                            for at in used
+                            if any(
+                                window.contains(at)
+                                for window in windows
+                            )
+                        ),
+                        category=category,
+                    )
+                )
+
+        return tuple(entries)
+
+    # --------------------------------------------------
+
+    def _heroism_windows(self, seconds: float) -> tuple[HeroismWindow, ...]:
+        """
+        Nur bereits begonnene Fenster - ein Fenster, das erst in
+        dreißig Sekunden anfängt, hat im Snapshot dieses Zeitpunkts
+        nichts verloren.
+        """
+
+        return tuple(
+            HeroismWindow(
+                start=start,
+                end=end,
+                source=source,
+                label=label,
+            )
+            for start, end, source, label in schedule.HEROISM_WINDOWS
+            if seconds >= start
+        )
+
+    # --------------------------------------------------
+
+    def _resurrections(self, seconds: float) -> tuple[ResurrectionEvent, ...]:
+
+        return tuple(
+            ResurrectionEvent(
+                target=target,
+                caster=caster,
+                at_seconds=at,
+                ability=ability,
+            )
+            for at, target, caster, ability in schedule.RESURRECT_SCHEDULE
+            if seconds >= at
+        )
+
+    # --------------------------------------------------
+
+    def _support(
+        self,
+        table: tuple[tuple[str, float, str, str], ...],
+        kind: str,
+        seconds: float,
+    ) -> tuple[SupportEvent, ...]:
+
+        return tuple(
+            SupportEvent(
+                actor_name=name,
+                kind=kind,
+                at_seconds=at,
+                target=target,
+                ability=ability,
+            )
+            for name, at, target, ability in table
+            if seconds >= at
+        )
+
+    # --------------------------------------------------
+
+    def _death_time(self, name: str, seconds: float) -> float | None:
+        """
+        Wann der Spieler gestorben ist, sofern er zum Zeitpunkt
+        `seconds` tot ist und nicht wiederbelebt wurde.
+        """
+
+        died_at = None
+
+        for at, dead_name, _cause in _DEATH_SCHEDULE:
+
+            if dead_name == name and seconds >= at:
+                died_at = at
+
+        if died_at is None:
+            return None
+
+        for at, target, _caster, _ability in schedule.RESURRECT_SCHEDULE:
+
+            if target == name and at <= seconds and at >= died_at:
+                return None
+
+        return died_at
 
     # --------------------------------------------------
 
