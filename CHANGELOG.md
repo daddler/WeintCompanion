@@ -1,6 +1,57 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.1.5.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.0.
+
+## 1.2.0
+
+WeintTV und die WeintAcademy sind vollständig ausgebaut.
+
+- WeintTV: Wiedergabe. Ein abgeschlossener Pull lässt sich Sekunde für
+  Sekunde abspielen - mit Schieberegler, Pause und 1x bis 8x. WeintTV und
+  die Academy zeigen dabei immer denselben Moment.
+- WeintTV: Neue Karte "Kampfereignisse" im Live-Bereich. Tode,
+  Kampf-Wiederbelebungen und Heldentum auf einer gemeinsamen Zeitachse -
+  endlich ist ablesbar, WANN Heldentum lief und AUF WEN ein Rezz ging.
+- WeintTV: Die Analyse ist von vier auf zehn Karten gewachsen - erhaltener
+  Schaden mit Vermeidbarkeitsanteil, vermeidbarer Schaden je Fähigkeit samt
+  Hinweis was zu tun war, DoT- und HoT-Uptimes, Laufwege, Aktivzeit,
+  Cooldown-Nutzung über den ganzen Kampf sowie Unterbrechungen und Dispels.
+- WeintTV: Spielerfilter in der Analyse. Ohne ihn wären 25 Spieler mal sechs
+  Tabellen unlesbar.
+- WeintTV: Ein Klick auf eine Analysezeile öffnet diesen Spieler in der
+  Academy.
+- Academy: "Rotation" bewertete bisher nur den Platz in der Schadensliste -
+  das ist eine Ausrüstungsbewertung, keine Aussage über die Spielweise.
+  Rotation misst jetzt Aktivzeit, Aktionen pro Minute und die
+  Wirkungsdauern der eigenen Effekte. Der Rang bleibt sichtbar, aber als
+  eigener Bereich "Leistung".
+- Academy: Neuer Bereich "Überleben" - erhaltener Schaden und sein
+  vermeidbarer Anteil, gemessen gegen die eigene Rolle. Ein Tank bekommt
+  zwangsläufig den meisten Schaden ab; nach Summe zu bewerten hieße, ihn für
+  seine Aufgabe zu bestrafen.
+- Academy: Cooldowns werden jetzt tatsächlich bewertet - genutzte gegen
+  mögliche Einsätze und der Anteil, der im Heldentum lag.
+- Academy: Der Trainingsplan erkennt selbst, ob eine Lektion im gewählten Log
+  eingehalten wurde: erfüllt, nicht erfüllt oder keine Daten, jeweils mit dem
+  gemessenen Wert gegen das Ziel. Der eigene Haken bleibt daneben bestehen.
+- Academy: Aus einem Befund springt man an die Sekunde der Wiedergabe, an
+  der er entstanden ist.
+- Academy: Der Katalog ist von 23 auf über 100 Lektionen gewachsen -
+  allgemein, nach Rolle, je Klasse und Spezialisierung sowie bossbezogen.
+  Jede lässt sich abwählen; standardmäßig sind alle aktiv, und neu
+  hinzukommende Lektionen erscheinen automatisch.
+- Academy: Fehlt einer Bewertung die Datengrundlage, zeigt sie das
+  ausdrücklich an, statt eine Note zu erfinden.
+- Die Einordnung "war dieser Treffer vermeidbar" liegt jetzt im Companion und
+  nicht im Bot. Sie ist dreiwertig: was nicht hinterlegt ist, bleibt "nicht
+  eingeordnet" - sonst bekäme jeder Boss ohne Referenzdaten automatisch eine
+  tadellose Bewertung.
+- Die Simulation liefert alle neuen Auswertungen mit, sodass sich beides auch
+  außerhalb der Raidzeit ansehen lässt.
+- Fix: Kampf-Wiederbelebungsladungen werden von den tatsächlich gewirkten
+  Rezzes verbraucht, nicht von Todesfällen.
+- Fix: Der Live/Archiv-Umschalter blieb während der Wiedergabe auf seinem
+  alten Stand stehen.
 
 ## 1.1.5
 

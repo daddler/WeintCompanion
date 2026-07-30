@@ -4,11 +4,34 @@ Diese Datei beschreibt den Endpunkt, den der **WeintCodex Bot**
 bereitstellen muss, damit die Companion-App den laufenden
 WarcraftLogs-Livelog als Raid-Datenquelle nutzen kann.
 
-Die Companion-Seite ist vollständig umgesetzt und wartet nur noch auf
-diesen Endpunkt. Solange er fehlt, meldet die Quelle in den
-Einstellungen „Zurzeit läuft kein Livelog" und WeintTV bleibt auf der
-Simulation bedienbar — es geht also nichts kaputt, solange die
-Bot-Seite noch aussteht.
+## Stand
+
+**Vier der fünf Endpunkte gibt es bereits.** Live, Reportliste,
+Fightliste und Einzel-Fight sind im Bot umgesetzt
+(`services/warcraftlogs.py`, Routen in `services/sync_server.py`) und
+liefern Daten. Diese Datei beschrieb sie früher als „noch nicht
+vorhanden" — das ist überholt.
+
+Was der Bot heute liefert, sind **Summen**: Schaden, Heilung,
+erhaltener Schaden, Tode. Zeitstempel gibt es ausschließlich bei
+`deaths[].at`. Dazu drei bekannte Lücken:
+
+- `consumables[].missing` bleibt immer leer (die Buff-Tabelle liefert
+  nur Gesamtzahlen, keine Spielerliste).
+- `mechanics[]` enthält genau eine handverlesene Regel (Immerseus).
+- `fight` sendet weder `battle_res_charges`/`battle_res_max` noch
+  `heroism_remaining`.
+
+Neu in **v2** ist alles, was Zeitstempel braucht — und damit alles,
+was WeintTVs Tiefenanalyse, die sechs Bewertungsbereiche der Academy
+und die Wiedergabe erst möglich macht. Jedes neue Feld ist optional
+und additiv; die Companion-Seite ist bereits vollständig darauf
+vorbereitet und zeigt „keine Daten", solange ein Block fehlt. Der Bot
+darf die Blöcke also einzeln und in beliebiger Reihenfolge
+nachliefern, ohne dass etwas kaputtgeht.
+
+Der fünfte Endpunkt (`/timeline`, für die Wiedergabe) existiert noch
+nicht.
 
 ---
 
@@ -291,6 +314,277 @@ anzeigt.
 
 ---
 
+## v2: Felder für die Tiefenauswertung
+
+Alle folgenden Felder sind **optional**. Fehlen sie, bleibt die
+entsprechende Karte in WeintTV leer und die entsprechende Bewertung in
+der Academy ausdrücklich unbewertet („keine Daten", null Sterne) —
+nicht schlecht bewertet. Der Bot kann sie also einzeln nachliefern.
+
+### `fight` — Ergänzungen
+
+| Feld | Typ | Bedeutung |
+|------|-----|-----------|
+| `heroism_windows` | Array | Heldentum-Fenster, siehe unten. Alternativ auf oberster Ebene. |
+
+Weiterhin gebraucht, aber bisher nicht gesendet:
+`battle_res_charges`, `battle_res_max`, `heroism_remaining`.
+
+### `heroism_windows[]` (oberste Ebene oder in `fight`)
+
+| Feld | Typ | Bedeutung |
+|------|-----|-----------|
+| `start` | Float | Sekunden seit Kampfbeginn, **Pflicht** |
+| `end` | Float | Sekunden seit Kampfbeginn, **Pflicht**, ≥ `start` |
+| `source` | String | Wer es gewirkt hat |
+| `label` | String | Bezeichnung, Standard „Heldentum" |
+
+Ohne die Fenster kann die Academy Cooldown-Einsätze nicht bewerten:
+„genutzt" ist die halbe Antwort, „zum richtigen Zeitpunkt genutzt" die
+eigentliche Frage. Ist `heroism_used` nicht gesetzt, leitet die App es
+aus der Existenz eines Fensters ab.
+
+WarcraftLogs-Quelle: `table(dataType: Buffs)`, die `bands` der
+Heldentum-Auren (`Heroism`, `Bloodlust`, `Time Warp`,
+`Ancient Hysteria`).
+
+### `players[]` — Ergänzungen
+
+| Feld | Typ | Bedeutung |
+|------|-----|-----------|
+| `active_time` | Float | **Sekunden**, in denen der Spieler tatsächlich gewirkt hat. Die App rechnet daraus den Prozentwert. |
+| `casts` | Int | Zahl der Wirkvorgänge; daraus entstehen die Aktionen pro Minute. |
+| `longest_gap` | Float | Längste Pause in Sekunden (optional) |
+| `movement_units` | Float | Summierte **Karteneinheiten**, nicht Meter — siehe unten. |
+| `damage_taken_abilities` | Array | Erhaltener Schaden je Fähigkeit, siehe unten. |
+| `dots` | Array | Wirkungsdauern auf Gegnern, siehe unten. |
+| `hots` | Array | Wirkungsdauern auf Verbündeten, gleiche Form. |
+| `cooldowns` | Array | Einsätze mit Zeitpunkten, siehe unten. |
+
+`active_time` ist **die** Rotationsmetrik. Bisher bewertete die
+Academy „Rotation" anhand des Schadensrangs — das ist eine
+Ausrüstungsbewertung, keine Aussage über die Spielweise. Quelle:
+`activeTime` aus `table(dataType: DamageDone)`.
+
+#### `movement_units` — bewusst keine Meter
+
+Der Bot summiert die Abstände zwischen den `x`/`y`-Angaben
+aufeinanderfolgender Ereignisse desselben Spielers und schickt diese
+Rohsumme. Die Umrechnung in Meter macht die App
+(`analyzer/analysis/movement.py`, eine einzige Konstante), damit ein
+falscher Faktor ohne Bot-Deploy korrigierbar ist.
+
+Zwei Dinge, die im Vertrag festgehalten sein sollen, weil sie die
+Aussagekraft begrenzen: zwischen zwei Ereignissen wird der Weg als
+Gerade angenommen, echtes Ausweichen wird also **unterschätzt**; und
+ohne Ereignisse gibt es keine Position, wer währenddessen läuft taucht
+nicht auf. Die App beschriftet den Wert deshalb überall als Schätzung.
+
+Quelle: `events(dataType: Casts)` bzw. `DamageTaken`, Felder `x`/`y`.
+
+#### `damage_taken_abilities[]`
+
+| Feld | Typ | Bedeutung |
+|------|-----|-----------|
+| `ability` | String | **Englischer** Name, Pflicht |
+| `amount` | Number | Schadenssumme dieser Fähigkeit |
+| `hits` | Int | Zahl der Treffer |
+| `source` | String | Verursachender NPC (optional) |
+
+**Der Bot ordnet nicht ein.** Ob ein Treffer vermeidbar war, ist eine
+Wertung und keine Messung — sie liegt in
+`analyzer/data/avoidable.py`, weil sie für WeintTV und die Academy
+identisch sein muss, sich mit Schwierigkeitsgrad und Taktik ändert und
+ohne Bot-Deploy korrigierbar bleiben soll. Der Bot liefert also nur
+Rohzeilen; die App macht daraus vermeidbar / unvermeidbar / nicht
+eingeordnet.
+
+Die Einordnung ist **dreiwertig**. Was in der Tabelle fehlt, bleibt
+„nicht eingeordnet" — und liegt der eingeordnete Anteil zu niedrig,
+gibt die Academy für „Überleben" gar keine Bewertung ab, statt eine,
+die nur die Lücken der Tabelle abbildet.
+
+Quelle: `table(dataType: DamageTaken, hostilityType: Friendlies)`,
+Feld `abilities` je Spieler.
+
+#### `dots[]` / `hots[]`
+
+| Feld | Typ | Bedeutung |
+|------|-----|-----------|
+| `aura` | String | Name der Fähigkeit, Pflicht |
+| `uptime_percent` | Float | 0–100 |
+| `applications` | Int | Zahl der Anwendungen |
+| `target` | String | Ziel (optional) |
+| `expected_percent` | Float | Richtwert, ab dem die Uptime als gut gilt (optional) |
+
+Quelle: `table(dataType: Debuffs, hostilityType: Enemies)` für DoTs,
+`table(dataType: Buffs)` für HoTs.
+
+#### `cooldowns[]`
+
+| Feld | Typ | Bedeutung |
+|------|-----|-----------|
+| `name` | String | Fähigkeit, Pflicht |
+| `casts` | Float[] | Zeitpunkte in Sekunden seit Kampfbeginn |
+| `cooldown` | Float | Abklingzeit in Sekunden |
+| `category` | String | `raid`, `heal`, `personal` oder `defensive` (optional) |
+
+**Möglich-Zahl und Burst-Ausrichtung rechnet die App selbst** aus
+Kampfdauer, Abklingzeit und den Heldentum-Fenstern. Der Bot liefert
+nur die Tatsachen.
+
+Nicht zu verwechseln mit `raid_cooldowns`/`heal_cooldowns`: die
+beschreiben den Live-Countdown, diese Liste die Rückschau über den
+ganzen Kampf.
+
+Quelle: `events(dataType: Casts)`, gefiltert auf bekannte Cooldowns.
+
+### `resurrects[]` (oberste Ebene)
+
+| Feld | Typ | Bedeutung |
+|------|-----|-----------|
+| `target` | String | Wiederbelebter Spieler, **Pflicht** |
+| `caster` | String | Wer gewirkt hat |
+| `at` | Float | Sekunden seit Kampfbeginn |
+| `ability` | String | Fähigkeit |
+
+Beantwortet, was die reine Ladungsanzeige offenlässt: auf wen, von
+wem, wann. Fehlt `battle_res_charges`, leitet die App die
+verbleibenden Ladungen daraus ab.
+
+Quelle: `events(dataType: Resurrects)`.
+
+### `interrupts[]` / `dispels[]` (oberste Ebene)
+
+| Feld | Typ | Bedeutung |
+|------|-----|-----------|
+| `actor` | String | Wer eingegriffen hat, **Pflicht** |
+| `at` | Float | Sekunden seit Kampfbeginn |
+| `target` | String | Ziel |
+| `ability` | String | Fähigkeit |
+
+Als Einzelereignisse und nicht als Zähler: daraus lässt sich beides
+ableiten, umgekehrt nicht — und nur der Zeitpunkt erlaubt den Sprung
+aus der Academy in die Wiedergabe.
+
+Quelle: `events(dataType: Interrupts)` bzw. `Dispels`.
+
+### `mechanics[]` — Neufassung
+
+`category` ist ab v2 **Pflicht** (`movement`, `positioning`,
+`interrupt`, `defensive`, `other`). Ohne sie kann die Academy den
+Fehler keinem trainierbaren Bereich zuordnen.
+
+Neu ist `at` (Float, Sekunden) — der Zeitpunkt, an dem der Fehler
+passierte. Er ist das Sprungziel in die Wiedergabe.
+
+**Zusammenführung:** Die App leitet zusätzlich eigene Mechanikfehler
+aus dem vermeidbaren Schaden ab. Beschreiben eine Bot-Regel und eine
+abgeleitete Zeile denselben Vorfall, **gewinnt der Bot** — seine
+Zeilen sind handverlesen und stehen zuoberst. Die Erkennung läuft je
+Spieler über den Fehlertext und über eine Alias-Tabelle, die deutsche
+Bot-Texte auf englische Fähigkeitsnamen abbildet. Der Bot muss dafür
+nichts tun; er kann seine Regeln behalten oder mit der Zeit zugunsten
+der Rohzeilen abbauen.
+
+---
+
+## v2: Zeitleiste eines Fights (Wiedergabe)
+
+```
+GET /companion/warcraftlogs/reports/{code}/fights/{fight_id}/timeline
+Authorization: Bearer <companion_token>
+```
+
+**Dieser Endpunkt existiert noch nicht.** Er ist die Grundlage für
+den Wiedergabe-Knopf in WeintTV: einen abgeschlossenen Pull Sekunde
+für Sekunde abspielen, mit Schieberegler und 1× bis 8×.
+
+Bewusst ein eigener Endpunkt und kein Zusatzfeld am Einzel-Fight: die
+Antwort enthält Zeitreihen für jeden Spieler und ist deutlich größer
+als das Gesamtbild. Sie wird nur beim Druck auf Wiedergabe gebraucht
+und soll nicht jeden Archiv-Klick verteuern.
+
+Statuscodes wie beim Einzel-Fight; `404`, wenn es für diesen Pull
+keine Zeitleiste gibt.
+
+```json
+{
+  "status": "ok",
+  "interval": 1.0,
+
+  "fight": { "…wie beim Einzel-Fight…" },
+
+  "boss_health": [100.0, 98.2, 95.1, "…"],
+
+  "players": [
+    {
+      "name": "Pyrothal",
+      "class": "Mage",
+      "spec": "Fire",
+      "role": "dps",
+      "damage":       [0, 120000, 260000, "…"],
+      "healing":      [0, 0, 0, "…"],
+      "damage_taken": [0, 0, 54000, "…"],
+      "movement":     [0, 480, 1020, "…"],
+      "activity":     [0, 0.9, 1.9, "…"],
+      "casts":        [0, 2, 4, "…"]
+    }
+  ],
+
+  "deaths":     [{ "name": "Krallenwut", "at": 63.0, "ability": "…" }],
+  "resurrects": [{ "target": "Krallenwut", "caster": "Elvenne", "at": 78.0 }],
+  "heroism_windows": [{ "start": 96.0, "end": 136.0, "source": "Kaldrun" }],
+
+  "avoidable_hits": [
+    { "player": "Dolchtanz", "ability": "Double Swipe", "at": 34.0,
+      "amount": 96000 }
+  ],
+
+  "interrupts": [], "dispels": [], "mechanics": [], "events": [],
+
+  "aggregate": { "…exakt die Form des Einzel-Fights…" }
+}
+```
+
+### Regeln, die für die Wiedergabe zwingend sind
+
+**Alle Reihen sind kumulativ**, nicht als Zuwachs je Takt. Das ist
+keine Geschmacksfrage: die App liest daraus Summen bis zum Zeitpunkt X
+und interpoliert zwischen zwei Stützpunkten. Aus Zuwächsen müsste sie
+bei jedem Sprung von vorn aufsummieren, und die Bossleiste würde bei
+achtfacher Geschwindigkeit sichtbar ruckeln.
+
+**`interval`** ist der Abstand der Stützpunkte in Sekunden. Empfohlen
+1.0; bei sehr langen Kämpfen sind 2 bis 5 vertretbar. Fehlt der Wert,
+nimmt die App 1.0 an.
+
+**`activity`** ist die kumulative aktive Zeit **in Sekunden**, nicht in
+Prozent — den Prozentwert bildet die App gegen die verstrichene Zeit.
+
+**`aggregate`** ist der Gesamtstand des fertigen Kampfes in exakt der
+Form des Einzel-Fight-Endpunkts. Er ist die Rückfallebene für alles,
+was sich pro Sekunde nicht ehrlich rekonstruieren lässt
+(Verbrauchsgüter, die vollständige Fähigkeitsaufschlüsselung des
+erhaltenen Schadens). Am Ende der Wiedergabe zeigt die App denselben
+Stand wie im Archiv.
+
+**`avoidable_hits`** sind Einzelereignisse mit Zeitpunkt. Während der
+Wiedergabe ist das der einzige exakt bekannte Teil der
+Schadensaufschlüsselung — deshalb zeigt die App nur ihn und
+extrapoliert den Rest nicht.
+
+**Größenordnung:** 25 Spieler × 6 Reihen × 360 Stützpunkte ist
+unproblematisch. Reihen **je Spieler und Fähigkeit** werden
+ausdrücklich **nicht** verlangt — das wären Megabyte pro Kampf.
+Deshalb kommt die vollständige Aufschlüsselung aus `aggregate`.
+
+Quellen: `graph(dataType: DamageDone|Healing|DamageTaken)` für die
+Reihen, `events(...)` für die Ereignislisten.
+
+
+---
+
 ## Was die Companion-App selbst ergänzt
 
 Damit auf Bot-Seite nichts doppelt gebaut wird:
@@ -306,6 +600,19 @@ Damit auf Bot-Seite nichts doppelt gebaut wird:
   `pull_number` das Ende eines Versuchs und legt ihn ab.
 - **Verwerfen veralteter Berichte.** Kommen drei Minuten lang keine
   neuen Daten, zeigt die App keinen eingefrorenen Pull weiter.
+
+Ab v2 zusätzlich:
+
+- **Die Einordnung „war das vermeidbar".** Sie ist eine Wertung, keine
+  Messung, und liegt in `analyzer/data/avoidable.py` — siehe die
+  Begründung bei `damage_taken_abilities`.
+- **Die Umrechnung von Karteneinheiten in Meter**, samt der
+  Kennzeichnung als Schätzung.
+- **Möglich-Zahl und Burst-Ausrichtung der Cooldowns** aus Kampfdauer,
+  Abklingzeit und Heldentum-Fenstern.
+- **Die Ableitung von Mechanikfehlern aus vermeidbarem Schaden** und
+  das Zusammenführen mit den Regeln des Bots.
+- **Die Rekonstruktion jeder Sekunde** aus der Zeitleiste.
 
 ---
 
@@ -449,12 +756,21 @@ nur eben für einen bestimmten statt den letzten Kampf.
 | `core/warcraftlogs_archive_client.py` | Archiv-Endpunkte: Report-/Fight-Listen, einzelner Fight |
 | `analyzer/providers/warcraftlogs.py` | Live-Provider: Abruf-Thread, Zwischenspeicher, Snapshot |
 | `analyzer/providers/warcraftlogs_payload.py` | Übersetzung Antwort → `RaidSnapshot`, Report-/Fight-Listen |
-| `core/raid_data_service.py` | Registrierung der Quelle, Live/Archiv-Zustandsmaschine |
-| `gui/widgets/tv/archive_picker.py` | Live/Archiv-Umschalter (WeintTV + Academy) |
+| `analyzer/replay/payload.py` | Übersetzung Zeitleisten-Antwort → `FightTimeline` |
+| `analyzer/replay/reconstruct.py` | `snapshot_at()`: aus der Zeitleiste der Stand einer Sekunde |
+| `analyzer/data/avoidable.py` | Einordnung „vermeidbar / unvermeidbar / unbekannt" je Boss |
+| `analyzer/analysis/damage.py` | Aufteilung des erhaltenen Schadens, Ableitung und Zusammenführung der Mechanikfehler |
+| `analyzer/analysis/movement.py` | Karteneinheiten → Meter, eine einzige Konstante |
+| `analyzer/academy/checks.py` | Auflösung der Metriknamen für den automatischen Trainingsplan |
+| `core/raid_data_service.py` | Registrierung der Quelle, Live/Archiv/Wiedergabe-Zustandsmaschine |
+| `gui/widgets/tv/archive_picker.py` | Live/Archiv-Umschalter und Wiedergabe-Start (WeintTV + Academy) |
+| `gui/widgets/tv/replay_bar.py` | Steuerung der Wiedergabe |
 | `gui/pages/settings_sections/modules.py` | Auswahl der Live-Quelle und Statusanzeige |
-| `tests/test_warcraftlogs_payload.py` | Mapping und Robustheit |
+| `tests/test_warcraftlogs_payload.py` | Mapping und Robustheit, auch der v2-Blöcke |
 | `tests/test_warcraftlogs_provider.py` | Lebenszyklus und Fehlerfälle (Live) |
-| `tests/test_raid_data_service.py` | Live/Archiv-Zusammenspiel |
+| `tests/test_raid_data_service.py` | Live/Archiv/Wiedergabe-Zusammenspiel |
+| `tests/test_replay.py` | Rekonstruktion und Zeitleisten-Mapping |
+| `tests/test_damage_analysis.py` | Einordnung und Entdopplung der Mechanikfehler |
 
 Zum Ausprobieren ohne fertigen Bot genügt es, in
 `core/backend_config.py` `BOT_BASE_URL` auf einen lokalen Server zu
