@@ -41,14 +41,24 @@ class AcademyService:
         self.file = Paths.config() / PROGRESS_FILE
 
         #
-        # Aufbau: {"completed": {"<Charaktername>": ["<lesson_id>", ...]}}
+        # Aufbau:
         #
-        # Der Fortschritt hängt am Charakter, nicht am Konto: ein
+        #   {"completed": {"<Charakter>": ["<lesson_id>", ...]},
+        #    "excluded":  {"<Charakter>": ["<lesson_id>", ...]}}
+        #
+        # Beides hängt am Charakter, nicht am Konto: ein
         # Zweitcharakter mit anderer Klasse hat einen eigenen
         # Lernpfad.
         #
+        # Bei der Abwahl werden bewusst die AUSGESCHLOSSENEN Lektionen
+        # gespeichert und nicht die gewählten. Damit ist jede neu
+        # hinzugefügte Lektion automatisch für alle aktiv - ohne
+        # Migration bestehender Dateien und ohne Nachfrage beim
+        # Nutzer. Andersherum wäre jeder Katalogausbau für
+        # Bestandsnutzer unsichtbar geblieben.
+        #
 
-        self.data: dict = {"completed": {}}
+        self.data: dict = {"completed": {}, "excluded": {}}
 
         self.load()
 
@@ -69,15 +79,17 @@ class AcademyService:
 
             if isinstance(loaded, dict):
 
-                completed = loaded.get("completed")
+                for key in ("completed", "excluded"):
 
-                if isinstance(completed, dict):
+                    section = loaded.get(key)
 
-                    self.data["completed"] = {
-                        str(name): [str(value) for value in ids]
-                        for name, ids in completed.items()
-                        if isinstance(ids, list)
-                    }
+                    if isinstance(section, dict):
+
+                        self.data[key] = {
+                            str(name): [str(value) for value in ids]
+                            for name, ids in section.items()
+                            if isinstance(ids, list)
+                        }
 
         except Exception as exc:
 
@@ -92,7 +104,7 @@ class AcademyService:
                 f"({exc}) - es wird neu begonnen."
             )
 
-            self.data = {"completed": {}}
+            self.data = {"completed": {}, "excluded": {}}
 
     def save(self):
         """
@@ -191,11 +203,25 @@ class AcademyService:
             self.resolve_player_name(snapshot),
         )
 
-    def build_plan(self, profile: PlayerProfile) -> TrainingPlan:
+    def build_plan(
+        self,
+        profile: PlayerProfile,
+        snapshot: RaidSnapshot | None = None,
+    ) -> TrainingPlan:
+        """
+        Der Trainingsplan eines Charakters.
+
+        Mit `snapshot` prüft der Plan seine Lektionen zusätzlich gegen
+        den gewählten Kampf und markiert sie selbst als erfüllt oder
+        nicht erfüllt. Ohne ihn bleibt es beim reinen Lernpfad -
+        dasselbe Verhalten wie vorher.
+        """
 
         return evaluator.build_plan(
             profile,
             self.completed_for(profile.name),
+            snapshot=snapshot,
+            excluded=self.excluded_for(profile.name),
         )
 
     def progress_for(self, profile: PlayerProfile) -> tuple[int, int]:
@@ -210,7 +236,7 @@ class AcademyService:
         aus.
         """
 
-        catalog = lessons_for_actor(profile.actor)
+        catalog = self.active_lessons(profile)
 
         done = self.completed_for(profile.name)
 
@@ -221,6 +247,27 @@ class AcademyService:
         )
 
         return completed, len(catalog)
+
+    def active_lessons(self, profile: PlayerProfile) -> tuple:
+        """
+        Der Katalog dieses Charakters ohne die abgewählten Lektionen.
+
+        Die abgewählten müssen hier heraus, sonst könnte die
+        Fortschrittsanzeige nie 100 Prozent erreichen: der Nenner
+        enthielte Lektionen, die der Spieler ausdrücklich nicht
+        bearbeiten will.
+        """
+
+        hidden = self.excluded_for(profile.name)
+
+        return tuple(
+            lesson
+            for lesson in lessons_for_actor(
+                profile.actor,
+                profile.encounter_name,
+            )
+            if lesson.lesson_id not in hidden
+        )
 
     # --------------------------------------------------
     # Fortschritt
@@ -307,4 +354,110 @@ class AcademyService:
 
         self.manager.logger.info(
             f"Academy: Lernpfad von {player_name} zurückgesetzt."
+        )
+
+    # --------------------------------------------------
+    # Abwahl von Lektionen
+    # --------------------------------------------------
+    #
+    # Standardmäßig ist jede Lektion aktiv. Gespeichert werden
+    # deshalb nur die Ausnahmen - siehe die Begründung im
+    # Konstruktor.
+    #
+
+    def excluded_for(self, player_name: str) -> frozenset[str]:
+
+        if not player_name:
+            return frozenset()
+
+        return frozenset(
+            self.data["excluded"].get(player_name, [])
+        )
+
+    def is_enabled(self, player_name: str, lesson_id: str) -> bool:
+
+        return lesson_id not in self.excluded_for(player_name)
+
+    def set_enabled(
+        self,
+        player_name: str,
+        lesson_id: str,
+        enabled: bool,
+    ):
+        """
+        Wählt eine Lektion für den Trainingsplan ab oder wieder an.
+        """
+
+        if not player_name or not lesson_id:
+            return
+
+        entries = list(
+            self.data["excluded"].get(player_name, [])
+        )
+
+        changed = False
+
+        if not enabled and lesson_id not in entries:
+
+            entries.append(lesson_id)
+
+            changed = True
+
+        elif enabled and lesson_id in entries:
+
+            entries.remove(lesson_id)
+
+            changed = True
+
+        if not changed:
+            return
+
+        self.data["excluded"][player_name] = entries
+
+        self.save()
+
+        lesson = find_lesson(lesson_id)
+
+        title = lesson.title if lesson else lesson_id
+
+        self.manager.logger.info(
+            f"Academy: \"{title}\" "
+            + ("wieder aufgenommen." if enabled else "abgewählt.")
+        )
+
+    def set_category_enabled(
+        self,
+        profile: PlayerProfile,
+        category: str,
+        enabled: bool,
+    ):
+        """
+        Einen ganzen Bereich auf einmal an- oder abwählen.
+        """
+
+        for lesson in lessons_for_actor(
+            profile.actor,
+            profile.encounter_name,
+        ):
+
+            if lesson.category == category:
+
+                self.set_enabled(profile.name, lesson.lesson_id, enabled)
+
+    def reset_selection(self, player_name: str):
+        """
+        Alle Abwahlen aufheben - vom Zurücksetzen des Fortschritts
+        bewusst getrennt: das eine ist "ich fange neu an", das andere
+        "zeig mir wieder alles".
+        """
+
+        if player_name not in self.data["excluded"]:
+            return
+
+        del self.data["excluded"][player_name]
+
+        self.save()
+
+        self.manager.logger.info(
+            f"Academy: Lektionsauswahl von {player_name} zurückgesetzt."
         )

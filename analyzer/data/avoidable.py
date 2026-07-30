@@ -253,6 +253,12 @@ ABILITY_ALIASES: dict[str, str] = {
     "ätzender schlag": "Corrosive Blast",
     "dreifacher stich": "Triple Puncture",
     "wirbel": "Swirl",
+    "zerfetzender ansturm": "Rending Charge",
+    "doppelhieb": "Double Swipe",
+    "loderndes sonnenlicht": "Blazing Sunlight",
+    "giftbolzensalve": "Venom Bolt Volley",
+    "tödliche seuche": "Deadly Plague",
+    "sha-pfütze": "Sha Puddle",
 }
 
 

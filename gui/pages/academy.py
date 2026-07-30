@@ -31,11 +31,15 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from PySide6.QtCore import Signal
+
 from analyzer.academy.lessons import lessons_in_category
 from analyzer.academy.models import (
     CATEGORY_LABELS,
     CATEGORY_ORDER,
     MAX_STARS,
+    STATUS_PASSED,
+    STATUS_UNKNOWN,
     PlayerProfile,
     TrainingPlan,
 )
@@ -43,9 +47,11 @@ from analyzer.models import RaidSnapshot
 
 from core.resources import Resources
 
+from gui.navigation import PageId
 from gui.theme.colors import Colors
 from gui.theme.wow_colors import class_color, class_label, role_label
 
+from gui.widgets.academy.catalog_list import CatalogList, CatalogRowData
 from gui.widgets.academy.lesson_card import LessonCard
 from gui.widgets.academy.star_rating import StarRating
 from gui.widgets.card import Card
@@ -56,6 +62,8 @@ from gui.widgets.segmented_control import SegmentedControl
 from gui.widgets.tv.archive_picker import ArchivePicker
 from gui.widgets.tv.entry_list import EntryData, EntryList
 from gui.widgets.tv.meter_bar import MeterBar
+from gui.widgets.tv.metric_tile import MetricTile
+from gui.widgets.tv.replay_bar import ReplayBar
 
 
 TAB_OVERVIEW = "overview"
@@ -64,6 +72,13 @@ TAB_CATALOG = "catalog"
 
 
 class AcademyPage(QWidget):
+
+    #
+    # Sprung in einen anderen Hauptbereich - duck-getypt vom
+    # MainWindow verbunden, wie on_enter()/on_leave().
+    #
+
+    pageRequested = Signal(int)
 
     def __init__(self, manager):
 
@@ -88,6 +103,16 @@ class AcademyPage(QWidget):
         self._profile = PlayerProfile()
 
         self._plan = TrainingPlan()
+
+        #
+        # Vorgemerkter Sprung in die Wiedergabe. Er kann erst
+        # ausgeführt werden, wenn die Zeitleiste geladen ist - bis
+        # dahin wartet er hier.
+        #
+
+        self._pending_seek = None
+
+        self.catalog_cards = {}
 
         root = QVBoxLayout(self)
 
@@ -156,6 +181,17 @@ class AcademyPage(QWidget):
         root.addWidget(ArchivePicker(self.service))
 
         #
+        # Wiedergabe-Steuerung, schmale Fassung: hier soll man einen
+        # Moment ansehen können, ohne dass die Seite zur Fernbedienung
+        # wird. Die Geschwindigkeitswahl bleibt WeintTV vorbehalten.
+        #
+        # Weil beide Seiten denselben Service ansprechen, zeigen sie
+        # während einer Wiedergabe zwangsläufig dieselbe Sekunde.
+        #
+
+        root.addWidget(ReplayBar(self.service, compact=True))
+
+        #
         # --------------------------------------------------
         # Hinweis bei deaktiviertem Modul
         # --------------------------------------------------
@@ -204,6 +240,10 @@ class AcademyPage(QWidget):
         #
         # Signale
         #
+
+        self.service.replayChanged.connect(
+            self._on_replay_changed
+        )
 
         self.service.snapshotChanged.connect(
             self._apply_snapshot
@@ -510,6 +550,22 @@ class AcademyPage(QWidget):
 
         self.catalog_lists = {}
 
+        hint = QLabel(
+            "Alle Lektionen sind standardmäßig aktiv. Wer eine "
+            "abwählt, nimmt sie aus dem Trainingsplan - neu "
+            "hinzukommende Lektionen bleiben davon unberührt und "
+            "erscheinen automatisch."
+        )
+
+        hint.setWordWrap(True)
+
+        hint.setStyleSheet(
+            f"font-size:12px;color:{Colors.TEXT_MUTED};"
+            "background:transparent;border:none;"
+        )
+
+        layout.addWidget(hint)
+
         for category in CATEGORY_ORDER:
 
             card = SectionCard(
@@ -518,9 +574,13 @@ class AcademyPage(QWidget):
                 "Lektionen dieses Bereichs.",
             )
 
-            entries = EntryList(
-                capacity=10,
+            entries = CatalogList(
+                capacity=40,
                 placeholder="Keine Lektionen hinterlegt.",
+            )
+
+            entries.activeChanged.connect(
+                self._on_catalog_toggled
             )
 
             card.addWidget(entries)
@@ -528,6 +588,25 @@ class AcademyPage(QWidget):
             layout.addWidget(card)
 
             self.catalog_lists[category] = entries
+
+            self.catalog_cards[category] = card
+
+        reset_row = QHBoxLayout()
+
+        reset_row.addStretch()
+
+        self.reset_selection_button = HeroButton(
+            "Alle Lektionen wieder aufnehmen",
+            primary=False,
+        )
+
+        self.reset_selection_button.clicked.connect(
+            self._reset_selection
+        )
+
+        reset_row.addWidget(self.reset_selection_button)
+
+        layout.addLayout(reset_row)
 
         layout.addStretch()
 
@@ -607,7 +686,15 @@ class AcademyPage(QWidget):
 
         self._profile = self.academy.build_profile(snapshot)
 
-        self._plan = self.academy.build_plan(self._profile)
+        #
+        # Der Snapshot geht mit, damit der Plan seine Lektionen gegen
+        # genau den gerade gezeigten Kampf prüfen kann. Im
+        # Wiedergabe-Modus ist das der Stand der laufenden Sekunde -
+        # daraus entsteht die Verzahnung mit WeintTV, ohne dass diese
+        # Seite etwas von einer Wiedergabe wissen müsste.
+        #
+
+        self._plan = self.academy.build_plan(self._profile, snapshot)
 
         self._apply_overview()
 
@@ -763,9 +850,25 @@ class AcademyPage(QWidget):
 
     def _apply_plan(self):
 
+        #
+        # Während einer laufenden Wiedergabe wird der Plan nicht neu
+        # gebaut. Bei achtfacher Geschwindigkeit kämen viermal pro
+        # Sekunde neue Snapshots - die Karten würden flackern und
+        # jeder Klick ginge im Neuaufbau verloren. Die Bewertungen
+        # oben laufen weiter mit; sobald pausiert oder gestoppt wird,
+        # zieht der Plan nach.
+        #
+
+        if self.service.replay_state().playing:
+            return
+
         signature = tuple(
-            (lesson.lesson_id, self._plan.is_completed(lesson.lesson_id))
-            for lesson in self._plan.lessons
+            (
+                item.lesson_id,
+                item.completed,
+                item.status,
+            )
+            for item in self._plan.items
         )
 
         if signature == self._plan_signature:
@@ -789,22 +892,25 @@ class AcademyPage(QWidget):
 
         self._lesson_cards = []
 
-        lessons = self._plan.lessons
+        items = self._plan.items
 
-        self.plan_placeholder.setVisible(not lessons)
+        self.plan_placeholder.setVisible(not items)
 
-        for index, lesson in enumerate(lessons):
-
-            completed = self._plan.is_completed(lesson.lesson_id)
+        for index, item in enumerate(items):
 
             card = LessonCard(
-                lesson,
-                completed=completed,
-                highlight=(index == 0 and not completed),
+                item.lesson,
+                completed=item.completed,
+                highlight=(index == 0 and not item.done),
+                result=item.result,
             )
 
             card.completedChanged.connect(
                 self._on_lesson_toggled
+            )
+
+            card.momentRequested.connect(
+                self._on_moment_requested
             )
 
             #
@@ -833,31 +939,144 @@ class AcademyPage(QWidget):
 
         self.academy.reset(self._profile.name)
 
+        self._plan_signature = None
+
+        self._apply_snapshot(self.service.current())
+
+    def _reset_selection(self):
+
+        self.academy.reset_selection(self._profile.name)
+
+        self._plan_signature = None
+
         self._apply_snapshot(self.service.current())
 
     # --------------------------------------------------
 
     def _apply_catalog(self):
 
+        excluded = self.academy.excluded_for(self._profile.name)
+
         for category, entries in self.catalog_lists.items():
 
-            entries.setEntries(
-                EntryData(
-                    title=lesson.title,
-                    detail=lesson.summary,
-                    level=(
-                        "success"
-                        if self._plan.is_completed(lesson.lesson_id)
-                        else "info"
-                    ),
-                    trailing=(
-                        "erledigt"
-                        if self._plan.is_completed(lesson.lesson_id)
-                        else ""
-                    ),
-                )
-                for lesson in lessons_in_category(
-                    self._profile.actor,
-                    category,
-                )
+            lessons = lessons_in_category(
+                self._profile.actor,
+                category,
+                self._profile.encounter_name,
             )
+
+            rows = []
+
+            for lesson in lessons:
+
+                item = self._plan.item(lesson.lesson_id)
+
+                completed = self._plan.is_completed(lesson.lesson_id)
+
+                rows.append(
+                    CatalogRowData(
+                        lesson_id=lesson.lesson_id,
+                        title=lesson.title,
+                        detail=(
+                            lesson.summary
+                            + (
+                                " · im Log erfüllt"
+                                if item is not None
+                                and item.status == STATUS_PASSED
+                                else ""
+                            )
+                            + (" · abgehakt" if completed else "")
+                        ),
+                        active=lesson.lesson_id not in excluded,
+                        completed=completed,
+                        status=(
+                            item.status
+                            if item is not None
+                            else STATUS_UNKNOWN
+                        ),
+                    )
+                )
+
+            entries.setRows(rows)
+
+            #
+            # Die Kopfzeile nennt, wie viele Lektionen eines Bereichs
+            # aktiv sind - sonst wäre eine Abwahl nach dem Wechsel des
+            # Bereichs nicht mehr auffindbar.
+            #
+
+            card = self.catalog_cards.get(category)
+
+            if card is not None:
+
+                active = sum(1 for row in rows if row.active)
+
+                card.setSubtitle(
+                    f"{active} von {len(rows)} Lektionen aktiv."
+                )
+
+    def _on_catalog_toggled(self, lesson_id: str, active: bool):
+
+        self.academy.set_enabled(
+            self._profile.name,
+            lesson_id,
+            active,
+        )
+
+        #
+        # Die Auswahl verändert den Trainingsplan - die Signatur
+        # zurücksetzen, damit er wirklich neu gebaut wird.
+        #
+
+        self._plan_signature = None
+
+        self._apply_snapshot(self.service.current())
+
+    def _on_moment_requested(self, seconds: float):
+        """
+        Aus einem Befund an genau die Sekunde der Wiedergabe springen,
+        an der er entstanden ist.
+
+        Läuft noch keine Wiedergabe, wird sie zuerst gestartet. Der
+        Sprung selbst passiert dann erst, wenn die Zeitleiste geladen
+        ist - deshalb der zweite Aufruf über das replayChanged-Signal
+        statt sofort.
+        """
+
+        from core.raid_data_service import MODE_REPLAY
+
+        if self.service.archive_state().mode != MODE_REPLAY:
+
+            self._pending_seek = seconds
+
+            self.service.start_replay()
+
+        else:
+
+            self.service.seek_replay(seconds)
+
+            self.service.set_replay_playing(False)
+
+        self.pageRequested.emit(PageId.WEINTTV)
+
+    def _on_replay_changed(self):
+        """
+        Einen vorgemerkten Sprung nachholen, sobald die Zeitleiste da
+        ist.
+        """
+
+        if self._pending_seek is None:
+            return
+
+        state = self.service.replay_state()
+
+        if state.loading or state.duration <= 0:
+            return
+
+        seconds = self._pending_seek
+
+        self._pending_seek = None
+
+        self.service.seek_replay(seconds)
+
+        self.service.set_replay_playing(False)

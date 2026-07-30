@@ -11,6 +11,7 @@ from analyzer.academy.models import (
     CATEGORY_MECHANICS,
     CATEGORY_MOVEMENT,
     CATEGORY_ORDER,
+    CATEGORY_OUTPUT,
     CATEGORY_ROTATION,
     MAX_STARS,
 )
@@ -87,18 +88,44 @@ def test_every_category_is_rated_once_and_in_fixed_order():
     )
 
 
-def test_top_performer_gets_the_best_rotation_rating():
+def test_top_performer_gets_the_best_output_rating():
 
     profile = build_profile(_snapshot(), "Spitze")
 
-    assert profile.rating(CATEGORY_ROTATION).stars == MAX_STARS
+    assert profile.rating(CATEGORY_OUTPUT).stars == MAX_STARS
 
 
-def test_weak_performer_gets_a_low_rotation_rating():
+def test_weak_performer_gets_a_low_output_rating():
 
     profile = build_profile(_snapshot(), "Mitte")
 
-    assert profile.rating(CATEGORY_ROTATION).stars < MAX_STARS
+    assert profile.rating(CATEGORY_OUTPUT).stars < MAX_STARS
+
+
+def test_rotation_is_not_derived_from_the_damage_ranking():
+    """
+    Der eigentliche Grund für den Umbau: "Rotation" war vorher nichts
+    anderes als der Platz in der Schadensliste. Das ist eine
+    Ausrüstungsbewertung, keine Aussage darüber, ob jemand seine
+    Knöpfe richtig gedrückt hat.
+
+    Ohne Aktivzeit- und Uptime-Daten darf Rotation deshalb gar keine
+    Bewertung liefern - und schon gar keine, die sich mit dem
+    Schadensrang ändert.
+    """
+
+    strong = build_profile(_snapshot(), "Spitze")
+    weak = build_profile(_snapshot(), "Mitte")
+
+    assert strong.rating(CATEGORY_ROTATION).has_data is False
+    assert weak.rating(CATEGORY_ROTATION).has_data is False
+
+    #
+    # Der Rang steckt jetzt in "Leistung" - und dort unterscheidet er
+    # die beiden sehr wohl.
+    #
+
+    assert strong.rating(CATEGORY_OUTPUT).stars > weak.rating(CATEGORY_OUTPUT).stars
 
 
 def test_tanks_are_compared_with_tanks_not_with_damage_dealers():
@@ -110,14 +137,14 @@ def test_tanks_are_compared_with_tanks_not_with_damage_dealers():
 
     profile = build_profile(_snapshot(), "Panzer")
 
-    assert profile.rating(CATEGORY_ROTATION).stars == MAX_STARS
+    assert profile.rating(CATEGORY_OUTPUT).stars == MAX_STARS
 
 
 def test_healers_are_rated_against_the_healing_ranking():
 
     profile = build_profile(_snapshot(), "Heilerin")
 
-    assert profile.rating(CATEGORY_ROTATION).stars == MAX_STARS
+    assert profile.rating(CATEGORY_OUTPUT).stars == MAX_STARS
 
 
 def test_mechanic_errors_lower_the_matching_category_only():
@@ -138,7 +165,15 @@ def test_mechanic_errors_lower_the_matching_category_only():
     assert profile.rating(CATEGORY_MOVEMENT).stars < MAX_STARS
 
     assert profile.rating(CATEGORY_MECHANICS).stars == MAX_STARS
-    assert profile.rating(CATEGORY_COOLDOWNS).stars == MAX_STARS
+
+    #
+    # Cooldowns bleiben ohne Cooldown-Daten ausdrücklich unbewertet
+    # (null Sterne = "keine Daten") - ein Bewegungsfehler darf daran
+    # nichts ändern, aber volle Punktzahl für etwas zu vergeben, das
+    # gar nicht gemessen wurde, wäre genauso falsch.
+    #
+
+    assert profile.rating(CATEGORY_COOLDOWNS).has_data is False
 
 
 def test_missed_interrupts_lower_the_mechanics_rating():

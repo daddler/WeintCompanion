@@ -113,9 +113,15 @@ MECHANIC_SCHEDULE: tuple[tuple[float, str, str, int, str, str], ...] = (
         "Unterbrechung verpasst",
         1, "error", MECHANIC_INTERRUPT,
     ),
+    #
+    # Bewusst dieselbe Fähigkeit, die weiter unten auch als
+    # vermeidbarer Treffer eingeplant ist: so läuft in der Simulation
+    # die Entdopplung zwischen Bot-Regel und abgeleitetem Fehler
+    # tatsächlich durch, statt nur theoretisch zu existieren.
+    #
     (
         108.0, "Windschritt",
-        "Wirbel nicht ausgewichen",
+        "Zerfetzender Ansturm nicht ausgewichen",
         3, "warning", MECHANIC_MOVEMENT,
     ),
     (
@@ -297,7 +303,7 @@ DAMAGE_TAKEN: tuple[tuple[str, str, tuple[float, ...], float], ...] = (
     #
 
     ("Dolchtanz", "Double Swipe", (34.0, 112.0), 96000.0),
-    ("Windschritt", "Swirl", (108.0, 121.0, 149.0), 78000.0),
+    ("Windschritt", "Rending Charge", (108.0, 121.0, 149.0), 78000.0),
     ("Krallenwut", "Blazing Sunlight", (158.0,), 132000.0),
     ("Frostgrimm", "Deadly Plague", (71.0,), 64000.0),
     ("Bestienrufer", "Venom Bolt Volley", (95.0, 118.0), 71000.0),

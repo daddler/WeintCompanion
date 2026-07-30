@@ -810,6 +810,7 @@ class MockRaidDataProvider(RaidDataProvider):
                 count=count,
                 severity=severity,
                 category=category,
+                at_seconds=at,
             )
             for at, name, mechanic, count, severity, category
             in _MECHANIC_SCHEDULE

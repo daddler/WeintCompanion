@@ -6,6 +6,14 @@ Rahmen, Radius und Innenabstände identisch zu allen anderen Karten
 der Anwendung sind. Die erste Lektion des Plans wird als "nächste"
 hervorgehoben - dafür genügt der bereits vorhandene
 Akzent-Rahmen von Card(accent=True).
+
+Seit der automatischen Prüfung trägt die Karte zusätzlich das
+Ergebnis aus dem gewählten Log: erfüllt, nicht erfüllt oder keine
+Daten, jeweils mit dem gemessenen Wert gegen das Ziel. Der
+Erledigt-Schalter bleibt daneben bestehen - er ist die Angabe des
+Spielers, das Ergebnis die Evidenz aus dem Log. Beides ineinander zu
+überführen würde entweder den selbst gesetzten Haken zerstören oder
+eine Behauptung aufstellen, die aus einem Pull nicht folgt.
 """
 
 from __future__ import annotations
@@ -13,12 +21,33 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
-from analyzer.academy.models import Lesson
+from analyzer.academy.models import (
+    STATUS_FAILED,
+    STATUS_PASSED,
+    STATUS_UNKNOWN,
+    Lesson,
+    LessonResult,
+)
 
 from gui.theme.colors import Colors
 from gui.widgets.card import Card
 from gui.widgets.eyebrow import eyebrow_label
+from gui.widgets.hero_banner import HeroButton
 from gui.widgets.toggle_switch import ToggleSwitch
+from gui.widgets.tv.timer_chip import TimerChip
+
+
+#
+# Prüfergebnis auf die Zustandsfarben der TimerChip abbilden - "keine
+# Daten" ist bewusst neutral und nicht rot: es ist kein Fehler des
+# Spielers, wenn die Datenquelle etwas nicht liefert.
+#
+
+STATUS_STATES = {
+    STATUS_PASSED: "success",
+    STATUS_FAILED: "error",
+    STATUS_UNKNOWN: "neutral",
+}
 
 
 class LessonCard(Card):
@@ -29,17 +58,27 @@ class LessonCard(Card):
 
     completedChanged = Signal(str, bool)
 
+    #
+    # Sekunde im Kampf, an der ein Befund festgemacht ist - der
+    # Sprung in die Wiedergabe.
+    #
+
+    momentRequested = Signal(float)
+
     def __init__(
         self,
         lesson: Lesson,
         completed: bool = False,
         highlight: bool = False,
+        result: LessonResult | None = None,
         parent=None,
     ):
 
         super().__init__(accent=highlight, parent=parent)
 
         self.lesson = lesson
+
+        self.result = result
 
         #
         # --------------------------------------------------
@@ -124,6 +163,23 @@ class LessonCard(Card):
 
         #
         # --------------------------------------------------
+        # Ergebnis der automatischen Prüfung
+        # --------------------------------------------------
+        #
+        # Bewusst getrennt vom Erledigt-Schalter: das eine ist die
+        # Evidenz aus dem Log, das andere die eigene Angabe. Sie
+        # ineinander zu überführen würde entweder den selbst
+        # gesetzten Haken zerstören oder eine Behauptung über das
+        # Können des Spielers aufstellen, die aus einem Pull nicht
+        # folgt.
+        #
+
+        if result is not None and lesson.is_measurable:
+
+            self._add_result(result)
+
+        #
+        # --------------------------------------------------
         # Beschreibung
         # --------------------------------------------------
         #
@@ -193,6 +249,54 @@ class LessonCard(Card):
             self.addWidget(steps)
 
     # --------------------------------------------------
+
+    def _add_result(self, result: LessonResult):
+
+        row = QHBoxLayout()
+
+        row.setContentsMargins(0, 0, 0, 0)
+
+        row.setSpacing(10)
+
+        state = STATUS_STATES.get(result.status, "neutral")
+
+        chip = TimerChip(result.label.upper(), state)
+
+        row.addWidget(chip)
+
+        detail = QLabel(
+            " · ".join(
+                entry.detail
+                for entry in result.checks
+                if entry.detail
+            )
+        )
+
+        detail.setWordWrap(True)
+
+        detail.setStyleSheet(
+            f"font-size:12px;color:{Colors.TEXT_MUTED};"
+            "background:transparent;border:none;"
+        )
+
+        row.addWidget(detail, 1)
+
+        #
+        # Der Sprung in die Wiedergabe erscheint nur, wenn sich der
+        # Befund tatsächlich an einer Sekunde festmachen lässt.
+        #
+
+        if result.at_seconds >= 0:
+
+            jump = HeroButton("Im Replay ansehen", primary=False)
+
+            jump.clicked.connect(
+                lambda: self.momentRequested.emit(result.at_seconds)
+            )
+
+            row.addWidget(jump)
+
+        self.addLayout(row)
 
     def _on_toggled(self, checked: bool):
 
