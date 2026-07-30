@@ -269,13 +269,28 @@ class MainWindow(QMainWindow):
             lambda: self.open_settings_section("discord")
         )
 
-        self.dashboard.pageRequested.connect(
-            self.change_page
-        )
-
         self.dashboard.openSettingsSection.connect(
             self.open_settings_section
         )
+
+        #
+        # Seitenübergreifende Sprünge.
+        #
+        # Duck-getypt über alle Seiten statt je Seite eine eigene
+        # Zeile - dasselbe Vorgehen wie bei den on_enter()/on_leave()-
+        # Haken in change_page(). Eine neue Seite, die springen können
+        # soll, braucht damit nur das Signal und keine Änderung hier.
+        #
+
+        for page in self.pages_by_id.values():
+
+            if hasattr(page, "pageRequested"):
+
+                page.pageRequested.connect(self.change_page)
+
+            if hasattr(page, "playerRequested"):
+
+                page.playerRequested.connect(self.open_academy_for)
 
         #
         # Startseite
@@ -430,6 +445,26 @@ class MainWindow(QMainWindow):
         if hasattr(self.settings, "show_section"):
 
             self.settings.show_section(key)
+
+    def open_academy_for(self, player_name: str):
+        """
+        Aus WeintTVs Analyse heraus einen Spieler in der Academy
+        öffnen.
+
+        Die Reihenfolge ist entscheidend: erst den Charakter setzen,
+        dann die Seite wechseln. `change_page()` löst `on_enter()` und
+        `refresh()` aus, die aus dem aktuellen Snapshot neu zeichnen -
+        andersherum stünde für einen Moment der falsche Charakter auf
+        der Seite.
+        """
+
+        academy = getattr(self, "academy", None)
+
+        if academy is not None and hasattr(academy, "show_player"):
+
+            academy.show_player(player_name)
+
+        self.change_page(PageId.ACADEMY)
 
     # --------------------------------------------------
     # System-Tray

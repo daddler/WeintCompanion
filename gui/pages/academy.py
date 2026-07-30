@@ -446,6 +446,23 @@ class AcademyPage(QWidget):
 
         open_row.addStretch()
 
+        #
+        # Der Sprung in WeintTVs Analyse: die Bewertung sagt WAS
+        # schieflief, die Analyse zeigt die Zahlen dahinter. Ohne
+        # diesen Weg müsste man ihn über die Seitenleiste suchen.
+        #
+
+        self.open_analysis_button = HeroButton(
+            "Zur Analyse",
+            primary=False,
+        )
+
+        self.open_analysis_button.clicked.connect(
+            self._open_analysis
+        )
+
+        open_row.addWidget(self.open_analysis_button)
+
         self.open_plan_button = HeroButton("Zum Trainingsplan")
 
         self.open_plan_button.clicked.connect(
@@ -457,6 +474,31 @@ class AcademyPage(QWidget):
         self.next_card.addLayout(open_row)
 
         layout.addWidget(self.next_card)
+
+        #
+        # Kennzahlen der Tiefenauswertung
+        #
+        # Die drei Zahlen, auf denen die neuen Bewertungen beruhen -
+        # sichtbar neben den Sternen, damit eine Bewertung nicht als
+        # Urteil ohne Beleg dasteht.
+        #
+
+        tiles = QHBoxLayout()
+
+        tiles.setSpacing(14)
+
+        self.tile_avoidable = MetricTile("VERMEIDBAR", "-")
+        self.tile_activity = MetricTile("AKTIVZEIT", "-")
+        self.tile_cooldowns = MetricTile("COOLDOWNS", "-")
+
+        for tile in (
+            self.tile_avoidable,
+            self.tile_activity,
+            self.tile_cooldowns,
+        ):
+            tiles.addWidget(tile, 1)
+
+        layout.addLayout(tiles)
 
         #
         # Fortschritt
@@ -616,6 +658,26 @@ class AcademyPage(QWidget):
     # Navigation innerhalb der Seite
     # --------------------------------------------------
 
+    def show_player(self, name: str):
+        """
+        Von außen einen Charakter auswählen - der Sprung aus WeintTVs
+        Analyse ("diesen Spieler in der Academy ansehen").
+
+        Muss VOR dem Seitenwechsel aufgerufen werden: change_page()
+        löst on_enter() und refresh() aus, die aus dem aktuellen
+        Snapshot neu zeichnen. Andersherum stünde für einen Moment der
+        falsche Charakter auf der Seite.
+        """
+
+        if not name:
+            return
+
+        self.academy.set_player_name(name)
+
+        self._plan_signature = None
+
+        self._apply_snapshot(self.service.current())
+
     def _show_tab(self, key):
 
         index = self._tab_index.get(key)
@@ -743,6 +805,68 @@ class AcademyPage(QWidget):
 
     # --------------------------------------------------
 
+    def _apply_metric_tiles(self):
+        """
+        Die drei Zahlen hinter den neuen Bewertungen.
+
+        Sie stehen bewusst neben den Sternen: eine Bewertung ohne den
+        Wert, auf dem sie beruht, ist ein Urteil ohne Beleg.
+        """
+
+        snapshot = self.service.current()
+
+        name = self._profile.name
+
+        taken = snapshot.damage_taken_of(name)
+
+        self.tile_avoidable.setValue(
+            f"{taken.avoidable_share * 100:.0f} %"
+            if taken is not None and taken.total > 0
+            else "-"
+        )
+
+        self.tile_avoidable.setCaption(
+            f"{taken.avoidable_hits} Treffer"
+            if taken is not None and taken.avoidable_hits
+            else "erhaltener Schaden"
+        )
+
+        activity = snapshot.activity_of(name)
+
+        self.tile_activity.setValue(
+            f"{activity.active_percent:.0f} %"
+            if activity is not None
+            else "-"
+        )
+
+        self.tile_activity.setCaption(
+            f"{activity.apm:.0f} Aktionen/min"
+            if activity is not None
+            else "keine Angaben"
+        )
+
+        cooldowns = [
+            usage
+            for usage in snapshot.cooldowns_of(name)
+            if usage.possible > 0
+        ]
+
+        used = sum(usage.uses for usage in cooldowns)
+
+        possible = sum(usage.possible for usage in cooldowns)
+
+        self.tile_cooldowns.setValue(
+            f"{used}/{possible}"
+            if possible
+            else "-"
+        )
+
+        self.tile_cooldowns.setCaption(
+            f"{sum(usage.in_burst for usage in cooldowns)} im Heldentum"
+            if cooldowns and snapshot.heroism_windows
+            else "genutzt von möglich"
+        )
+
     def _apply_overview(self):
 
         profile = self._profile
@@ -799,7 +923,18 @@ class AcademyPage(QWidget):
 
             stars.setStars(rating.stars)
 
-            detail.setText(rating.detail)
+            #
+            # Ohne Daten wird der Grund genannt statt eine Bewertung
+            # zu behaupten - null Sterne heißen "unbekannt", nicht
+            # "schlecht".
+            #
+
+            detail.setText(
+                rating.detail
+                or f"{rating.hint} - noch keine Daten."
+            )
+
+        self._apply_metric_tiles()
 
         #
         # Nächste Lektion
@@ -942,6 +1077,19 @@ class AcademyPage(QWidget):
         self._plan_signature = None
 
         self._apply_snapshot(self.service.current())
+
+    def _open_analysis(self):
+        """
+        WeintTV öffnen und dort direkt die Analyse zeigen.
+        """
+
+        weinttv = getattr(self.window(), "weinttv", None)
+
+        if weinttv is not None and hasattr(weinttv, "show_tab"):
+
+            weinttv.show_tab("analysis")
+
+        self.pageRequested.emit(PageId.WEINTTV)
 
     def _reset_selection(self):
 

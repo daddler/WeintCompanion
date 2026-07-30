@@ -879,6 +879,16 @@ class WeintTvPage(QWidget):
     # Navigation innerhalb der Seite
     # --------------------------------------------------
 
+    def show_tab(self, key):
+        """
+        Öffentlich, weil die Academy hierher springen können muss -
+        "Zur Analyse" aus der Übersicht heraus.
+        """
+
+        self.tabs.setValue(key)
+
+        self._show_tab(key)
+
     def _show_tab(self, key):
 
         index = self._tab_index.get(key)
