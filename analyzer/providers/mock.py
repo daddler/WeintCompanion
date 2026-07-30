@@ -25,6 +25,7 @@ import time
 from dataclasses import replace
 
 from analyzer.analysis import damage as damage_analysis
+from analyzer.data import avoidable as avoidable_data
 from analyzer.data import encounters
 from analyzer.providers import mock_schedule as schedule
 from analyzer.providers.base import RaidDataProvider
@@ -188,6 +189,21 @@ _HEAL_COOLDOWNS = schedule.HEAL_COOLDOWNS
 #
 
 
+def _rate_of(rows: tuple[MetricEntry, ...], name: str) -> float:
+    """
+    Der Wert pro Sekunde eines Spielers aus einer Rangliste - 0.0,
+    wenn er nicht darin vorkommt (Heiler stehen nicht im
+    Schadensranking).
+    """
+
+    for entry in rows:
+
+        if entry.actor.name == name:
+            return entry.value
+
+    return 0.0
+
+
 class MockRaidDataProvider(RaidDataProvider):
     """
     Deterministische Simulation eines 25er-Raids.
@@ -283,6 +299,178 @@ class MockRaidDataProvider(RaidDataProvider):
             )
 
         return self._after_snapshot(pull_number)
+
+    # --------------------------------------------------
+    # Wiedergabe
+    # --------------------------------------------------
+
+    def timeline(self, pull_number: int = 1):
+        """
+        Der ganze simulierte Pull als Zeitleiste.
+
+        Ohne das wäre die Wiedergabe erst vorführbar, wenn der Bot den
+        Zeitleisten-Endpunkt liefert - und damit wäre die
+        aufwendigste Neuerung von WeintTV monatelang unbegutachtbar.
+
+        Die Reihen entstehen, indem dieselben Funktionen abgetastet
+        werden, die auch den Live-Snapshot bauen. Dadurch stimmt die
+        Wiedergabe mit dem Live-Bild an jedem Zeitpunkt überein -
+        anders als bei einer zweiten, eigens gebauten Datenreihe, die
+        langsam auseinanderliefe.
+        """
+
+        from analyzer.analysis.movement import COORD_UNITS_PER_METER
+        from analyzer.replay.models import (
+            AvoidableHit,
+            FightTimeline,
+            PlayerSeries,
+        )
+
+        interval = 1.0
+
+        steps = int(PULL_SECONDS / interval) + 1
+
+        stamps = [index * interval for index in range(steps)]
+
+        #
+        # Die Snapshots einmal je Takt bauen und danach auslesen. Ein
+        # Aufruf je Spieler und Takt wäre fünfundzwanzigmal so teuer,
+        # ohne ein anderes Ergebnis zu liefern.
+        #
+
+        frames = [
+            self._combat_snapshot(pull_number, at)
+            for at in stamps
+        ]
+
+        players = []
+
+        for actor, _base in _ACTORS:
+
+            damage = []
+            healing = []
+            taken = []
+            units = []
+            active = []
+            casts = []
+
+            #
+            # Schaden und Heilung werden aus der Kurve *aufsummiert*
+            # statt aus `MetricEntry.total` übernommen.
+            #
+            # Grund: der Live-Snapshot rechnet total = Wert pro
+            # Sekunde × Kampfzeit, und der Wert pro Sekunde schwankt
+            # bewusst leicht (damit sich die Rangfolge bewegt). Diese
+            # Multiplikation ergibt deshalb keine monoton wachsende
+            # Summe - beim Vorspulen könnte der Schaden eines
+            # Spielers sinken. Die aufsummierte Kurve ist das echte
+            # Integral und kann das nicht.
+            #
+
+            damage_sum = 0.0
+
+            healing_sum = 0.0
+
+            for at, frame in zip(stamps, frames):
+
+                damage_sum += _rate_of(frame.top_damage, actor.name) * interval
+
+                healing_sum += _rate_of(frame.top_healing, actor.name) * interval
+
+                damage.append(damage_sum)
+
+                healing.append(healing_sum)
+
+                entry = frame.damage_taken_of(actor.name)
+
+                taken.append(entry.total if entry else 0.0)
+
+                movement = frame.movement_of(actor.name)
+
+                units.append(
+                    movement.meters * COORD_UNITS_PER_METER
+                    if movement
+                    else 0.0
+                )
+
+                activity = frame.activity_of(actor.name)
+
+                active.append(
+                    activity.active_percent / 100.0 * at
+                    if activity
+                    else 0.0
+                )
+
+                casts.append(float(activity.casts) if activity else 0.0)
+
+            players.append(
+                PlayerSeries(
+                    actor=actor,
+                    damage=tuple(damage),
+                    healing=tuple(healing),
+                    damage_taken=tuple(taken),
+                    movement_units=tuple(units),
+                    active_seconds=tuple(active),
+                    casts=tuple(casts),
+                )
+            )
+
+        final = frames[-1]
+
+        #
+        # Vermeidbare Treffer einzeln mit Zeitpunkt - nur so kann die
+        # Academy aus einem Befund an genau diese Sekunde springen.
+        #
+
+        hits = []
+
+        for name, ability, times, per_hit in schedule.DAMAGE_TAKEN:
+
+            rule = avoidable_data.classify(self._encounter_name, ability)
+
+            if rule is None or rule.verdict != avoidable_data.VERDICT_AVOIDABLE:
+                continue
+
+            for at in times:
+
+                hits.append(
+                    AvoidableHit(
+                        actor_name=name,
+                        ability=ability,
+                        at_seconds=at,
+                        amount=per_hit,
+                        note=rule.note,
+                    )
+                )
+
+        hits.sort(key=lambda hit: hit.at_seconds)
+
+        return FightTimeline(
+            encounter=self._encounter(),
+            source_label=f"Wiedergabe · {self._encounter_name}",
+            pull_number=pull_number,
+            duration=PULL_SECONDS,
+            interval=interval,
+            raid_size=RAID_SIZE,
+            battle_res_max=BATTLE_RES_MAX,
+            boss_health=tuple(
+                frame.boss_health_percent
+                for frame in frames
+            ),
+            players=tuple(players),
+            deaths=final.deaths,
+            resurrections=final.resurrections,
+            heroism_windows=final.heroism_windows,
+            cooldown_usage=final.cooldown_usage,
+            avoidable_hits=tuple(hits),
+            interrupts=final.interrupts,
+            dispels=final.dispels,
+            mechanics=final.mechanics,
+            damage_taken_totals=final.damage_taken,
+            dot_uptimes=final.dot_uptimes,
+            hot_uptimes=final.hot_uptimes,
+            aggregate=self._after_snapshot(pull_number),
+        )
 
     # --------------------------------------------------
     # Phasen

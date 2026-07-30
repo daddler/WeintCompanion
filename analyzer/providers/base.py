@@ -76,6 +76,28 @@ class RaidDataProvider(ABC):
         return False
 
     # --------------------------------------------------
+    # Wiedergabe
+    # --------------------------------------------------
+
+    def timeline(self, pull_number: int = 1):
+        """
+        Der zuletzt gesehene Kampf als Zeitleiste, oder None.
+
+        Bewusst nicht abstrakt: eine Quelle, die keinen vollständigen
+        Verlauf kennt, muss dafür nichts umsetzen. Damit bleibt die
+        Zusicherung erhalten, dass eine neue Datenquelle ein Eintrag
+        in der Registry plus eine Klasse ist - wer eine Zeitleiste
+        liefern kann, bekommt die Wiedergabe geschenkt, wer nicht,
+        funktioniert unverändert weiter.
+
+        Der WarcraftLogs-Live-Anbieter überschreibt das absichtlich
+        nicht: ein laufender Kampf lässt sich nicht wiedergeben, und
+        für abgeschlossene gibt es den Archiv-Weg.
+        """
+
+        return None
+
+    # --------------------------------------------------
     # Diagnose
     # --------------------------------------------------
 
