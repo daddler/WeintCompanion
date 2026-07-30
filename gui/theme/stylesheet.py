@@ -224,6 +224,51 @@ QTextEdit:focus{{
 
 
 /* ==========================================================
+   SLIDER
+
+   Nur die Wiedergabe-Leiste von WeintTV benutzt ihn. Ohne eigene
+   Regel zeichnet Qt hier den Stil des Betriebssystems, der zwischen
+   den dunklen Karten des Designs wie ein Fremdkörper wirkt.
+========================================================== */
+
+QSlider::groove:horizontal{{
+
+    height:6px;
+
+    border-radius:3px;
+
+    background:{Colors.SURFACE_LIGHT};
+}}
+
+QSlider::sub-page:horizontal{{
+
+    height:6px;
+
+    border-radius:3px;
+
+    background:{Colors.PRIMARY};
+}}
+
+QSlider::handle:horizontal{{
+
+    width:14px;
+
+    height:14px;
+
+    margin:-4px 0;
+
+    border-radius:7px;
+
+    background:{Colors.TEXT};
+}}
+
+QSlider::handle:horizontal:hover{{
+
+    background:{Colors.PRIMARY_HOVER};
+}}
+
+
+/* ==========================================================
    COMBOBOX
 ========================================================== */
 

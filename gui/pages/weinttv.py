@@ -12,7 +12,7 @@ Aufbau: drei Bereiche in einem eigenen QStackedWidget, umgeschaltet
 Unternavigation der Einstellungen, nur horizontal).
 
     Live      Was gerade passiert
-    Analyse   Cooldowns, Verbrauchsgüter, Fehler, Warnungen
+    Analyse   Die Tiefenauswertung des Pulls
     Verlauf   Abgeschlossene Pulls
 
 Aktualisiert wird nur, solange die Seite auch sichtbar ist:
@@ -22,7 +22,9 @@ Haken ruft MainWindow.change_page() auf.
 
 from __future__ import annotations
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QComboBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -31,7 +33,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from analyzer.models import RaidSnapshot
+from analyzer.analysis.movement import format_meters
+from analyzer.models import MECHANIC_SOURCE_LOCAL, RaidSnapshot
 
 from core.resources import Resources
 
@@ -42,12 +45,42 @@ from gui.widgets.card import Card
 from gui.widgets.section_card import SectionCard
 from gui.widgets.segmented_control import SegmentedControl
 from gui.widgets.tv.archive_picker import ArchivePicker
+from gui.widgets.tv.data_table import (
+    DataTable,
+    TableCell,
+    TableColumn,
+    TableRowData,
+)
 from gui.widgets.tv.entry_list import EntryData, EntryList
 from gui.widgets.tv.meter_bar import MeterBar
 from gui.widgets.tv.meter_row_list import MeterRowData, MeterRowList
 from gui.widgets.tv.metric_tile import MetricTile
 from gui.widgets.tv.ranking_list import RankingList, format_per_second
+from gui.widgets.tv.replay_bar import ReplayBar
 from gui.widgets.tv.timer_chip import TimerChip
+
+
+#
+# Auswahlwert des Spielerfilters für "alle Spieler". Ein leerer String
+# wäre in einer QComboBox nicht von "nichts gewählt" zu unterscheiden.
+#
+
+ALL_PLAYERS = "__all__"
+
+
+def _format_amount(value: float) -> str:
+    """
+    Große Schadenssummen lesbar machen. Gehört hierher und nicht in
+    jedes Widget - dieselbe Begründung wie bei format_per_second().
+    """
+
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
+
+    if value >= 1_000:
+        return f"{value / 1_000:.0f}k"
+
+    return f"{value:.0f}"
 
 
 TAB_LIVE = "live"
@@ -56,6 +89,22 @@ TAB_HISTORY = "history"
 
 
 class WeintTvPage(QWidget):
+
+    #
+    # Sprung in einen anderen Hauptbereich. Duck-getypt vom
+    # MainWindow verbunden, genau wie on_enter()/on_leave().
+    #
+
+    pageRequested = Signal(int)
+
+    #
+    # "Diesen Spieler in der Academy ansehen" - die eine Hälfte der
+    # Verzahnung beider Bereiche. Die andere Hälfte
+    # (Academy -> Wiedergabe an dieser Sekunde) liegt in
+    # gui/pages/academy.py.
+    #
+
+    playerRequested = Signal(str)
 
     def __init__(self, manager):
 
@@ -66,6 +115,15 @@ class WeintTvPage(QWidget):
         self.service = manager.raid_data
 
         self._attached = False
+
+        #
+        # Auf welchen Spieler die Analyse eingeschränkt ist. Ohne
+        # Filter wären 25 Spieler mal sechs Tabellen unlesbar.
+        #
+
+        self._filter = ALL_PLAYERS
+
+        self._roster_signature = ()
 
         root = QVBoxLayout(self)
 
@@ -127,6 +185,18 @@ class WeintTvPage(QWidget):
         #
 
         root.addWidget(ArchivePicker(self.service))
+
+        #
+        # --------------------------------------------------
+        # Wiedergabe-Steuerung
+        # --------------------------------------------------
+        #
+        # Blendet sich selbst ein, sobald ein Pull abgespielt wird -
+        # ebenfalls über denselben Service, also auch hier ohne
+        # Möglichkeit, gegenüber der Academy auseinanderzulaufen.
+        #
+
+        root.addWidget(ReplayBar(self.service))
 
         #
         # --------------------------------------------------
@@ -391,6 +461,32 @@ class WeintTvPage(QWidget):
 
         layout.addWidget(tank_card)
 
+        #
+        # Kampfereignisse
+        #
+        # Tode, Kampf-Wiederbelebungen und Heldentum in einer
+        # gemeinsamen, zeitlich sortierten Liste. Bisher war nur
+        # ablesbar, DASS Heldentum lief und WIE VIELE Rezz-Ladungen
+        # übrig sind - nicht wann und auf wen. Drei getrennte, meist
+        # fast leere Karten dafür wären verschenkter Platz; die
+        # gemeinsame Zeitachse erzählt zudem den Verlauf des Pulls.
+        #
+
+        events_card = SectionCard(
+            Resources.logs(),
+            "Kampfereignisse",
+            "Tode, Kampf-Rezz und Heldentum in zeitlicher Folge.",
+        )
+
+        self.events_list = EntryList(
+            capacity=12,
+            placeholder="Noch nichts passiert.",
+        )
+
+        events_card.addWidget(self.events_list)
+
+        layout.addWidget(events_card)
+
         layout.addStretch()
 
         return page
@@ -408,6 +504,242 @@ class WeintTvPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         layout.setSpacing(16)
+
+        #
+        # Spielerfilter
+        #
+        # Ohne ihn stünden hier 25 Spieler mal sechs Tabellen. Die
+        # Analyse soll die Frage "was soll ICH anders machen"
+        # beantworten können, und dafür muss man sich auf einen
+        # Spieler beschränken dürfen.
+        #
+
+        filter_row = QHBoxLayout()
+
+        filter_row.setSpacing(10)
+
+        filter_label = QLabel("Spieler")
+
+        filter_label.setStyleSheet(
+            f"font-size:12px;color:{Colors.TEXT_MUTED};"
+            "background:transparent;border:none;"
+        )
+
+        filter_row.addWidget(filter_label)
+
+        self.player_filter = QComboBox()
+
+        self.player_filter.setMinimumWidth(200)
+
+        self.player_filter.currentIndexChanged.connect(
+            self._on_filter_changed
+        )
+
+        filter_row.addWidget(self.player_filter)
+
+        filter_row.addStretch()
+
+        layout.addLayout(filter_row)
+
+        #
+        # Erhaltener Schaden
+        #
+        # Steht bewusst ganz oben: es ist die Zahl, die am ehesten
+        # erklärt, warum ein Pull schiefging - und die Grundlage der
+        # Überlebensbewertung in der Academy.
+        #
+
+        self.damage_taken_table = DataTable(
+            columns=(
+                TableColumn("Spieler", weight=3),
+                TableColumn("Gesamt", weight=2, align="right", mono=True),
+                TableColumn("Vermeidbar", weight=2, align="right", mono=True),
+                TableColumn("Anteil", weight=2, align="right", mono=True),
+                TableColumn("Treffer", weight=1, align="right", mono=True),
+            ),
+            capacity=25,
+            placeholder="Keine Angaben zum erhaltenen Schaden.",
+        )
+
+        self.damage_taken_table.rowActivated.connect(
+            self.playerRequested
+        )
+
+        damage_taken_card = SectionCard(
+            Resources.game(),
+            "Erhaltener Schaden",
+            "Wie viel getroffen wurde - und wie viel davon vermeidbar war.",
+        )
+
+        damage_taken_card.addWidget(self.damage_taken_table)
+
+        layout.addWidget(damage_taken_card)
+
+        #
+        # Vermeidbarer Schaden nach Fähigkeit
+        #
+
+        self.avoidable_table = DataTable(
+            columns=(
+                TableColumn("Fähigkeit", weight=3),
+                TableColumn("Spieler", weight=2),
+                TableColumn("Schaden", weight=2, align="right", mono=True),
+                TableColumn("Treffer", weight=1, align="right", mono=True),
+                TableColumn("Was tun", weight=3),
+            ),
+            capacity=20,
+            placeholder=(
+                "Nichts Vermeidbares erkannt - oder für diesen Boss "
+                "fehlen noch Referenzdaten."
+            ),
+        )
+
+        self.avoidable_table.rowActivated.connect(
+            self.playerRequested
+        )
+
+        avoidable_card = SectionCard(
+            Resources.logs(),
+            "Vermeidbarer Schaden",
+            "Aufgeschlüsselt nach Fähigkeit, mit Hinweis was zu tun war.",
+        )
+
+        avoidable_card.addWidget(self.avoidable_table)
+
+        layout.addWidget(avoidable_card)
+
+        #
+        # Wirkungsdauern
+        #
+
+        uptimes = QHBoxLayout()
+
+        uptimes.setSpacing(16)
+
+        dot_card = SectionCard(
+            Resources.game(),
+            "DoT-Uptimes",
+            "Wirkungsdauer der Schadenseffekte auf dem Ziel.",
+        )
+
+        self.dot_uptimes = MeterRowList(
+            capacity=12,
+            placeholder="Keine Angaben zu DoT-Uptimes.",
+        )
+
+        dot_card.addWidget(self.dot_uptimes)
+
+        uptimes.addWidget(dot_card, 1)
+
+        hot_card = SectionCard(
+            Resources.backup(),
+            "HoT-Uptimes",
+            "Wirkungsdauer der Heileffekte auf dem Raid.",
+        )
+
+        self.hot_uptimes = MeterRowList(
+            capacity=12,
+            placeholder="Keine Angaben zu HoT-Uptimes.",
+        )
+
+        hot_card.addWidget(self.hot_uptimes)
+
+        uptimes.addWidget(hot_card, 1)
+
+        layout.addLayout(uptimes)
+
+        #
+        # Laufwege und Aktivzeit
+        #
+
+        movement_row = QHBoxLayout()
+
+        movement_row.setSpacing(16)
+
+        self.movement_card = SectionCard(
+            Resources.companion(),
+            "Laufwege",
+            "Schätzung aus Positionsdaten.",
+        )
+
+        self.movement_list = MeterRowList(
+            capacity=25,
+            placeholder="Keine Angaben zu Laufwegen.",
+        )
+
+        self.movement_card.addWidget(self.movement_list)
+
+        movement_row.addWidget(self.movement_card, 1)
+
+        activity_card = SectionCard(
+            Resources.dashboard(),
+            "Aktivzeit",
+            "Wie durchgehend gespielt wurde - unabhängig vom Schaden.",
+        )
+
+        self.activity_list = MeterRowList(
+            capacity=25,
+            placeholder="Keine Angaben zur Aktivzeit.",
+        )
+
+        activity_card.addWidget(self.activity_list)
+
+        movement_row.addWidget(activity_card, 1)
+
+        layout.addLayout(movement_row)
+
+        #
+        # Cooldown-Nutzung
+        #
+        # Nicht zu verwechseln mit den beiden Fortschrittslisten
+        # weiter unten: die zeigen den Live-Countdown, diese Tabelle
+        # die Rückschau über den ganzen Kampf.
+        #
+
+        self.cooldown_table = DataTable(
+            columns=(
+                TableColumn("Fähigkeit", weight=3),
+                TableColumn("Spieler", weight=2),
+                TableColumn("Einsätze", weight=2, align="right", mono=True),
+                TableColumn("Im Heldentum", weight=2, align="right", mono=True),
+                TableColumn("Zeitpunkte", weight=3, mono=True),
+            ),
+            capacity=25,
+            placeholder="Keine Angaben zur Cooldown-Nutzung.",
+        )
+
+        self.cooldown_table.rowActivated.connect(
+            self.playerRequested
+        )
+
+        cooldown_usage_card = SectionCard(
+            Resources.companion(),
+            "Cooldown-Nutzung",
+            "Genutzte gegen mögliche Einsätze über den ganzen Kampf.",
+        )
+
+        cooldown_usage_card.addWidget(self.cooldown_table)
+
+        layout.addWidget(cooldown_usage_card)
+
+        #
+        # Unterbrechungen und Dispels
+        #
+
+        self.support_list = EntryList(
+            capacity=12,
+            placeholder="Keine Unterbrechungen oder Dispels erfasst.",
+        )
+
+        support_card = SectionCard(
+            Resources.sync(),
+            "Unterbrechungen & Dispels",
+            "Wer wann eingegriffen hat.",
+        )
+
+        support_card.addWidget(self.support_list)
+
+        layout.addWidget(support_card)
 
         cooldowns = QHBoxLayout()
 
@@ -796,6 +1128,67 @@ class WeintTvPage(QWidget):
             for tank in snapshot.tanks
         )
 
+        self.events_list.setEntries(self._event_rows(snapshot))
+
+    def _event_rows(self, snapshot: RaidSnapshot):
+        """
+        Tode, Kampf-Rezz und Heldentum auf einer gemeinsamen
+        Zeitachse - neueste zuerst, damit das Jüngste ohne Scrollen
+        sichtbar ist.
+        """
+
+        rows = []
+
+        for window in snapshot.heroism_windows:
+
+            rows.append((
+                window.start,
+                EntryData(
+                    title=f"{window.label} eingesetzt",
+                    detail=(
+                        f"{window.clock}"
+                        + (f" · von {window.source}" if window.source else "")
+                    ),
+                    level="info",
+                    trailing=f"{int(window.duration)}s",
+                ),
+            ))
+
+        for event in snapshot.resurrections:
+
+            rows.append((
+                event.at_seconds,
+                EntryData(
+                    title=f"Kampf-Rezz auf {event.target}",
+                    detail=(
+                        f"{event.clock}"
+                        + (f" · von {event.caster}" if event.caster else "")
+                    ),
+                    level="success",
+                    trailing=event.ability,
+                ),
+            ))
+
+        for death in snapshot.deaths:
+
+            clock = max(0, int(death.at_seconds))
+
+            rows.append((
+                death.at_seconds,
+                EntryData(
+                    title=f"{death.actor_name} gestorben",
+                    detail=(
+                        f"{clock // 60:02d}:{clock % 60:02d}"
+                        + (f" · {death.cause}" if death.cause else "")
+                    ),
+                    level="error",
+                ),
+            ))
+
+        rows.sort(key=lambda row: row[0], reverse=True)
+
+        return [entry for _at, entry in rows]
+
     # --------------------------------------------------
 
     def _apply_analysis(self, snapshot: RaidSnapshot):
@@ -827,10 +1220,24 @@ class WeintTvPage(QWidget):
             for state in snapshot.consumables
         )
 
+        #
+        # Die Herkunft steht dabei: Fehler, die der Analyzer aus dem
+        # erhaltenen Schaden abgeleitet hat, sind nur so gut wie die
+        # Referenzdaten des jeweiligen Bosses - das soll man sehen
+        # können, statt beide Quellen ununterscheidbar zu mischen.
+        #
+
         self.mechanics.setEntries(
             EntryData(
                 title=issue.mechanic,
-                detail=issue.actor_name,
+                detail=(
+                    issue.actor_name
+                    + (
+                        " · aus dem Schaden abgeleitet"
+                        if issue.source == MECHANIC_SOURCE_LOCAL
+                        else ""
+                    )
+                ),
                 level=issue.severity,
                 trailing=f"{issue.count}×",
             )
@@ -844,6 +1251,330 @@ class WeintTvPage(QWidget):
             )
             for text in snapshot.warnings
         )
+
+        self._apply_deep_analysis(snapshot)
+
+    # --------------------------------------------------
+    # Tiefenauswertung
+    # --------------------------------------------------
+    #
+    # Jede Karte bekommt genau die Zeilen, die zur Filterauswahl
+    # passen. Fehlt der Datenquelle ein Block, entsteht eine leere
+    # Liste und das jeweilige Widget zeigt seinen Platzhaltertext -
+    # kein Sonderfall, keine Fallunterscheidung je Feld.
+    #
+
+    def _keep(self, name: str) -> bool:
+
+        return self._filter in (ALL_PLAYERS, name)
+
+    def _apply_deep_analysis(self, snapshot: RaidSnapshot):
+
+        self._sync_filter(snapshot)
+
+        self._apply_damage_taken(snapshot)
+
+        self._apply_uptimes(snapshot)
+
+        self._apply_movement(snapshot)
+
+        self._apply_cooldown_usage(snapshot)
+
+        self.support_list.setEntries(
+            EntryData(
+                title=(
+                    f"{event.actor_name} → {event.target}"
+                    if event.target
+                    else event.actor_name
+                ),
+                detail=(
+                    ("Unterbrechung" if event.kind == "interrupt" else "Dispel")
+                    + (f" · {event.ability}" if event.ability else "")
+                ),
+                level="success",
+                trailing=(
+                    f"{int(event.at_seconds) // 60:02d}:"
+                    f"{int(event.at_seconds) % 60:02d}"
+                ),
+            )
+            for event in sorted(
+                (
+                    event
+                    for event in snapshot.interrupts + snapshot.dispels
+                    if self._keep(event.actor_name)
+                ),
+                key=lambda event: event.at_seconds,
+                reverse=True,
+            )
+        )
+
+    def _apply_damage_taken(self, snapshot: RaidSnapshot):
+
+        rows = [
+            entry
+            for entry in snapshot.damage_taken
+            if self._keep(entry.actor_name)
+        ]
+
+        self.damage_taken_table.setRows(
+            TableRowData(
+                key=entry.actor_name,
+                cells=(
+                    TableCell(entry.actor_name, Colors.TEXT),
+                    TableCell(_format_amount(entry.total)),
+                    TableCell(
+                        _format_amount(entry.avoidable),
+                        (
+                            Colors.ERROR
+                            if entry.avoidable > 0
+                            else Colors.TEXT_MUTED
+                        ),
+                    ),
+                    TableCell(
+                        f"{entry.avoidable_share * 100:.0f} %",
+                        (
+                            Colors.ERROR
+                            if entry.avoidable_share >= 0.15
+                            else Colors.SUCCESS
+                        ),
+                        ratio=entry.avoidable_share,
+                    ),
+                    TableCell(str(entry.hits)),
+                ),
+            )
+            for entry in rows
+        )
+
+        #
+        # Die Aufschlüsselung nach Fähigkeit zeigt nur Vermeidbares -
+        # unvermeidbarer Schaden gehört zum Kampf und wäre hier nur
+        # Rauschen.
+        #
+
+        breakdown = []
+
+        for entry in rows:
+
+            for ability in entry.abilities:
+
+                if not ability.avoidable:
+                    continue
+
+                breakdown.append((entry.actor_name, ability))
+
+        breakdown.sort(key=lambda row: row[1].amount, reverse=True)
+
+        self.avoidable_table.setRows(
+            TableRowData(
+                key=name,
+                cells=(
+                    TableCell(ability.ability, Colors.TEXT),
+                    TableCell(name),
+                    TableCell(_format_amount(ability.amount), Colors.ERROR),
+                    TableCell(str(ability.hits)),
+                    TableCell(ability.note, Colors.TEXT_MUTED),
+                ),
+            )
+            for name, ability in breakdown
+        )
+
+    def _apply_uptimes(self, snapshot: RaidSnapshot):
+
+        for widget, rows in (
+            (self.dot_uptimes, snapshot.dot_uptimes),
+            (self.hot_uptimes, snapshot.hot_uptimes),
+        ):
+
+            widget.setRows(
+                MeterRowData(
+                    title=entry.ability,
+                    detail=(
+                        entry.actor_name
+                        + (
+                            f" · Ziel {entry.expected_percent:.0f} %"
+                            if entry.expected_percent > 0
+                            else ""
+                        )
+                    ),
+                    value=f"{entry.uptime_percent:.0f} %",
+                    ratio=entry.uptime_percent / 100.0,
+                    color=(
+                        Colors.SUCCESS
+                        if entry.uptime_percent >= entry.expected_percent
+                        else Colors.WARNING
+                    ),
+                )
+                for entry in rows
+                if self._keep(entry.actor_name)
+            )
+
+    def _apply_movement(self, snapshot: RaidSnapshot):
+
+        average = snapshot.movement_average
+
+        #
+        # Der Untertitel nennt den Raidschnitt und sagt ausdrücklich,
+        # dass es eine Schätzung ist. WarcraftLogs kennt keine
+        # Distanzmetrik - der Wert entsteht aus Positionsangaben
+        # zwischen Ereignissen und unterschätzt echtes Ausweichen.
+        #
+
+        self.movement_card.setSubtitle(
+            f"Schätzung aus Positionsdaten · Raidschnitt "
+            f"{format_meters(average)}"
+            if average > 0
+            else "Schätzung aus Positionsdaten."
+        )
+
+        longest = max(
+            (entry.meters for entry in snapshot.movement),
+            default=0.0,
+        )
+
+        self.movement_list.setRows(
+            MeterRowData(
+                title=entry.actor_name,
+                detail=(
+                    f"{entry.meters_per_second:.1f} m/s"
+                    + (
+                        f" · {entry.avoidable_hits} vermeidbare Treffer"
+                        if entry.avoidable_hits
+                        else ""
+                    )
+                ),
+                value=format_meters(entry.meters),
+                ratio=(
+                    entry.meters / longest
+                    if longest > 0
+                    else 0.0
+                ),
+                color=(
+                    Colors.WARNING
+                    if average > 0 and entry.meters > average * 1.25
+                    else Colors.PRIMARY
+                ),
+            )
+            for entry in snapshot.movement
+            if self._keep(entry.actor_name)
+        )
+
+        self.activity_list.setRows(
+            MeterRowData(
+                title=entry.actor_name,
+                detail=f"{entry.apm:.0f} Aktionen/min",
+                value=f"{entry.active_percent:.0f} %",
+                ratio=entry.active_percent / 100.0,
+                color=(
+                    Colors.SUCCESS
+                    if entry.active_percent >= 90.0
+                    else Colors.WARNING
+                ),
+            )
+            for entry in snapshot.activity
+            if self._keep(entry.actor_name)
+        )
+
+    def _apply_cooldown_usage(self, snapshot: RaidSnapshot):
+
+        rows = sorted(
+            (
+                usage
+                for usage in snapshot.cooldown_usage
+                if self._keep(usage.actor_name)
+            ),
+            key=lambda usage: usage.efficiency,
+        )
+
+        self.cooldown_table.setRows(
+            TableRowData(
+                key=usage.actor_name,
+                cells=(
+                    TableCell(usage.ability, Colors.TEXT),
+                    TableCell(usage.actor_name),
+                    TableCell(
+                        f"{usage.uses}/{usage.possible}"
+                        if usage.possible
+                        else str(usage.uses),
+                        (
+                            Colors.SUCCESS
+                            if usage.efficiency >= 0.85
+                            else Colors.WARNING
+                        ),
+                        ratio=usage.efficiency,
+                    ),
+                    TableCell(
+                        str(usage.in_burst)
+                        if snapshot.heroism_windows
+                        else "-",
+                        (
+                            Colors.SUCCESS
+                            if usage.in_burst
+                            else Colors.TEXT_MUTED
+                        ),
+                    ),
+                    TableCell(
+                        ", ".join(
+                            f"{int(at) // 60:02d}:{int(at) % 60:02d}"
+                            for at in usage.cast_times
+                        )
+                        or "nicht genutzt",
+                        (
+                            Colors.TEXT_MUTED
+                            if usage.cast_times
+                            else Colors.ERROR
+                        ),
+                    ),
+                ),
+            )
+            for usage in rows
+        )
+
+    # --------------------------------------------------
+
+    def _sync_filter(self, snapshot: RaidSnapshot):
+        """
+        Die Spielerliste des Filters mitziehen, ohne die laufende
+        Auswahl zu verwerfen. Der Frühausstieg bei unveränderter
+        Besetzung ist wichtig: sonst würde das Auswahlfeld im
+        Sekundentakt zurückgesetzt, während man es bedient.
+        """
+
+        names = snapshot.actor_names
+
+        if names == self._roster_signature:
+            return
+
+        self._roster_signature = names
+
+        self.player_filter.blockSignals(True)
+
+        self.player_filter.clear()
+
+        self.player_filter.addItem("Alle Spieler", ALL_PLAYERS)
+
+        for name in names:
+
+            self.player_filter.addItem(name, name)
+
+        index = self.player_filter.findData(self._filter)
+
+        if index >= 0:
+            self.player_filter.setCurrentIndex(index)
+        else:
+            self._filter = ALL_PLAYERS
+
+        self.player_filter.blockSignals(False)
+
+    def _on_filter_changed(self, index: int):
+
+        value = self.player_filter.itemData(index)
+
+        if value is None:
+            return
+
+        self._filter = value
+
+        self._apply_deep_analysis(self.service.current())
 
     def _cooldown_rows(self, states):
 

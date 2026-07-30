@@ -10,17 +10,29 @@ denselben Service ansprechen, sehen sie beim Blick ins Archiv immer
 denselben Report/Pull - keine zwei Ansichten können auseinanderlaufen.
 
 Aufbau: Live/Archiv-Umschalter, dahinter zwei Auswahlfelder (Bericht,
-Pull), die nur im Archiv-Modus sichtbar sind, und eine kurze
-Statuszeile für Ladezustand/Fehler.
+Pull), die nur im Archiv-Modus sichtbar sind, die Schaltfläche zum
+Starten der Wiedergabe und eine kurze Statuszeile für
+Ladezustand/Fehler.
+
+Die Wiedergabe ist ein dritter Modus des Service, aber bewusst kein
+dritter Knopf am Umschalter: man spielt immer einen Pull ab, den man
+vorher ausgewählt hat. Der Umschalter zeigt während der Wiedergabe
+deshalb weiter die Ansicht, aus der sie gestartet wurde.
 """
 
 from __future__ import annotations
 
 from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QWidget
 
-from core.raid_data_service import ArchiveState, MODE_ARCHIVE, MODE_LIVE
+from core.raid_data_service import (
+    ArchiveState,
+    MODE_ARCHIVE,
+    MODE_LIVE,
+    MODE_REPLAY,
+)
 
 from gui.theme.colors import Colors
+from gui.widgets.hero_banner import HeroButton
 from gui.widgets.segmented_control import SegmentedControl
 
 
@@ -69,6 +81,20 @@ class ArchivePicker(QWidget):
 
         layout.addWidget(self.fight_box)
 
+        #
+        # Der Einstieg in die Wiedergabe. Bewusst hier und nicht in
+        # der ReplayBar: solange nichts abgespielt wird, gibt es
+        # nichts zu steuern - nur etwas zu starten.
+        #
+
+        self.play_button = HeroButton("▶  Wiedergabe")
+
+        self.play_button.clicked.connect(
+            self.service.start_replay
+        )
+
+        layout.addWidget(self.play_button)
+
         self.status_label = QLabel("")
 
         self.status_label.setStyleSheet(
@@ -78,6 +104,10 @@ class ArchivePicker(QWidget):
         layout.addWidget(self.status_label, 1)
 
         service.archiveChanged.connect(
+            self._refresh
+        )
+
+        service.replayChanged.connect(
             self._refresh
         )
 
@@ -131,17 +161,31 @@ class ArchivePicker(QWidget):
 
         self.mode_switch.blockSignals(True)
 
-        self.mode_switch.setValue(state.mode)
+        #
+        # Die Wiedergabe ist ein eigener Modus, aber keine eigene
+        # Schaltfläche - sie wird immer aus einer der beiden Ansichten
+        # heraus gestartet. Ohne diese Zuordnung bliebe der Schalter
+        # auf seinem alten Stand stehen: SegmentedControl.setValue()
+        # tut bei einem unbekannten Wert stillschweigend nichts.
+        #
+
+        self.mode_switch.setValue(
+            MODE_LIVE
+            if state.mode == MODE_LIVE
+            else MODE_ARCHIVE
+        )
 
         self.mode_switch.blockSignals(False)
 
-        is_archive = state.mode == MODE_ARCHIVE
+        is_archive = state.mode != MODE_LIVE
 
         self.report_box.setVisible(is_archive)
 
         self.fight_box.setVisible(is_archive)
 
         self.status_label.setVisible(is_archive)
+
+        self._update_play_button(state)
 
         if not is_archive:
             return
@@ -151,6 +195,30 @@ class ArchivePicker(QWidget):
         self._fill_fights(state)
 
         self._update_status(state)
+
+    def _update_play_button(self, state: ArchiveState):
+        """
+        Die Schaltfläche verschwindet, sobald abgespielt wird - ab
+        dann übernimmt die ReplayBar. Sie erscheint überhaupt nur,
+        wenn es etwas abzuspielen gibt.
+        """
+
+        replaying = state.mode == MODE_REPLAY
+
+        loading = self.service.replay_state().loading
+
+        self.play_button.setVisible(
+            not replaying
+            and self.service.replay_available()
+        )
+
+        self.play_button.setEnabled(not loading)
+
+        self.play_button.setText(
+            "Wird geladen …"
+            if loading
+            else "▶  Wiedergabe"
+        )
 
     def _fill_reports(self, state: ArchiveState):
 

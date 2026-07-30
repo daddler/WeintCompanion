@@ -81,6 +81,8 @@ class SectionCard(QFrame):
         # Optionaler Untertitel
         #
 
+        self.subtitle = None
+
         if subtitle:
 
             self.subtitle = QLabel(subtitle)
@@ -128,6 +130,25 @@ class SectionCard(QFrame):
     # --------------------------------------------------
     # API
     # --------------------------------------------------
+
+    def setSubtitle(self, text: str):
+        """
+        Untertitel nachträglich ändern.
+
+        Gebraucht dort, wo er einen berechneten Bezugswert nennt (der
+        Raidschnitt der Laufwege etwa) - der steht beim Aufbau der
+        Karte noch nicht fest. Karten ohne Untertitel ignorieren den
+        Aufruf, statt einen zur Laufzeit einzufügen und damit das
+        Layout springen zu lassen.
+        """
+
+        if self.subtitle is None:
+            return
+
+        if self.subtitle.text() == text:
+            return
+
+        self.subtitle.setText(text)
 
     def addWidget(self, widget):
 
