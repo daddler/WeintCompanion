@@ -51,6 +51,64 @@ MECHANIC_OTHER = "other"
 
 #
 # --------------------------------------------------
+# Arten von Wirkungsdauern
+# --------------------------------------------------
+#
+# DoTs liegen auf Gegnern, HoTs und Buffs auf Verbündeten. Die
+# Unterscheidung steckt im Eintrag und nicht in getrennten Listen,
+# damit eine Auswertung ("mittlere Uptime meiner Kernfähigkeiten")
+# über eine einzige Schleife laufen kann.
+#
+
+UPTIME_DOT = "dot"
+UPTIME_HOT = "hot"
+UPTIME_BUFF = "buff"
+
+
+#
+# --------------------------------------------------
+# Arten von Cooldowns
+# --------------------------------------------------
+#
+# Getrennt von den MECHANIC_*-Kategorien: dort geht es um Fehler,
+# hier um die Einordnung einer Fähigkeit. Ein nicht genutzter
+# Defensiv-Cooldown ist beides - eine CooldownUsage mit
+# CD_DEFENSIVE und (abgeleitet) ein MechanicIssue mit
+# MECHANIC_DEFENSIVE.
+#
+
+CD_RAID = "raid"
+CD_HEAL = "heal"
+CD_PERSONAL = "personal"
+CD_DEFENSIVE = "defensive"
+
+
+#
+# --------------------------------------------------
+# Arten von Unterstützungsereignissen
+# --------------------------------------------------
+#
+
+SUPPORT_INTERRUPT = "interrupt"
+SUPPORT_DISPEL = "dispel"
+
+
+#
+# --------------------------------------------------
+# Herkunft eines Mechanikfehlers
+# --------------------------------------------------
+#
+# Der Bot darf eigene, handverlesene Regeln mitschicken; zusätzlich
+# leitet der Analyzer Fehler aus dem erhaltenen Schaden ab. Beim
+# Zusammenführen gewinnt der Bot - siehe analyzer.analysis.damage.
+#
+
+MECHANIC_SOURCE_BOT = "bot"
+MECHANIC_SOURCE_LOCAL = "local"
+
+
+#
+# --------------------------------------------------
 # Teilnehmer
 # --------------------------------------------------
 #
@@ -225,6 +283,355 @@ class MechanicIssue:
 
     category: str = MECHANIC_OTHER
 
+    #
+    # Woher der Fehler stammt. Der Bot darf eigene, handverlesene
+    # Regeln mitschicken; zusätzlich leitet der Analyzer Fehler aus
+    # dem erhaltenen Schaden ab. Ohne dieses Feld ließe sich beim
+    # Zusammenführen nicht entscheiden, welche Zeile Vorrang hat -
+    # und derselbe Fehler stünde zweimal in der Liste.
+    #
+
+    source: str = MECHANIC_SOURCE_BOT
+
+    #
+    # Zeitpunkt im Pull, -1 wenn unbekannt. Er ist die Grundlage für
+    # den Sprung aus der Academy an genau diese Stelle der Wiedergabe.
+    #
+
+    at_seconds: float = -1.0
+
+
+#
+# --------------------------------------------------
+# Tiefenauswertung
+# --------------------------------------------------
+#
+# Alles ab hier beantwortet nicht mehr "wie viel", sondern "wie gut":
+# Wirkungsdauern, Laufwege, erhaltener Schaden, Cooldown-Einsätze.
+# Bewusst je Spieler und je Fähigkeit statt als Raidsumme - eine
+# Analyse, die nur Summen kennt, kann niemandem sagen, was er anders
+# machen soll.
+#
+
+
+@dataclass(frozen=True)
+class ActivityEntry:
+    """
+    Wie durchgehend ein Spieler tatsächlich Knöpfe gedrückt hat.
+
+    Das ist die Grundlage der Rotationsbewertung - und zwar bewusst
+    getrennt vom Schadenswert: hoher Schaden bei löchriger Aktivzeit
+    heißt gute Ausrüstung, nicht gutes Spiel, und umgekehrt.
+
+    `active_percent` ist 0-100, `longest_gap` die längste Pause in
+    Sekunden (verrät mehr als der Durchschnitt: zehn kurze Lücken
+    sind Bewegung, eine lange Lücke ist ein Fehler).
+    """
+
+    actor_name: str
+
+    active_percent: float = 0.0
+
+    casts: int = 0
+
+    apm: float = 0.0
+
+    longest_gap: float = 0.0
+
+
+@dataclass(frozen=True)
+class UptimeEntry:
+    """
+    Die Wirkungsdauer einer Fähigkeit auf einem Ziel.
+
+    DoTs liegen auf Gegnern, HoTs und Buffs auf Verbündeten - die Art
+    steckt in `kind` (siehe UPTIME_* oben) statt in getrennten
+    Strukturen, damit eine Auswertung über alle laufen kann.
+
+    `expected_percent` ist der Richtwert, ab dem die Uptime als gut
+    gilt (0 = kein Richtwert bekannt). Er steht hier und nicht in der
+    Oberfläche, damit WeintTV und die Academy denselben Maßstab
+    benutzen.
+    """
+
+    actor_name: str
+
+    ability: str
+
+    uptime_percent: float = 0.0
+
+    kind: str = UPTIME_DOT
+
+    applications: int = 0
+
+    target: str = ""
+
+    expected_percent: float = 0.0
+
+
+@dataclass(frozen=True)
+class MovementEntry:
+    """
+    Der Laufweg eines Spielers im Kampf.
+
+    `estimated` ist bewusst standardmäßig True und wird auch so
+    angezeigt: WarcraftLogs kennt keine Distanzmetrik, der Wert
+    entsteht aus den Positionsangaben aufeinanderfolgender Ereignisse
+    und unterschätzt echtes Ausweichen deshalb systematisch. Als
+    Vergleich innerhalb eines Pulls ist er belastbar, als absolute
+    Zahl nicht - und genau das muss die Oberfläche sagen dürfen.
+    """
+
+    actor_name: str
+
+    meters: float = 0.0
+
+    meters_per_second: float = 0.0
+
+    avoidable_hits: int = 0
+
+    estimated: bool = True
+
+
+@dataclass(frozen=True)
+class AbilityDamage:
+    """
+    Was eine einzelne Fähigkeit einem Spieler angetan hat.
+
+    `verdict` ist einer der VERDICT_*-Werte aus
+    analyzer.data.avoidable und bewusst dreiwertig: unbekannt ist
+    nicht dasselbe wie unvermeidbar. Würde Unbekanntes als
+    unvermeidbar gelten, bekäme jeder Boss ohne Referenzdaten
+    automatisch eine tadellose Bewertung.
+
+    `source_name` ist der Verursacher (NPC) - derselbe
+    Fähigkeitsname kommt in mehreren Kämpfen vor.
+    """
+
+    ability: str
+
+    amount: float = 0.0
+
+    hits: int = 0
+
+    verdict: str = "unknown"
+
+    note: str = ""
+
+    source_name: str = ""
+
+    @property
+    def avoidable(self) -> bool:
+
+        return self.verdict == "avoidable"
+
+
+@dataclass(frozen=True)
+class DamageTakenEntry:
+    """
+    Der erhaltene Schaden eines Spielers, aufgeteilt nach
+    Vermeidbarkeit.
+
+    Drei Töpfe statt zwei: `total` minus `avoidable` minus
+    `unavoidable` ist der noch nicht eingeordnete Rest
+    (`unclassified`). Solange der überwiegt, darf daraus keine
+    Bewertung entstehen - dafür gibt es `classified_share`.
+    """
+
+    actor_name: str
+
+    total: float = 0.0
+
+    avoidable: float = 0.0
+
+    unavoidable: float = 0.0
+
+    hits: int = 0
+
+    avoidable_hits: int = 0
+
+    abilities: tuple[AbilityDamage, ...] = ()
+
+    @property
+    def unclassified(self) -> float:
+
+        return max(0.0, self.total - self.avoidable - self.unavoidable)
+
+    @property
+    def avoidable_share(self) -> float:
+
+        if self.total <= 0:
+            return 0.0
+
+        return max(0.0, min(1.0, self.avoidable / self.total))
+
+    @property
+    def classified_share(self) -> float:
+        """
+        Wie viel des erhaltenen Schadens überhaupt eingeordnet werden
+        konnte. Unter einem Mindestwert ist jede Aussage über
+        "vermeidbar" wertlos.
+        """
+
+        if self.total <= 0:
+            return 0.0
+
+        classified = self.avoidable + self.unavoidable
+
+        return max(0.0, min(1.0, classified / self.total))
+
+
+@dataclass(frozen=True)
+class CooldownUsage:
+    """
+    Die Einsätze eines Cooldowns über einen ganzen Kampf.
+
+    Bewusst getrennt von `CooldownState`: der beschreibt den
+    Live-Countdown ("noch 42 Sekunden"), dieser die Rückschau ("4 von
+    6 möglichen Einsätzen, 2 davon im Heldentum"). Beide Sichten aus
+    einer Struktur zu bedienen hieße, für einen beendeten Pull eine
+    Restzeit zu erfinden.
+    """
+
+    actor_name: str
+
+    ability: str
+
+    cast_times: tuple[float, ...] = ()
+
+    cooldown: float = 0.0
+
+    possible: int = 0
+
+    in_burst: int = 0
+
+    category: str = CD_PERSONAL
+
+    @property
+    def uses(self) -> int:
+
+        return len(self.cast_times)
+
+    @property
+    def efficiency(self) -> float:
+        """
+        Genutzte von möglichen Einsätzen als 0.0 - 1.0.
+        """
+
+        if self.possible <= 0:
+            return 0.0
+
+        return max(0.0, min(1.0, self.uses / self.possible))
+
+    @property
+    def wasted(self) -> int:
+
+        return max(0, self.possible - self.uses)
+
+    @property
+    def burst_share(self) -> float:
+        """
+        Anteil der Einsätze, die in ein Burstfenster fielen.
+        """
+
+        if not self.cast_times:
+            return 0.0
+
+        return max(0.0, min(1.0, self.in_burst / len(self.cast_times)))
+
+    @property
+    def first_cast(self) -> float:
+
+        return self.cast_times[0] if self.cast_times else -1.0
+
+
+@dataclass(frozen=True)
+class HeroismWindow:
+    """
+    Ein Heldentum-/Kampfrausch-Fenster mit seinem Zeitpunkt.
+
+    Der Zeitpunkt ist der Grund, warum die Academy Cooldown-Einsätze
+    überhaupt bewerten kann: "genutzt" ist wenig wert, "im richtigen
+    Fenster genutzt" ist die eigentliche Frage.
+    """
+
+    start: float = 0.0
+
+    end: float = 0.0
+
+    source: str = ""
+
+    label: str = "Heldentum"
+
+    @property
+    def duration(self) -> float:
+
+        return max(0.0, self.end - self.start)
+
+    def contains(self, seconds: float) -> bool:
+
+        return self.start <= seconds <= self.end
+
+    @property
+    def clock(self) -> str:
+        """
+        Fenster als MM:SS - MM:SS.
+        """
+
+        def stamp(value: float) -> str:
+
+            total = max(0, int(value))
+
+            return f"{total // 60:02d}:{total % 60:02d}"
+
+        return f"{stamp(self.start)} - {stamp(self.end)}"
+
+
+@dataclass(frozen=True)
+class ResurrectionEvent:
+    """
+    Eine im Kampf gewirkte Wiederbelebung.
+
+    Beantwortet die Frage, die die reine Ladungsanzeige offen lässt:
+    auf wen, von wem, wann.
+    """
+
+    target: str
+
+    caster: str = ""
+
+    at_seconds: float = 0.0
+
+    ability: str = ""
+
+    @property
+    def clock(self) -> str:
+
+        total = max(0, int(self.at_seconds))
+
+        return f"{total // 60:02d}:{total % 60:02d}"
+
+
+@dataclass(frozen=True)
+class SupportEvent:
+    """
+    Eine Unterbrechung oder ein entfernter Effekt.
+
+    Als Einzelereignis mit Zeitpunkt statt als Zähler, weil beides
+    daraus ableitbar ist - umgekehrt nicht - und weil nur der
+    Zeitpunkt den Sprung aus der Academy in die Wiedergabe erlaubt.
+    """
+
+    actor_name: str
+
+    kind: str = SUPPORT_INTERRUPT
+
+    at_seconds: float = 0.0
+
+    target: str = ""
+
+    ability: str = ""
+
 
 #
 # --------------------------------------------------
@@ -332,6 +739,35 @@ class RaidSnapshot:
 
     warnings: tuple[str, ...] = ()
 
+    #
+    # Tiefenauswertung
+    #
+    # Alle neu und alle mit leerem Default: eine Datenquelle, die
+    # davon nichts liefert, erzeugt dadurch keinen Sonderfall - die
+    # Oberfläche zeigt schlicht ihren Platzhaltertext. Genau deshalb
+    # ist auch nichts hiervon Pflicht.
+    #
+
+    activity: tuple[ActivityEntry, ...] = ()
+
+    dot_uptimes: tuple[UptimeEntry, ...] = ()
+
+    hot_uptimes: tuple[UptimeEntry, ...] = ()
+
+    movement: tuple[MovementEntry, ...] = ()
+
+    damage_taken: tuple[DamageTakenEntry, ...] = ()
+
+    cooldown_usage: tuple[CooldownUsage, ...] = ()
+
+    heroism_windows: tuple[HeroismWindow, ...] = ()
+
+    resurrections: tuple[ResurrectionEvent, ...] = ()
+
+    interrupts: tuple[SupportEvent, ...] = ()
+
+    dispels: tuple[SupportEvent, ...] = ()
+
     # --------------------------------------------------
 
     @property
@@ -366,6 +802,166 @@ class RaidSnapshot:
         total = max(0, int(self.pull_seconds))
 
         return f"{total // 60:02d}:{total % 60:02d}"
+
+    @property
+    def has_analysis(self) -> bool:
+        """
+        Ob überhaupt Tiefenauswertung vorliegt.
+
+        Der einzige Schalter, den die Oberfläche braucht, um eine
+        ganze Karte auf "keine Daten" zu stellen - statt in jedem
+        Widget einzeln auf leere Tupel zu prüfen.
+        """
+
+        return bool(
+            self.activity
+            or self.dot_uptimes
+            or self.hot_uptimes
+            or self.movement
+            or self.damage_taken
+            or self.cooldown_usage
+        )
+
+    # --------------------------------------------------
+    # Nachschlagen je Spieler
+    # --------------------------------------------------
+    #
+    # Lineare Suche über höchstens 25 Einträge - billiger als jede
+    # Indexstruktur und, weil der Snapshot eingefroren ist, ohne
+    # Gefahr, dass Index und Daten auseinanderlaufen. Eine
+    # `cached_property` wäre hier nicht möglich: sie müsste in ein
+    # frozen-Objekt schreiben.
+    #
+
+    def activity_of(self, name: str) -> ActivityEntry | None:
+
+        for entry in self.activity:
+
+            if entry.actor_name == name:
+                return entry
+
+        return None
+
+    def movement_of(self, name: str) -> MovementEntry | None:
+
+        for entry in self.movement:
+
+            if entry.actor_name == name:
+                return entry
+
+        return None
+
+    def damage_taken_of(self, name: str) -> DamageTakenEntry | None:
+
+        for entry in self.damage_taken:
+
+            if entry.actor_name == name:
+                return entry
+
+        return None
+
+    def uptimes_of(
+        self,
+        name: str,
+        kind: str = UPTIME_DOT,
+    ) -> tuple[UptimeEntry, ...]:
+
+        rows = (
+            self.hot_uptimes
+            if kind == UPTIME_HOT
+            else self.dot_uptimes
+        )
+
+        return tuple(
+            entry
+            for entry in rows
+            if entry.actor_name == name
+        )
+
+    def cooldowns_of(self, name: str) -> tuple[CooldownUsage, ...]:
+
+        return tuple(
+            entry
+            for entry in self.cooldown_usage
+            if entry.actor_name == name
+        )
+
+    def interrupts_of(self, name: str) -> tuple[SupportEvent, ...]:
+
+        return tuple(
+            event
+            for event in self.interrupts
+            if event.actor_name == name
+        )
+
+    def dispels_of(self, name: str) -> tuple[SupportEvent, ...]:
+
+        return tuple(
+            event
+            for event in self.dispels
+            if event.actor_name == name
+        )
+
+    def deaths_of(self, name: str) -> tuple[DeathEntry, ...]:
+
+        return tuple(
+            death
+            for death in self.deaths
+            if death.actor_name == name
+        )
+
+    def heroism_window_at(self, seconds: float) -> HeroismWindow | None:
+
+        for window in self.heroism_windows:
+
+            if window.contains(seconds):
+                return window
+
+        return None
+
+    # --------------------------------------------------
+    # Raidweite Bezugsgrößen
+    # --------------------------------------------------
+
+    @property
+    def movement_average(self) -> float:
+        """
+        Mittlerer Laufweg des Raids.
+
+        Eine Eigenschaft und kein Feld, damit der Schnitt nie im
+        Widerspruch zu den Zeilen stehen kann, aus denen er entsteht.
+        """
+
+        if not self.movement:
+            return 0.0
+
+        return sum(entry.meters for entry in self.movement) / len(self.movement)
+
+    @property
+    def damage_taken_total(self) -> float:
+
+        return sum(entry.total for entry in self.damage_taken)
+
+    @property
+    def avoidable_total(self) -> float:
+
+        return sum(entry.avoidable for entry in self.damage_taken)
+
+    @property
+    def actor_names(self) -> tuple[str, ...]:
+        """
+        Alle bekannten Spielernamen des Snapshots, sortiert.
+        """
+
+        names = set()
+
+        for entry in self.top_damage + self.top_healing:
+            names.add(entry.actor.name)
+
+        for tank in self.tanks:
+            names.add(tank.actor.name)
+
+        return tuple(sorted(names))
 
     # --------------------------------------------------
 
@@ -416,6 +1012,16 @@ class PullSummary:
     best_damage_value: float = 0.0
 
     #
+    # Aus der Tiefenauswertung übernommen, damit der Verlauf-Tab
+    # Entwicklung über mehrere Pulls zeigen kann und nicht nur
+    # Kill/Wipe. 0.0, wenn die Quelle nichts dazu liefert.
+    #
+
+    avoidable_damage: float = 0.0
+
+    movement_average: float = 0.0
+
+    #
     # Ab wann ein Pull als Erfolg gilt. Der letzte Prozentpunkt
     # Bossleben verschwindet im Log oft zwischen zwei Ereignissen -
     # eine harte Null wäre deshalb zu streng.
@@ -454,4 +1060,6 @@ class PullSummary:
             death_count=snapshot.death_count,
             best_damage_name=best.actor.name if best else "",
             best_damage_value=best.value if best else 0.0,
+            avoidable_damage=snapshot.avoidable_total,
+            movement_average=snapshot.movement_average,
         )

@@ -23,20 +23,36 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from analyzer.analysis import damage as damage_analysis
+from analyzer.analysis.movement import build_movement
+from analyzer.analysis.ranking import build_ranking
 from analyzer.data import encounters
 from analyzer.models import (
+    CD_HEAL,
+    CD_PERSONAL,
+    CD_RAID,
     MECHANIC_OTHER,
     ROLE_DPS,
     ROLE_HEALER,
     ROLE_TANK,
+    SUPPORT_DISPEL,
+    SUPPORT_INTERRUPT,
+    UPTIME_DOT,
+    UPTIME_HOT,
+    ActivityEntry,
     Actor,
     ConsumableState,
     CooldownState,
+    CooldownUsage,
     DeathEntry,
+    HeroismWindow,
     MechanicIssue,
     MetricEntry,
     RaidSnapshot,
+    ResurrectionEvent,
+    SupportEvent,
     TankEntry,
+    UptimeEntry,
 )
 
 
@@ -294,28 +310,13 @@ def _entries(
     """
     Baut eine sortierte Rangliste mit Anteilen.
 
-    `total` ist die Gesamtsumme des Spielers, `value` der Wert pro
-    Sekunde - dieselbe Bedeutung wie beim Mock, damit WeintTV und die
-    Academy beide Quellen ohne Fallunterscheidung darstellen können.
+    Nur noch eine Weiterleitung: die Rechnung steht in
+    analyzer.analysis.ranking, weil die Wiedergabe sie genauso
+    braucht. Zwei Umsetzungen wären zwei Auswertungen, die sich
+    irgendwann uneinig sind.
     """
 
-    total_sum = sum(total for _actor, total in rows)
-
-    rows = sorted(rows, key=lambda row: row[1], reverse=True)
-
-    return tuple(
-        MetricEntry(
-            actor=actor,
-            value=total / duration,
-            total=total,
-            share=(
-                total / total_sum
-                if total_sum > 0
-                else 0.0
-            ),
-        )
-        for actor, total in rows
-    )
+    return build_ranking(rows, duration)
 
 
 def build_metrics(
@@ -523,6 +524,467 @@ def build_cooldowns(rows: list) -> tuple[CooldownState, ...]:
 
 #
 # --------------------------------------------------
+# Tiefenauswertung
+# --------------------------------------------------
+#
+# Alles hier ist optional (siehe docs/warcraftlogs-bridge.md, v2).
+# Liefert der Bot einen Block nicht, entsteht ein leeres Tupel und
+# die Oberfläche zeigt ihren Platzhaltertext - kein Fehler, kein
+# Sonderfall. Genau deshalb kann der Bot die neuen Felder einzeln und
+# in beliebiger Reihenfolge nachliefern.
+#
+
+
+def build_activity(
+    players: list,
+    duration: float,
+) -> tuple[ActivityEntry, ...]:
+    """
+    Aktivzeit und Aktionen pro Minute je Spieler.
+
+    Das ist die eigentliche Rotationsmetrik: `active_time` kommt aus
+    WarcraftLogs' `activeTime` und sagt, wie durchgehend jemand
+    Knöpfe gedrückt hat - unabhängig davon, wie viel Schaden dabei
+    herauskam.
+    """
+
+    entries = []
+
+    for row in players:
+
+        row = _mapping(row)
+
+        name = _text(row.get("name"))
+
+        if not name:
+            continue
+
+        active = _number(row.get("active_time"))
+
+        casts = _count(row.get("casts"))
+
+        if active <= 0 and casts <= 0:
+            continue
+
+        entries.append(
+            ActivityEntry(
+                actor_name=name,
+                active_percent=(
+                    max(0.0, min(100.0, active / duration * 100.0))
+                    if duration > 0
+                    else 0.0
+                ),
+                casts=casts,
+                apm=(
+                    casts / duration * 60.0
+                    if duration > 0
+                    else 0.0
+                ),
+                longest_gap=_number(row.get("longest_gap")),
+            )
+        )
+
+    entries.sort(key=lambda entry: entry.active_percent, reverse=True)
+
+    return tuple(entries)
+
+
+def build_uptimes(
+    players: list,
+    key: str,
+    kind: str,
+) -> tuple[UptimeEntry, ...]:
+    """
+    Wirkungsdauern aus `players[].dots` bzw. `players[].hots`.
+
+    Absteigend nach Uptime sortiert, damit die Oberfläche nicht
+    sortieren muss.
+    """
+
+    entries = []
+
+    for row in players:
+
+        row = _mapping(row)
+
+        actor_name = _text(row.get("name"))
+
+        if not actor_name:
+            continue
+
+        for aura in _sequence(row.get(key)):
+
+            aura = _mapping(aura)
+
+            ability = _text(aura.get("aura")) or _text(aura.get("name"))
+
+            if not ability:
+                continue
+
+            entries.append(
+                UptimeEntry(
+                    actor_name=actor_name,
+                    ability=ability,
+                    uptime_percent=_percent(
+                        aura.get("uptime_percent"),
+                        default=0.0,
+                    ),
+                    kind=kind,
+                    applications=_count(aura.get("applications")),
+                    target=_text(aura.get("target")),
+                    expected_percent=_percent(
+                        aura.get("expected_percent"),
+                        default=0.0,
+                    ),
+                )
+            )
+
+    entries.sort(key=lambda entry: entry.uptime_percent, reverse=True)
+
+    return tuple(entries)
+
+
+def build_movement_rows(
+    players: list,
+    duration: float,
+    damage_taken: tuple = (),
+) -> tuple:
+    """
+    Laufwege aus den Rohsummen der Positionsdaten.
+
+    Der Bot schickt bewusst **Karteneinheiten** (`movement_units`) und
+    keine Meter - die Umrechnung steht in analyzer.analysis.movement,
+    damit der Faktor an einer Stelle korrigierbar ist. Siehe dort
+    auch, warum der Wert eine Schätzung ist.
+    """
+
+    hits_by_name = {
+        entry.actor_name: entry.avoidable_hits
+        for entry in damage_taken
+    }
+
+    entries = []
+
+    for row in players:
+
+        row = _mapping(row)
+
+        name = _text(row.get("name"))
+
+        if not name:
+            continue
+
+        units = _number(row.get("movement_units"))
+
+        if units <= 0:
+            continue
+
+        entries.append(
+            build_movement(
+                actor_name=name,
+                units=units,
+                seconds=duration,
+                avoidable_hits=hits_by_name.get(name, 0),
+            )
+        )
+
+    entries.sort(key=lambda entry: entry.meters, reverse=True)
+
+    return tuple(entries)
+
+
+def build_damage_taken(
+    players: list,
+    encounter_name: str,
+) -> tuple:
+    """
+    Erhaltener Schaden je Spieler, aufgeschlüsselt nach Fähigkeit und
+    eingeordnet nach Vermeidbarkeit.
+
+    Die Einordnung macht bewusst der Companion
+    (analyzer.data.avoidable), nicht der Bot: sie ist eine Wertung,
+    die für WeintTV und die Academy identisch sein muss und ohne
+    Bot-Deploy korrigierbar bleiben soll.
+    """
+
+    entries = []
+
+    for row in players:
+
+        row = _mapping(row)
+
+        name = _text(row.get("name"))
+
+        if not name:
+            continue
+
+        rows = []
+
+        for ability in _sequence(row.get("damage_taken_abilities")):
+
+            ability = _mapping(ability)
+
+            ability_name = _text(ability.get("ability")) or _text(ability.get("name"))
+
+            if not ability_name:
+                continue
+
+            rows.append(
+                (
+                    ability_name,
+                    _number(ability.get("amount")),
+                    _count(ability.get("hits")),
+                    _text(ability.get("source")),
+                )
+            )
+
+        if not rows:
+            continue
+
+        entries.append(
+            damage_analysis.build_damage_taken(
+                actor_name=name,
+                encounter_name=encounter_name,
+                rows=tuple(rows),
+                role=role_name(_text(row.get("role"))),
+            )
+        )
+
+    entries.sort(key=lambda entry: entry.total, reverse=True)
+
+    return tuple(entries)
+
+
+#
+# Wie ein Cooldown-Name auf eine Kategorie abgebildet wird, wenn der
+# Bot keine mitschickt. Die Listen sind bewusst dieselben, die der
+# Bot für raid_cooldowns/heal_cooldowns benutzt - so landet ein
+# Cooldown in beiden Ansichten in derselben Schublade.
+#
+
+_RAID_COOLDOWN_NAMES = {
+    "rallying cry",
+    "anti-magic zone",
+    "spirit link totem",
+    "power word: barrier",
+    "smoke bomb",
+    "stampeding roar",
+    "devotion aura",
+}
+
+_HEAL_COOLDOWN_NAMES = {
+    "tranquility",
+    "divine hymn",
+    "healing tide totem",
+    "revival",
+    "aura mastery",
+}
+
+
+def _cooldown_category(name: str, given: str) -> str:
+
+    if given in (CD_RAID, CD_HEAL, CD_PERSONAL, "defensive"):
+        return given
+
+    lowered = name.lower()
+
+    if lowered in _RAID_COOLDOWN_NAMES:
+        return CD_RAID
+
+    if lowered in _HEAL_COOLDOWN_NAMES:
+        return CD_HEAL
+
+    return CD_PERSONAL
+
+
+def build_cooldown_usage(
+    players: list,
+    duration: float,
+    windows: tuple[HeroismWindow, ...] = (),
+) -> tuple[CooldownUsage, ...]:
+    """
+    Cooldown-Einsätze mit Zeitpunkten.
+
+    Der Unterschied zu `build_cooldowns()`: dort geht es um den
+    Live-Countdown, hier um die Rückschau. `possible` rechnet der
+    Companion selbst aus Kampfdauer und Abklingzeit aus - der Bot
+    liefert nur die Tatsachen (wann gewirkt, wie lang die Abklingzeit
+    ist), nicht die Bewertung.
+
+    `in_burst` zählt die Einsätze innerhalb eines Heldentum-Fensters.
+    Genau das ist die Frage, die "genutzt oder nicht" nicht
+    beantwortet: ein Cooldown zur falschen Zeit ist halb verschenkt.
+    """
+
+    entries = []
+
+    for row in players:
+
+        row = _mapping(row)
+
+        actor_name = _text(row.get("name"))
+
+        if not actor_name:
+            continue
+
+        for cooldown in _sequence(row.get("cooldowns")):
+
+            cooldown = _mapping(cooldown)
+
+            ability = _text(cooldown.get("name"))
+
+            if not ability:
+                continue
+
+            cast_times = tuple(
+                sorted(
+                    _number(value)
+                    for value in _sequence(cooldown.get("casts"))
+                )
+            )
+
+            recharge = _number(cooldown.get("cooldown"))
+
+            entries.append(
+                CooldownUsage(
+                    actor_name=actor_name,
+                    ability=ability,
+                    cast_times=cast_times,
+                    cooldown=recharge,
+                    possible=_possible_uses(duration, recharge),
+                    in_burst=sum(
+                        1
+                        for at in cast_times
+                        if any(window.contains(at) for window in windows)
+                    ),
+                    category=_cooldown_category(
+                        ability,
+                        _text(cooldown.get("category")),
+                    ),
+                )
+            )
+
+    return tuple(entries)
+
+
+def _possible_uses(duration: float, cooldown: float) -> int:
+    """
+    Wie oft ein Cooldown im Kampf hätte genutzt werden können.
+
+    Der erste Einsatz zählt immer mit (Kampfbeginn), danach je
+    vollständig abgelaufener Abklingzeit einer mehr. Ohne bekannte
+    Abklingzeit gibt es keine Obergrenze - dann 0, damit daraus keine
+    erfundene Quote entsteht.
+    """
+
+    if cooldown <= 0 or duration <= 0:
+        return 0
+
+    return int(duration // cooldown) + 1
+
+
+def build_heroism_windows(rows: list) -> tuple[HeroismWindow, ...]:
+    """
+    Heldentum-Fenster mit Anfang und Ende.
+
+    Bisher wusste die Anwendung nur *ob* Heldentum lief. Der Zeitpunkt
+    ist die Voraussetzung dafür, Cooldown-Einsätze überhaupt bewerten
+    zu können.
+    """
+
+    entries = []
+
+    for row in rows:
+
+        row = _mapping(row)
+
+        start = _number(row.get("start"), -1.0)
+
+        end = _number(row.get("end"), -1.0)
+
+        if start < 0 or end < start:
+            continue
+
+        entries.append(
+            HeroismWindow(
+                start=start,
+                end=end,
+                source=_text(row.get("source")),
+                label=_text(row.get("label")) or "Heldentum",
+            )
+        )
+
+    entries.sort(key=lambda window: window.start)
+
+    return tuple(entries)
+
+
+def build_resurrections(rows: list) -> tuple[ResurrectionEvent, ...]:
+    """
+    Im Kampf gewirkte Wiederbelebungen - auf wen, von wem, wann.
+
+    Ohne Ziel ist der Eintrag wertlos und wird verworfen; ohne Wirker
+    ist er noch brauchbar.
+    """
+
+    entries = []
+
+    for row in rows:
+
+        row = _mapping(row)
+
+        target = _text(row.get("target"))
+
+        if not target:
+            continue
+
+        entries.append(
+            ResurrectionEvent(
+                target=target,
+                caster=_text(row.get("caster")),
+                at_seconds=_number(row.get("at")),
+                ability=_text(row.get("ability")),
+            )
+        )
+
+    entries.sort(key=lambda event: event.at_seconds)
+
+    return tuple(entries)
+
+
+def build_support_events(rows: list, kind: str) -> tuple[SupportEvent, ...]:
+    """
+    Unterbrechungen bzw. entfernte Effekte als Einzelereignisse.
+    """
+
+    entries = []
+
+    for row in rows:
+
+        row = _mapping(row)
+
+        actor_name = _text(row.get("actor")) or _text(row.get("name"))
+
+        if not actor_name:
+            continue
+
+        entries.append(
+            SupportEvent(
+                actor_name=actor_name,
+                kind=kind,
+                at_seconds=_number(row.get("at")),
+                target=_text(row.get("target")),
+                ability=_text(row.get("ability")),
+            )
+        )
+
+    entries.sort(key=lambda event: event.at_seconds)
+
+    return tuple(entries)
+
+
+#
+# --------------------------------------------------
 # Hinweise
 # --------------------------------------------------
 #
@@ -616,19 +1078,56 @@ def snapshot_from_payload(
 
     pull_seconds = duration + (age_seconds if in_combat else 0.0)
 
+    #
+    # Tiefenauswertung. Reihenfolge ist hier wichtig: die
+    # Heldentum-Fenster braucht die Cooldown-Auswertung (um Einsätze
+    # im Burst zu zählen), und der erhaltene Schaden braucht die
+    # Laufweg-Auswertung (für die Zahl vermeidbarer Treffer).
+    #
+
+    encounter = _encounter(fight)
+
+    encounter_name = encounter.name if encounter is not None else ""
+
+    heroism_windows = build_heroism_windows(
+        _sequence(payload.get("heroism_windows"))
+        or _sequence(_mapping(fight).get("heroism_windows"))
+    )
+
+    damage_taken = build_damage_taken(players, encounter_name)
+
+    #
+    # Der Bot darf eigene, handverlesene Mechanikregeln mitschicken;
+    # zusätzlich leitet der Analyzer sie aus vermeidbaren Treffern ab.
+    # Beim Zusammenführen gewinnt der Bot, damit derselbe Fehler nicht
+    # doppelt gezählt wird - siehe analyzer.analysis.damage.
+    #
+
+    mechanics = damage_analysis.merge_mechanics(
+        damage_analysis.bot_mechanics(
+            build_mechanics(_sequence(payload.get("mechanics")))
+        ),
+        damage_analysis.derive_mechanics(damage_taken, encounter_name),
+    )
+
+    resurrections = build_resurrections(
+        _sequence(payload.get("resurrects"))
+        or _sequence(payload.get("resurrections"))
+    )
+
     return RaidSnapshot(
         source_label=source_label,
         live=live,
         in_combat=in_combat,
-        encounter=_encounter(fight),
+        encounter=encounter,
         pull_number=_count(fight.get("pull_number")),
         pull_seconds=pull_seconds,
         boss_health_percent=_percent(fight.get("boss_percentage")),
         raid_size=raid_size,
         deaths=build_deaths(_sequence(payload.get("deaths"))),
-        battle_res_charges=_count(fight.get("battle_res_charges")),
+        battle_res_charges=_battle_res_charges(fight, resurrections),
         battle_res_max=_count(fight.get("battle_res_max")),
-        heroism_used=_flag(fight.get("heroism_used")),
+        heroism_used=_heroism_used(fight, heroism_windows),
         heroism_remaining=_number(fight.get("heroism_remaining")),
         top_damage=damage,
         top_healing=healing,
@@ -636,9 +1135,7 @@ def snapshot_from_payload(
         consumables=build_consumables(
             _sequence(payload.get("consumables"))
         ),
-        mechanics=build_mechanics(
-            _sequence(payload.get("mechanics"))
-        ),
+        mechanics=mechanics,
         raid_cooldowns=build_cooldowns(
             _sequence(payload.get("raid_cooldowns"))
         ),
@@ -646,7 +1143,70 @@ def snapshot_from_payload(
             _sequence(payload.get("heal_cooldowns"))
         ),
         warnings=build_warnings(payload, age_seconds),
+        activity=build_activity(players, duration),
+        dot_uptimes=build_uptimes(players, "dots", UPTIME_DOT),
+        hot_uptimes=build_uptimes(players, "hots", UPTIME_HOT),
+        movement=build_movement_rows(players, duration, damage_taken),
+        damage_taken=damage_taken,
+        cooldown_usage=build_cooldown_usage(
+            players,
+            duration,
+            heroism_windows,
+        ),
+        heroism_windows=heroism_windows,
+        resurrections=resurrections,
+        interrupts=build_support_events(
+            _sequence(payload.get("interrupts")),
+            SUPPORT_INTERRUPT,
+        ),
+        dispels=build_support_events(
+            _sequence(payload.get("dispels")),
+            SUPPORT_DISPEL,
+        ),
     )
+
+
+def _heroism_used(
+    fight: dict,
+    windows: tuple[HeroismWindow, ...],
+) -> bool:
+    """
+    Ein ausdrückliches `heroism_used` des Bots hat Vorrang; sonst
+    verrät schon die Existenz eines Fensters die Antwort. So
+    funktioniert die Anzeige auch für einen Bot, der nur noch die
+    Fenster schickt.
+    """
+
+    if _flag(fight.get("heroism_used")):
+        return True
+
+    return bool(windows)
+
+
+def _battle_res_charges(
+    fight: dict,
+    resurrections: tuple[ResurrectionEvent, ...],
+) -> int:
+    """
+    Verbleibende Kampf-Wiederbelebungen.
+
+    Ein ausdrücklicher Wert des Bots hat Vorrang. Fehlt er, aber die
+    Obergrenze und die Ereignisse sind bekannt, ist die Differenz die
+    ehrlichere Angabe als eine Null - die würde aussehen, als wären
+    alle Ladungen verbraucht.
+    """
+
+    charges = _count(fight.get("battle_res_charges"), -1)
+
+    if charges >= 0:
+        return charges
+
+    maximum = _count(fight.get("battle_res_max"))
+
+    if maximum <= 0:
+        return 0
+
+    return max(0, maximum - len(resurrections))
 
 
 #
