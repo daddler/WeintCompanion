@@ -1,6 +1,17 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.0.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.1.
+
+## 1.2.1
+
+- Fix: Das Companion-Update blieb manchmal mit "Keine Prüfsumme für das
+  Companion-Update verfügbar" stehen, obwohl der Release ganz normal eine
+  Prüfsumme hatte. Ursache war eine Teilstring-Suche bei der Asset-Auswahl,
+  die unter bestimmten Bedingungen die von der CI veröffentlichte
+  ".sha256"-Datei selbst statt der eigentlichen Installationsdatei als "das
+  Asset" erkennen konnte - danach lief die Suche nach deren eigener
+  Prüfsumme zwangsläufig ins Leere und das Update wurde aus
+  Sicherheitsgründen abgebrochen.
 
 ## 1.2.0
 

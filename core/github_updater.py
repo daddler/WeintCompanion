@@ -93,6 +93,28 @@ class GitHubUpdater:
     # Prüfsumme des gewählten Assets
     # --------------------------------------------------
 
+    @staticmethod
+    def _is_checksum_asset(name: str) -> bool:
+        """
+        Ob "name" eine von der CI veröffentlichte "<asset>.sha256"-
+        Prüfsummendatei ist, keine echte Installationsdatei.
+
+        Wird gebraucht, weil die Auswahl des Haupt-Assets unten über
+        eine einfache Teilstring-Suche läuft ("wanted in name") - und
+        z. B. ".appimage" auch als Teilstring in
+        "weintcompanion-x86_64.appimage.sha256" steckt. GitHub
+        garantiert keine feste Reihenfolge der Assets in der
+        API-Antwort; steht die Prüfsummendatei zufällig vor der
+        eigentlichen Binärdatei in der Liste, würde ohne diesen
+        Ausschluss die Prüfsummendatei selbst als "das Asset"
+        erkannt. Die anschließende Suche nach ihrer eigenen
+        Prüfsumme ("<name>.sha256.sha256") liefe dann zwangsläufig
+        ins Leere - genau das Verhalten, das als "Keine Prüfsumme
+        für das Companion-Update verfügbar" beim Update blockiert.
+        """
+
+        return name.lower().endswith(".sha256")
+
     def _find_sha256(self, assets, asset_name: str) -> str | None:
         """
         Sucht in "assets" nach einer zu "asset_name" gehörenden
@@ -200,7 +222,11 @@ class GitHubUpdater:
                     "",
                 ).lower()
 
-                if wanted and wanted in name:
+                if (
+                    wanted
+                    and wanted in name
+                    and not self._is_checksum_asset(name)
+                ):
 
                     asset_name = asset.get(
                         "name",
@@ -219,19 +245,30 @@ class GitHubUpdater:
             # Falls kein Filter passt, erstes Asset nehmen.
             #
 
-            if not download_url and assets:
+            if not download_url:
 
-                asset = assets[0]
-
-                asset_name = asset.get(
-                    "name",
-                    "",
+                fallback = next(
+                    (
+                        asset
+                        for asset in assets
+                        if not self._is_checksum_asset(
+                            asset.get("name", "")
+                        )
+                    ),
+                    None,
                 )
 
-                download_url = asset.get(
-                    "browser_download_url",
-                    "",
-                )
+                if fallback is not None:
+
+                    asset_name = fallback.get(
+                        "name",
+                        "",
+                    )
+
+                    download_url = fallback.get(
+                        "browser_download_url",
+                        "",
+                    )
 
             sha256 = self._find_sha256(assets, asset_name)
 
