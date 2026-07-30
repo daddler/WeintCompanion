@@ -29,7 +29,7 @@ import threading
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 from analyzer.combatlog.locator import CombatLogLocation, find_combat_log
 from analyzer.models import PullSummary, RaidSnapshot
@@ -160,6 +160,34 @@ MODE_LIVE = "live"
 MODE_ARCHIVE = "archive"
 
 
+#
+# Wiedergabe: ein archivierter Pull wird Sekunde für Sekunde
+# abgespielt. Bewusst ein weiterer Wert desselben `mode`-Feldes und
+# kein zweites Flag - sonst gäbe es zwei Antworten auf die Frage
+# "darf der Live-Poll gerade veröffentlichen?", und irgendwann
+# überschreibt der Poll ein Wiedergabebild.
+#
+
+MODE_REPLAY = "replay"
+
+
+#
+# Wählbare Abspielgeschwindigkeiten.
+#
+
+REPLAY_SPEEDS = (1.0, 2.0, 4.0, 8.0)
+
+
+#
+# Taktrate der Wiedergabe-Uhr in Millisekunden. Viermal pro Sekunde
+# ist flüssig genug fürs Auge und günstig genug, dass die
+# Rekonstruktion (reine Rechnung auf höchstens 25 Spielern) im
+# Hauptthread laufen kann, statt einen weiteren Thread zu brauchen.
+#
+
+REPLAY_TICK_MS = 250
+
+
 @dataclass(frozen=True)
 class ArchiveState:
     """
@@ -195,6 +223,93 @@ class ArchiveState:
 
     fight_error: str = ""
 
+    # --------------------------------------------------
+
+    @property
+    def is_live(self) -> bool:
+
+        return self.mode == MODE_LIVE
+
+    @property
+    def browsing(self) -> bool:
+        """
+        Ob gerade etwas anderes als der Live-Feed gezeigt wird - der
+        eine Schalter, an dem der Live-Poll erkennt, dass er sein
+        Ergebnis verwerfen muss.
+        """
+
+        return self.mode != MODE_LIVE
+
+
+@dataclass(frozen=True)
+class ReplayState:
+    """
+    Zustand der Wiedergabe - der Wert, den `ReplayBar` unverändert
+    übernimmt.
+
+    Getrennt von `ArchiveState`, obwohl der Modus in dessen `mode`
+    steckt: die Archiv-Auswahl (welcher Bericht, welcher Pull) bleibt
+    während der Wiedergabe unverändert bestehen, damit das Beenden
+    der Wiedergabe wieder genau dort landet, wo man war.
+    """
+
+    loading: bool = False
+
+    error: str = ""
+
+    duration: float = 0.0
+
+    position: float = 0.0
+
+    playing: bool = False
+
+    speed: float = 1.0
+
+    label: str = ""
+
+    report_code: str = ""
+
+    fight_id: int | None = None
+
+    #
+    # Modus, aus dem die Wiedergabe gestartet wurde - dorthin führt
+    # das Beenden zurück.
+    #
+
+    origin: str = MODE_ARCHIVE
+
+    # --------------------------------------------------
+
+    @property
+    def available(self) -> bool:
+
+        return self.duration > 0
+
+    @property
+    def progress(self) -> float:
+
+        if self.duration <= 0:
+            return 0.0
+
+        return max(0.0, min(1.0, self.position / self.duration))
+
+    @property
+    def clock(self) -> str:
+
+        return _clock(self.position)
+
+    @property
+    def total_clock(self) -> str:
+
+        return _clock(self.duration)
+
+
+def _clock(value: float) -> str:
+
+    total = max(0, int(value))
+
+    return f"{total // 60:02d}:{total % 60:02d}"
+
 
 class RaidDataService(QObject):
 
@@ -216,6 +331,15 @@ class RaidDataService(QObject):
     #
 
     archiveChanged = Signal()
+
+    #
+    # Wird bei jeder Änderung der Wiedergabe emittiert (geladen,
+    # Position, Geschwindigkeit, Play/Pause). Ebenfalls ohne Payload,
+    # aus demselben Grund wie archiveChanged: ReplayBar liest
+    # replay_state() neu.
+    #
+
+    replayChanged = Signal()
 
     def __init__(self, manager):
 
@@ -254,6 +378,36 @@ class RaidDataService(QObject):
         self._archive = ArchiveState()
 
         self._archive_client = None
+
+        #
+        # Der zuletzt aus dem Archiv geladene Snapshot. Er wird
+        # gemerkt, damit das Beenden der Wiedergabe sofort wieder
+        # dorthin zurückführt, statt den Fight erneut abzurufen.
+        #
+
+        self._archive_snapshot = None
+
+        #
+        # Wiedergabe (siehe ReplayState oben).
+        #
+
+        self._replay = ReplayState()
+
+        self._timeline = None
+
+        #
+        # Die Uhr der Wiedergabe. Ein QTimer im Hauptthread und kein
+        # weiterer Thread: die Rekonstruktion ist reine Rechnung auf
+        # höchstens 25 Spielern, und ein Thread müsste seine
+        # Ergebnisse ohnehin wieder über ein Signal zurückreichen.
+        # Dasselbe Muster wie der Sync-Timer im CompanionManager.
+        #
+
+        self._replay_timer = QTimer(self)
+
+        self._replay_timer.setInterval(REPLAY_TICK_MS)
+
+        self._replay_timer.timeout.connect(self._on_replay_tick)
 
     # --------------------------------------------------
     # Datenquelle
@@ -567,7 +721,7 @@ class RaidDataService(QObject):
             # Wert bereitsteht, statt bis zum nächsten Takt zu warten.
             #
 
-            if self._archive.mode == MODE_ARCHIVE:
+            if self._archive.browsing:
                 return
 
         self._publish(snapshot)
@@ -710,6 +864,8 @@ class RaidDataService(QObject):
         aktuellen Stand der konfigurierten Live-Quelle, statt bis zum
         nächsten Poll-Takt zu warten.
         """
+
+        self._halt_replay()
 
         with self._lock:
 
@@ -956,7 +1112,500 @@ class RaidDataService(QObject):
                 fight_error="",
             )
 
+            #
+            # Für die Rückkehr aus der Wiedergabe merken, damit sie
+            # ohne erneuten Abruf sofort wieder hier landet.
+            #
+
+            self._archive_snapshot = snapshot
+
         self.archiveChanged.emit()
+
+    # --------------------------------------------------
+    # Wiedergabe
+    # --------------------------------------------------
+    #
+    # Ablauf, die ReplayBar bildet ihn direkt ab:
+    #
+    #   start_replay()          -> Zeitleiste lädt, Wiedergabe beginnt
+    #   set_replay_playing()    -> Pause / Fortsetzen
+    #   seek_replay(seconds)    -> Springen im Kampf
+    #   set_replay_speed(x)     -> 1x bis 8x
+    #   stop_replay()           -> zurück zum Ausgangsmodus
+    #
+    # Die Uhr ist ein QTimer im Hauptthread (siehe __init__). Das
+    # Laden der Zeitleiste läuft dagegen in einem kurzlebigen Thread,
+    # nach demselben Muster wie die Archiv-Abrufe - ein langsamer Bot
+    # darf die Oberfläche nie einfrieren.
+    #
+
+    def replay_state(self) -> ReplayState:
+
+        with self._lock:
+
+            return self._replay
+
+    def replay_available(self) -> bool:
+        """
+        Ob für die aktuelle Auswahl überhaupt eine Wiedergabe in
+        Frage kommt - im Archiv, sobald ein Pull gewählt ist, live
+        nur bei Quellen, die eine Zeitleiste liefern können.
+        """
+
+        with self._lock:
+
+            if self._archive.mode == MODE_REPLAY:
+                return True
+
+            if self._archive.mode == MODE_ARCHIVE:
+                return self._archive.selected_fight is not None
+
+            provider = self._provider
+
+        return provider is not None and hasattr(provider, "timeline")
+
+    # --------------------------------------------------
+
+    def start_replay(self):
+        """
+        Startet die Wiedergabe des gerade gewählten Pulls.
+
+        Zwei Wege, ein Ziel: im Archiv wird die Zeitleiste beim Bot
+        angefragt, live liefert der Provider sie direkt (bei der
+        Simulation ist das reine Rechnung). Ist bereits eine
+        Wiedergabe geladen, wird sie nur zurückgespult - ein
+        erneuter Abruf derselben Daten wäre Verschwendung.
+        """
+
+        with self._lock:
+
+            if self._replay.loading:
+                return
+
+            if self._timeline is not None:
+
+                self._replay = replace(
+                    self._replay,
+                    position=0.0,
+                    playing=True,
+                    error="",
+                )
+
+                restart = True
+
+            else:
+
+                restart = False
+
+                report_code = self._archive.selected_report
+
+                fight_id = self._archive.selected_fight
+
+                origin = (
+                    MODE_ARCHIVE
+                    if self._archive.mode == MODE_ARCHIVE
+                    else MODE_LIVE
+                )
+
+                label = self._archive_report_label(report_code)
+
+                self._replay = replace(
+                    self._replay,
+                    loading=True,
+                    error="",
+                    report_code=report_code,
+                    fight_id=fight_id,
+                    origin=origin,
+                )
+
+        if restart:
+
+            self._start_replay_clock()
+
+            self._publish_replay_frame()
+
+            self.replayChanged.emit()
+
+            return
+
+        self.replayChanged.emit()
+
+        if origin == MODE_LIVE:
+
+            self._begin_live_replay()
+
+            return
+
+        threading.Thread(
+            target=self._fetch_timeline_worker,
+            args=(report_code, fight_id, label),
+            daemon=True,
+            name="WarcraftLogsTimelineFetch",
+        ).start()
+
+    def _begin_live_replay(self):
+        """
+        Wiedergabe aus der laufenden Quelle - für die Simulation der
+        einzige Weg, die Wiedergabe ohne Bot vorzuführen.
+        """
+
+        provider = self._ensure_provider()
+
+        timeline = None
+
+        reason = ""
+
+        try:
+
+            timeline = provider.timeline()
+
+        except Exception as exc:
+
+            reason = f"Wiedergabe konnte nicht gebaut werden: {exc}"
+
+        if timeline is None or not timeline.has_data:
+
+            self._fail_replay(
+                reason
+                or "Diese Datenquelle liefert keine Wiedergabe."
+            )
+
+            return
+
+        self._begin_replay(timeline)
+
+    def _fetch_timeline_worker(
+        self,
+        report_code: str,
+        fight_id: int,
+        label: str,
+    ):
+
+        try:
+
+            result = self._ensure_archive_client().fetch_timeline(
+                report_code,
+                fight_id,
+            )
+
+        except Exception as exc:
+
+            result = FetchResult(reason=f"Unerwarteter Fehler: {exc}")
+
+        with self._lock:
+
+            #
+            # Wie bei den Archiv-Abrufen: ein spätes Ergebnis für eine
+            # inzwischen verworfene Auswahl darf nichts überschreiben.
+            #
+
+            stale = (
+                self._replay.report_code != report_code
+                or self._replay.fight_id != fight_id
+            )
+
+        if stale:
+            return
+
+        if not result.ok:
+
+            self._fail_replay(result.reason)
+
+            return
+
+        from analyzer.replay.payload import timeline_from_payload
+
+        try:
+
+            timeline = timeline_from_payload(
+                result.payload,
+                source_label=f"Wiedergabe · {label}",
+            )
+
+        except Exception as exc:
+
+            self._fail_replay(f"Zeitleiste unlesbar: {exc}")
+
+            return
+
+        if not timeline.has_data:
+
+            self._fail_replay(
+                "Für diesen Pull liegt keine Zeitleiste vor."
+            )
+
+            return
+
+        self._begin_replay(timeline)
+
+    def _begin_replay(self, timeline):
+
+        with self._lock:
+
+            self._timeline = timeline
+
+            self._archive = replace(self._archive, mode=MODE_REPLAY)
+
+            self._replay = replace(
+                self._replay,
+                loading=False,
+                error="",
+                duration=timeline.duration,
+                position=0.0,
+                playing=True,
+                label=timeline.source_label,
+            )
+
+        self._publish_replay_frame()
+
+        self._start_replay_clock()
+
+        self.archiveChanged.emit()
+
+        self.replayChanged.emit()
+
+    def _fail_replay(self, reason: str):
+
+        with self._lock:
+
+            self._replay = replace(
+                self._replay,
+                loading=False,
+                playing=False,
+                error=reason,
+            )
+
+        self.replayChanged.emit()
+
+    # --------------------------------------------------
+
+    def stop_replay(self):
+        """
+        Beendet die Wiedergabe und kehrt dorthin zurück, wo sie
+        gestartet wurde.
+        """
+
+        with self._lock:
+
+            if self._archive.mode != MODE_REPLAY:
+                return
+
+            origin = self._replay.origin
+
+            self._timeline = None
+
+            self._replay = ReplayState(speed=self._replay.speed)
+
+            self._archive = replace(self._archive, mode=origin)
+
+            archived = self._archive_snapshot
+
+        self._stop_replay_clock()
+
+        #
+        # Der gemerkte Archiv-Snapshot macht die Rückkehr sofortig -
+        # ohne ihn müsste der Fight erneut beim Bot abgerufen werden.
+        #
+
+        if origin == MODE_ARCHIVE and archived is not None:
+
+            self._publish(archived, track=False)
+
+        elif origin == MODE_LIVE:
+
+            self._poll_once()
+
+        self.archiveChanged.emit()
+
+        self.replayChanged.emit()
+
+    def set_replay_playing(self, playing: bool):
+        """
+        Play/Pause. Am Ende angekommen spult "Play" zuerst zurück -
+        sonst sähe die Schaltfläche kaputt aus.
+        """
+
+        with self._lock:
+
+            if self._archive.mode != MODE_REPLAY:
+                return
+
+            position = self._replay.position
+
+            if playing and position >= self._replay.duration:
+                position = 0.0
+
+            self._replay = replace(
+                self._replay,
+                playing=playing,
+                position=position,
+            )
+
+        if playing:
+            self._start_replay_clock()
+        else:
+            self._stop_replay_clock()
+
+        self._publish_replay_frame()
+
+        self.replayChanged.emit()
+
+    def toggle_replay(self):
+
+        with self._lock:
+
+            playing = self._replay.playing
+
+        self.set_replay_playing(not playing)
+
+    def seek_replay(self, seconds: float):
+        """
+        Springt an eine Stelle im Kampf.
+
+        Veröffentlicht sofort, auch im pausierten Zustand - sonst
+        würde das Ziehen am Schieberegler nichts zeigen.
+        """
+
+        with self._lock:
+
+            if self._archive.mode != MODE_REPLAY:
+                return
+
+            self._replay = replace(
+                self._replay,
+                position=max(
+                    0.0,
+                    min(self._replay.duration, seconds),
+                ),
+            )
+
+        self._publish_replay_frame()
+
+        self.replayChanged.emit()
+
+    def set_replay_speed(self, speed: float):
+        """
+        Unbekannte Werte werden verworfen statt übernommen - eine
+        Geschwindigkeit von 0 würde die Wiedergabe stillstehen
+        lassen, ohne dass die Oberfläche das erklären könnte.
+        """
+
+        if speed not in REPLAY_SPEEDS:
+            return
+
+        with self._lock:
+
+            if self._replay.speed == speed:
+                return
+
+            self._replay = replace(self._replay, speed=speed)
+
+        self.replayChanged.emit()
+
+    # --------------------------------------------------
+
+    def _start_replay_clock(self):
+
+        if not self._replay_timer.isActive():
+            self._replay_timer.start()
+
+    def _stop_replay_clock(self):
+
+        if self._replay_timer.isActive():
+            self._replay_timer.stop()
+
+    def _halt_replay(self):
+        """
+        Wiedergabe ohne Rückkehr beenden - für Moduswechsel, die
+        ohnehin ein anderes Bild veröffentlichen.
+        """
+
+        with self._lock:
+
+            if self._archive.mode != MODE_REPLAY:
+                return
+
+            self._timeline = None
+
+            self._replay = ReplayState(speed=self._replay.speed)
+
+            self._archive = replace(self._archive, mode=MODE_ARCHIVE)
+
+        self._stop_replay_clock()
+
+        self.replayChanged.emit()
+
+    def _on_replay_tick(self):
+
+        self._advance_replay(REPLAY_TICK_MS / 1000.0)
+
+    def _advance_replay(self, delta: float):
+        """
+        Ein Takt der Wiedergabe.
+
+        Bewusst als eigene Methode und nicht im Timer-Slot: so können
+        Tests die Wiedergabe Schritt für Schritt durchlaufen, ohne auf
+        eine echte Uhr zu warten.
+        """
+
+        with self._lock:
+
+            if self._archive.mode != MODE_REPLAY:
+                return
+
+            if not self._replay.playing:
+                return
+
+            position = self._replay.position + delta * self._replay.speed
+
+            finished = position >= self._replay.duration
+
+            self._replay = replace(
+                self._replay,
+                position=min(position, self._replay.duration),
+                playing=not finished,
+            )
+
+        if finished:
+
+            #
+            # Am Ende stehen bleiben statt zurückzuspringen: der
+            # letzte Stand ist das Ergebnis des Pulls und genau das,
+            # was man danach ansehen will. Dieselbe Überlegung wie
+            # bei der Nachlaufphase der Simulation.
+            #
+
+            self._stop_replay_clock()
+
+        self._publish_replay_frame()
+
+        self.replayChanged.emit()
+
+    def _publish_replay_frame(self):
+
+        with self._lock:
+
+            timeline = self._timeline
+
+            position = self._replay.position
+
+            label = self._replay.label
+
+        if timeline is None:
+            return
+
+        from analyzer.replay import snapshot_at
+
+        #
+        # track=False: ein wiedergegebener Pull findet nicht jetzt
+        # statt. Ließe man ihn in die Historie, entstünde bei jedem
+        # Takt ein Eintrag - die Pull-Nummer ändert sich ja nie.
+        #
+
+        self._publish(
+            snapshot_at(timeline, position, label),
+            track=False,
+        )
 
     # --------------------------------------------------
     # Abschluss
@@ -972,5 +1621,7 @@ class RaidDataService(QObject):
         with self._lock:
 
             self._listeners = 0
+
+        self._stop_replay_clock()
 
         self._stop_thread()

@@ -246,3 +246,42 @@ class WarcraftLogsArchiveClient:
             return FetchResult(reason=reason)
 
         return FetchResult(payload=body)
+
+    # --------------------------------------------------
+    # Zeitleiste eines Fights (Wiedergabe)
+    # --------------------------------------------------
+
+    def fetch_timeline(self, report_code: str, fight_id: int) -> FetchResult:
+        """
+        Die Zeitleiste eines Pulls für die Wiedergabe.
+
+        Bewusst ein eigener Endpunkt statt eines Zusatzfeldes am
+        Einzel-Fight: die Antwort enthält Zeitreihen für jeden Spieler
+        und ist damit deutlich größer als das Gesamtbild - sie wird
+        nur beim Druck auf Wiedergabe gebraucht und soll nicht jeden
+        Archiv-Klick verteuern.
+
+        Ergebnisform wie bei fetch_fight(): ein FetchResult mit der
+        rohen Antwort, das analyzer.replay.payload übersetzt.
+        """
+
+        if not report_code:
+
+            return FetchResult(
+                reason="Kein Bericht ausgewählt.",
+            )
+
+        status, body, reason = self._get(
+            f"{REPORTS_ENDPOINT}/{report_code}/fights/{fight_id}/timeline"
+        )
+
+        if status == 404:
+
+            return FetchResult(
+                reason="Für diesen Pull liefert der Bot keine Zeitleiste.",
+            )
+
+        if body is None:
+            return FetchResult(reason=reason)
+
+        return FetchResult(payload=body)

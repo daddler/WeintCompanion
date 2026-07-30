@@ -54,6 +54,40 @@ PAYLOAD = {
 }
 
 
+#
+# Eine winzige, aber vollständige Zeitleiste: zwei Spieler, sechs
+# Sekunden. Groß genug, damit Interpolation, Ereignisse und
+# Rangliste durchlaufen, klein genug, um sie im Test zu überblicken.
+#
+
+TIMELINE_PAYLOAD = {
+    "interval": 1.0,
+    "fight": {
+        "name": "Horridon",
+        "duration": 6.0,
+        "raid_size": 2,
+        "pull_number": 7,
+        "battle_res_max": 3,
+    },
+    "boss_health": [100.0, 90.0, 80.0, 60.0, 40.0, 20.0, 0.5],
+    "players": [
+        {
+            "name": "Pyrothal",
+            "class": "Mage",
+            "role": "dps",
+            "damage": [0.0, 100.0, 200.0, 300.0, 400.0, 500.0, 600.0],
+        },
+        {
+            "name": "Elvenne",
+            "class": "Druid",
+            "role": "healer",
+            "healing": [0.0, 50.0, 100.0, 150.0, 200.0, 250.0, 300.0],
+        },
+    ],
+    "deaths": [{"name": "Pyrothal", "at": 4.0, "ability": "Double Swipe"}],
+}
+
+
 class _Logger:
 
     def info(self, message):
@@ -89,7 +123,13 @@ class _FakeArchiveClient:
     Ausnahme liefern, um Fehlerpfade zu prüfen.
     """
 
-    def __init__(self, reports_result=None, fights_result=None, fight_result=None):
+    def __init__(
+        self,
+        reports_result=None,
+        fights_result=None,
+        fight_result=None,
+        timeline_result=None,
+    ):
 
         from core.warcraftlogs_archive_client import (
             FightsFetchResult,
@@ -114,9 +154,12 @@ class _FakeArchiveClient:
 
         self.fight_result = fight_result
 
+        self.timeline_result = timeline_result
+
         self.report_calls = 0
         self.fights_calls = 0
         self.fight_calls = 0
+        self.timeline_calls = 0
 
     def fetch_reports(self):
 
@@ -140,6 +183,17 @@ class _FakeArchiveClient:
             return self.fight_result
 
         return FetchResult(payload=PAYLOAD)
+
+    def fetch_timeline(self, report_code, fight_id):
+
+        from analyzer.providers.warcraftlogs import FetchResult
+
+        self.timeline_calls += 1
+
+        if self.timeline_result is not None:
+            return self.timeline_result
+
+        return FetchResult(payload=TIMELINE_PAYLOAD)
 
 
 def _wait_until(condition, timeout=5.0):
@@ -576,3 +630,333 @@ def test_reload_provider_does_not_disturb_an_active_archive_view():
     service.reload_provider()
 
     assert service.current().encounter_name == "Horridon"
+
+
+# --------------------------------------------------
+# Wiedergabe
+# --------------------------------------------------
+#
+# Die Wiedergabe ist der dritte Modus derselben Zustandsmaschine.
+# Gefährlich daran ist genau das, was schon beim Archiv gefährlich
+# war: dass der Live-Poll dazwischenfunkt, dass ein spätes Ergebnis
+# eine neuere Auswahl überschreibt, und dass wiedergegebene Sekunden
+# in der Pull-Historie landen. Abgespielt wird über
+# service._advance_replay(delta) statt über eine echte Uhr - sonst
+# hinge jeder Test an der Wanduhr.
+#
+
+
+def _replaying_service():
+    """
+    Ein Service, der bereits einen Pull aus dem Archiv wiedergibt.
+    """
+
+    from core.raid_data_service import MODE_REPLAY
+
+    service = _make_service()
+
+    service.enter_archive_mode()
+
+    assert _wait_until(lambda: service.archive_state().reports)
+
+    service.select_archive_report("aBc")
+
+    assert _wait_until(lambda: service.archive_state().fights)
+
+    service.select_archive_fight("aBc", 12)
+
+    assert _wait_until(
+        lambda: service.archive_state().selected_fight == 12
+        and not service.archive_state().fight_loading
+    )
+
+    service.start_replay()
+
+    assert _wait_until(
+        lambda: service.archive_state().mode == MODE_REPLAY
+    )
+
+    return service
+
+
+def test_start_replay_loads_the_timeline_and_begins_at_zero():
+
+    service = _replaying_service()
+
+    state = service.replay_state()
+
+    assert state.loading is False
+    assert state.error == ""
+    assert state.duration == 6.0
+    assert state.position == 0.0
+    assert state.playing is True
+
+    assert service.current().pull_seconds == 0.0
+
+
+def test_replay_advances_and_stops_at_the_end():
+    """
+    Am Ende bleibt die Wiedergabe stehen statt zurückzuspringen - der
+    letzte Stand ist das Ergebnis des Pulls.
+    """
+
+    service = _replaying_service()
+
+    service._advance_replay(3.0)
+
+    assert service.replay_state().position == 3.0
+    assert service.current().pull_seconds == 3.0
+
+    service._advance_replay(10.0)
+
+    state = service.replay_state()
+
+    assert state.position == 6.0
+    assert state.playing is False
+
+
+def test_replay_speed_multiplies_the_step():
+
+    service = _replaying_service()
+
+    service.set_replay_speed(4.0)
+
+    service._advance_replay(1.0)
+
+    assert service.replay_state().position == 4.0
+
+
+def test_replay_speed_ignores_unknown_values():
+    """
+    Eine Geschwindigkeit von 0 würde die Wiedergabe stillstehen
+    lassen, ohne dass die Oberfläche das erklären könnte.
+    """
+
+    service = _replaying_service()
+
+    service.set_replay_speed(0.0)
+    service.set_replay_speed(99.0)
+
+    assert service.replay_state().speed == 1.0
+
+
+def test_seeking_publishes_immediately_even_while_paused():
+    """
+    Ohne sofortige Veröffentlichung würde das Ziehen am
+    Schieberegler nichts zeigen.
+    """
+
+    service = _replaying_service()
+
+    service.set_replay_playing(False)
+
+    service.seek_replay(5.0)
+
+    assert service.current().pull_seconds == 5.0
+
+
+def test_seeking_is_clamped_to_the_fight():
+
+    service = _replaying_service()
+
+    service.seek_replay(-40.0)
+    assert service.replay_state().position == 0.0
+
+    service.seek_replay(9999.0)
+    assert service.replay_state().position == 6.0
+
+
+def test_live_poll_does_not_overwrite_a_replay_frame():
+    """
+    Der Poll-Thread läuft während der Wiedergabe absichtlich weiter,
+    damit die Rückkehr zu Live sofort geht. Er darf dabei aber
+    niemals das gerade gezeigte Bild überschreiben.
+    """
+
+    service = _replaying_service()
+
+    service.seek_replay(2.0)
+
+    before = service.current()
+
+    service._poll_once()
+
+    assert service.current() is before
+
+
+def test_replayed_seconds_never_enter_the_pull_history():
+    """
+    Die Pull-Nummer ändert sich während einer Wiedergabe nie - liefe
+    sie durch die Historie, entstünde bei jedem Takt ein Eintrag.
+    """
+
+    service = _replaying_service()
+
+    for _ in range(10):
+        service._advance_replay(1.0)
+
+    assert service.history() == ()
+
+
+def test_stopping_the_replay_returns_to_the_archived_pull():
+    """
+    Und zwar ohne den Fight erneut abzurufen - der Snapshot ist
+    gemerkt.
+    """
+
+    from core.raid_data_service import MODE_ARCHIVE
+
+    service = _replaying_service()
+
+    calls_before = service._archive_client.fight_calls
+
+    service.stop_replay()
+
+    assert service.archive_state().mode == MODE_ARCHIVE
+
+    assert service._archive_client.fight_calls == calls_before
+
+    assert service.current().source_label.startswith("Archiv ·")
+
+
+def test_show_live_ends_a_running_replay():
+
+    from core.raid_data_service import MODE_LIVE
+
+    service = _replaying_service()
+
+    service.show_live()
+
+    assert service.archive_state().mode == MODE_LIVE
+
+    assert service.replay_state().playing is False
+
+    assert _wait_until(
+        lambda: service.current().source_label == "Simulation"
+    )
+
+
+def test_a_failing_timeline_fetch_reports_a_reason_instead_of_raising():
+
+    from analyzer.providers.warcraftlogs import FetchResult
+    from core.raid_data_service import MODE_ARCHIVE
+
+    client = _FakeArchiveClient(
+        timeline_result=FetchResult(reason="Bot nicht erreichbar."),
+    )
+
+    service = _make_service(client)
+
+    service.enter_archive_mode()
+
+    assert _wait_until(lambda: service.archive_state().reports)
+
+    service.select_archive_report("aBc")
+
+    assert _wait_until(lambda: service.archive_state().fights)
+
+    service.select_archive_fight("aBc", 12)
+
+    assert _wait_until(
+        lambda: service.archive_state().selected_fight == 12
+    )
+
+    service.start_replay()
+
+    assert _wait_until(
+        lambda: service.replay_state().error == "Bot nicht erreichbar."
+    )
+
+    #
+    # Und der Modus bleibt, wo er war - eine gescheiterte Wiedergabe
+    # darf die Archiv-Ansicht nicht verlassen.
+    #
+
+    assert service.archive_state().mode == MODE_ARCHIVE
+    assert service.replay_state().loading is False
+
+
+def test_an_exploding_timeline_client_does_not_leave_loading_stuck():
+
+    class _Exploding(_FakeArchiveClient):
+
+        def fetch_timeline(self, report_code, fight_id):
+            raise RuntimeError("kaputt")
+
+    service = _make_service(_Exploding())
+
+    service.enter_archive_mode()
+
+    assert _wait_until(lambda: service.archive_state().reports)
+
+    service.select_archive_report("aBc")
+
+    assert _wait_until(lambda: service.archive_state().fights)
+
+    service.select_archive_fight("aBc", 12)
+
+    assert _wait_until(
+        lambda: service.archive_state().selected_fight == 12
+    )
+
+    service.start_replay()
+
+    assert _wait_until(lambda: service.replay_state().error != "")
+
+    assert service.replay_state().loading is False
+
+
+def test_replay_can_be_started_from_the_live_simulation():
+    """
+    Ohne diesen Weg wäre die Wiedergabe erst vorführbar, sobald der
+    Bot den Zeitleisten-Endpunkt liefert.
+    """
+
+    from core.raid_data_service import MODE_LIVE, MODE_REPLAY
+
+    service = _make_service()
+
+    assert service.archive_state().mode == MODE_LIVE
+
+    service.start_replay()
+
+    assert _wait_until(
+        lambda: service.archive_state().mode == MODE_REPLAY
+    )
+
+    assert service.replay_state().duration > 0
+
+    #
+    # Und das Beenden führt zurück zum Live-Feed, nicht ins Archiv.
+    #
+
+    service.stop_replay()
+
+    assert service.archive_state().mode == MODE_LIVE
+
+
+def test_replay_availability_follows_the_selection():
+
+    service = _make_service()
+
+    service.enter_archive_mode()
+
+    assert _wait_until(lambda: service.archive_state().reports)
+
+    #
+    # Im Archiv ohne gewählten Pull gibt es nichts abzuspielen.
+    #
+
+    assert service.replay_available() is False
+
+    service.select_archive_report("aBc")
+
+    assert _wait_until(lambda: service.archive_state().fights)
+
+    service.select_archive_fight("aBc", 12)
+
+    assert _wait_until(
+        lambda: service.archive_state().selected_fight == 12
+    )
+
+    assert service.replay_available() is True
