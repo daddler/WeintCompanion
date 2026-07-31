@@ -1,6 +1,15 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.2.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.3.
+
+## 1.2.3
+
+- Vorbereitung der WarcraftLogs-Anbindung für die Tiefenanalyse: der
+  Vertrag mit dem WeintCodex Bot ist um DoT-/HoT-Uptimes,
+  Cooldown-Nutzung sowie Unterbrechungen und Dispels ergänzt. Sobald der
+  Bot diese Daten liefert, füllen sich die entsprechenden Karten in
+  WeintTVs Analyse automatisch - bis dahin bleiben sie unverändert
+  "keine Daten".
 
 ## 1.2.2
 
