@@ -12,9 +12,8 @@ Fightliste und Einzel-Fight sind im Bot umgesetzt
 liefern Daten. Diese Datei beschrieb sie früher als „noch nicht
 vorhanden" — das ist überholt.
 
-Was der Bot heute liefert, sind **Summen**: Schaden, Heilung,
-erhaltener Schaden, Tode. Zeitstempel gibt es ausschließlich bei
-`deaths[].at`. Dazu drei bekannte Lücken:
+Grundlage sind weiterhin **Summen**: Schaden, Heilung, erhaltener
+Schaden, Tode. Dazu drei bekannte Lücken:
 
 - `consumables[].missing` bleibt immer leer (die Buff-Tabelle liefert
   nur Gesamtzahlen, keine Spielerliste).
@@ -22,13 +21,30 @@ erhaltener Schaden, Tode. Zeitstempel gibt es ausschließlich bei
 - `fight` sendet weder `battle_res_charges`/`battle_res_max` noch
   `heroism_remaining`.
 
-Neu in **v2** ist alles, was Zeitstempel braucht — und damit alles,
-was WeintTVs Tiefenanalyse, die sechs Bewertungsbereiche der Academy
-und die Wiedergabe erst möglich macht. Jedes neue Feld ist optional
-und additiv; die Companion-Seite ist bereits vollständig darauf
-vorbereitet und zeigt „keine Daten", solange ein Block fehlt. Der Bot
-darf die Blöcke also einzeln und in beliebiger Reihenfolge
-nachliefern, ohne dass etwas kaputtgeht.
+**Ein erster Teil von v2 ist im Bot umgesetzt, aber noch nicht gegen
+die echte WarcraftLogs-API verifiziert** (der Bot lief in dieser
+Umgebung ohne Netzwerkzugriff/Zugangsdaten): `players[].dots`/`hots`
+(aus `table(dataType: Debuffs/Buffs)`), `players[].cooldowns` (aus
+rohen `events(dataType: Casts)`, gefiltert auf eine feste
+Fähigkeitsliste in `KNOWN_COOLDOWNS`) sowie die top-level `interrupts[]`/
+`dispels[]` (aus `events(dataType: Interrupts/Dispels)`). Namen für
+Akteure und Fähigkeiten löst der Bot dafür neu über
+`report.masterData.actors`/`.abilities` auf, da rohe Events nur
+numerische `sourceID`/`targetID`/`abilityGameID` kennen. Bleiben diese
+Felder in der Praxis leer, ist das erwartungsgemäß der nächste
+Schritt: ein Diagnose-Log in `get_report_fight` zeigt bei jedem
+Archiv-Abruf die rohen Ereigniszahlen und Beispielwerte im Bot-
+Terminal, darüber lässt sich ein falsch angenommenes API-Format
+gezielt korrigieren — genau das Muster, mit dem `raid_cooldowns`/
+`heal_cooldowns`/`mechanics` schon einmal fertiggestellt wurden.
+
+Weiterhin offen (noch nicht im Bot umgesetzt): `active_time`/`casts`
+(Aktivzeit/APM), `movement_units` (Laufwege), `damage_taken_abilities`
+(Schadensaufschlüsselung je Fähigkeit), `resurrects[]`,
+`heroism_windows[]`, `battle_res_charges`/`battle_res_max`/
+`heroism_remaining`, sowie die vollständige `mechanics[]`-Neufassung
+für weitere Bosse. Jedes fehlende Feld degradiert weiterhin sauber zu
+„keine Daten" (Companion-seitig bereits getestet).
 
 Der fünfte Endpunkt (`/timeline`, für die Wiedergabe) existiert noch
 nicht.
