@@ -6,14 +6,15 @@ WarcraftLogs-Livelog als Raid-Datenquelle nutzen kann.
 
 ## Stand
 
-**Vier der fünf Endpunkte gibt es bereits.** Live, Reportliste,
-Fightliste und Einzel-Fight sind im Bot umgesetzt
-(`services/warcraftlogs.py`, Routen in `services/sync_server.py`) und
-liefern Daten. Diese Datei beschrieb sie früher als „noch nicht
-vorhanden" — das ist überholt.
+**Alle fünf Endpunkte gibt es jetzt** (`services/warcraftlogs.py`,
+`services/warcraftlogs_timeline.py`, Routen in
+`services/sync_server.py`). Der fünfte, `/timeline`, war der Grund,
+warum der Wiedergabe-Knopf in WeintTV ausnahmslos „Für diesen Pull
+liefert der Bot keine Zeitleiste" meldete: die Route existierte nicht,
+und ein 404 ist im Vertrag genau diese Meldung.
 
-Grundlage sind weiterhin **Summen**: Schaden, Heilung, erhaltener
-Schaden, Tode. Dazu drei bekannte Lücken:
+Grundlage der ersten vier sind **Summen**: Schaden, Heilung,
+erhaltener Schaden, Tode. Dazu drei bekannte Lücken:
 
 - `consumables[].missing` bleibt immer leer (die Buff-Tabelle liefert
   nur Gesamtzahlen, keine Spielerliste).
@@ -21,33 +22,65 @@ Schaden, Tode. Dazu drei bekannte Lücken:
 - `fight` sendet weder `battle_res_charges`/`battle_res_max` noch
   `heroism_remaining`.
 
-**Ein erster Teil von v2 ist im Bot umgesetzt, aber noch nicht gegen
-die echte WarcraftLogs-API verifiziert** (der Bot lief in dieser
-Umgebung ohne Netzwerkzugriff/Zugangsdaten): `players[].dots`/`hots`
-(aus `table(dataType: Debuffs/Buffs)`), `players[].cooldowns` (aus
-rohen `events(dataType: Casts)`, gefiltert auf eine feste
-Fähigkeitsliste in `KNOWN_COOLDOWNS`) sowie die top-level `interrupts[]`/
-`dispels[]` (aus `events(dataType: Interrupts/Dispels)`). Namen für
-Akteure und Fähigkeiten löst der Bot dafür neu über
-`report.masterData.actors`/`.abilities` auf, da rohe Events nur
-numerische `sourceID`/`targetID`/`abilityGameID` kennen. Bleiben diese
-Felder in der Praxis leer, ist das erwartungsgemäß der nächste
-Schritt: ein Diagnose-Log in `get_report_fight` zeigt bei jedem
-Archiv-Abruf die rohen Ereigniszahlen und Beispielwerte im Bot-
-Terminal, darüber lässt sich ein falsch angenommenes API-Format
-gezielt korrigieren — genau das Muster, mit dem `raid_cooldowns`/
-`heal_cooldowns`/`mechanics` schon einmal fertiggestellt wurden.
+### Warum die v2-Felder leer ankamen
+
+Ein erster Teil von v2 war im Bot umgesetzt, lieferte aber in der
+Praxis nichts. Zwei Ursachen, beide inzwischen behoben — sie sind hier
+festgehalten, weil sie sich bei jeder Erweiterung wiederholen können:
+
+- **Die Sprache.** Cooldowns wurden über ihren **englischen Namen**
+  erkannt (`"Tranquility"`, `"Rallying Cry"`). WarcraftLogs liefert
+  Fähigkeitsnamen aber in der Sprache des Clients, der den Bericht
+  hochgeladen hat — bei einer deutschen Gilde steht dort „Seelenruhe"
+  und „Sammelschrei", und kein einziger Vergleich hat gepasst.
+  `raid_cooldowns`, `heal_cooldowns` und `players[].cooldowns` kamen
+  deshalb dauerhaft leer an, ohne dass irgendwo ein Fehler auftauchte.
+  Derselbe Fehler steckte in der Heldentum-Erkennung und im
+  `"Flask of"`-Präfix der Verbrauchsgüter.
+
+  Jetzt erkennt `services/warcraftlogs_spells.py` jede Fähigkeit über
+  **drei unabhängige Wege** — Spell-ID, englischer Name, deutscher
+  Name —, und einer genügt. Die drei sind bewusst additiv: eine falsch
+  erinnerte ID macht den Eintrag nicht kaputt, solange ein Name passt.
+  Ohne Zugriff auf die echte API ist das die einzige ehrliche Antwort
+  auf „ungetestet".
+
+- **Die Tabellenform.** `players[].dots`/`hots` lasen `entries` aus der
+  Buffs-/Debuffs-Tabelle. Die antwortet aber mit `auras` (eine Liste je
+  Fähigkeit, nicht je Spieler), also kam immer `{}` heraus — in der
+  Oberfläche nicht von „der Spieler hat keine DoTs" zu unterscheiden.
+  Gelesen werden jetzt **beide** Formen; die eigentliche Zuordnung
+  „wer hat den DoT gelegt" kommt aus rohen `events(dataType:
+  Debuffs/Buffs)`, weil nur die eine `sourceID` haben.
+
+Dazu zwei kleinere Ursachen derselben Art: alle Ereignisströme hingen
+in **einem** `gather()` mit **einem** `try/except` — ein einziger
+unbekannter `dataType` ließ damit auch die intakten Ströme
+verschwinden (jetzt pro Strom abgesichert); und `events()` lief mit
+der Voreinstellung von 300 Ereignissen je Seite, viel zu wenig für
+einen 25-Mann-Kampf, sodass spät gezündete Cooldowns schlicht nicht
+mehr in der Antwort waren.
+
+### Was jetzt geliefert wird
+
+`players[].dots`/`hots` (aus rohen Buff-/Debuff-Ereignissen, Uptime als
+Vereinigung der aktiven Fenster, nie über 100 %),
+`players[].cooldowns` (Zeitpunkte aus `events(dataType: Casts)`, über
+die Spell-ID erkannt), `players[].movement_units` (Summe der Abstände
+zwischen aufeinanderfolgenden Positionsangaben), die top-level
+`interrupts[]`/`dispels[]`, sowie der komplette `/timeline`-Endpunkt.
 
 Weiterhin offen (noch nicht im Bot umgesetzt): `active_time`/`casts`
-(Aktivzeit/APM), `movement_units` (Laufwege), `damage_taken_abilities`
-(Schadensaufschlüsselung je Fähigkeit), `resurrects[]`,
-`heroism_windows[]`, `battle_res_charges`/`battle_res_max`/
-`heroism_remaining`, sowie die vollständige `mechanics[]`-Neufassung
-für weitere Bosse. Jedes fehlende Feld degradiert weiterhin sauber zu
-„keine Daten" (Companion-seitig bereits getestet).
+im Einzel-Fight (in der Zeitleiste gibt es sie), `resurrects[]`,
+`battle_res_charges`/`battle_res_max`/`heroism_remaining`, sowie die
+vollständige `mechanics[]`-Neufassung für weitere Bosse. Jedes
+fehlende Feld degradiert weiterhin sauber zu „keine Daten"
+(Companion-seitig getestet).
 
-Der fünfte Endpunkt (`/timeline`, für die Wiedergabe) existiert noch
-nicht.
+Ein Diagnose-Log in `get_report_fight` und `get_report_timeline` zeigt
+bei jedem Archiv-Abruf die rohen Ereigniszahlen und Beispielwerte im
+Bot-Terminal — darüber lässt sich ein weiterhin leeres Feld gezielt
+eingrenzen, statt zu raten.
 
 ---
 
@@ -550,9 +583,9 @@ GET /companion/warcraftlogs/reports/{code}/fights/{fight_id}/timeline
 Authorization: Bearer <companion_token>
 ```
 
-**Dieser Endpunkt existiert noch nicht.** Er ist die Grundlage für
-den Wiedergabe-Knopf in WeintTV: einen abgeschlossenen Pull Sekunde
-für Sekunde abspielen, mit Schieberegler und 1× bis 8×.
+Die Grundlage für den Wiedergabe-Knopf in WeintTV: einen
+abgeschlossenen Pull Sekunde für Sekunde abspielen, mit Schieberegler
+und 1× bis 8×. Umgesetzt in `services/warcraftlogs_timeline.py`.
 
 Bewusst ein eigener Endpunkt und kein Zusatzfeld am Einzel-Fight: die
 Antwort enthält Zeitreihen für jeden Spieler und ist deutlich größer
@@ -590,9 +623,9 @@ keine Zeitleiste gibt.
   "resurrects": [{ "target": "Krallenwut", "caster": "Elvenne", "at": 78.0 }],
   "heroism_windows": [{ "start": 96.0, "end": 136.0, "source": "Kaldrun" }],
 
-  "avoidable_hits": [
+  "damage_taken_hits": [
     { "player": "Dolchtanz", "ability": "Double Swipe", "at": 34.0,
-      "amount": 96000 }
+      "amount": 96000, "hits": 1 }
   ],
 
   "interrupts": [], "dispels": [], "mechanics": [], "events": [],
@@ -623,18 +656,53 @@ was sich pro Sekunde nicht ehrlich rekonstruieren lässt
 erhaltenen Schadens). Am Ende der Wiedergabe zeigt die App denselben
 Stand wie im Archiv.
 
-**`avoidable_hits`** sind Einzelereignisse mit Zeitpunkt. Während der
-Wiedergabe ist das der einzige exakt bekannte Teil der
-Schadensaufschlüsselung — deshalb zeigt die App nur ihn und
-extrapoliert den Rest nicht.
+**`damage_taken_hits`** sind Einzeltreffer mit Zeitpunkt, je Spieler,
+Fähigkeit und Sekunde zusammengefasst. Während der Wiedergabe ist das
+der einzige exakt bekannte Teil der Schadensaufschlüsselung — deshalb
+zeigt die App nur ihn und extrapoliert den Rest nicht.
+
+**Der Bot schickt hier bewusst kein Urteil.** Ob ein Treffer
+vermeidbar war, entscheidet die Companion-App über
+`analyzer/data/avoidable.py`: diese Wertung ändert sich mit
+Schwierigkeitsgrad und Taktik, muss für WeintTV und die Academy
+identisch sein und ohne Bot-Deploy korrigierbar bleiben. Eine
+Fähigkeit ohne Tabelleneintrag ergibt `unknown` und damit **keinen**
+Eintrag — lieber eine Lücke als ein Vorwurf gegen jemanden, der nichts
+falsch gemacht hat. Das ältere Feld `avoidable_hits` (bereits als
+vermeidbar gemeldete Treffer) wird weiterhin akzeptiert und
+unverändert übernommen.
+
+**`interval`** wird bei langen Kämpfen gestreckt statt die Antwort
+wachsen zu lassen: ab `MAX_SAMPLES` Stützpunkten geht der Takt auf 2,
+3, … Sekunden hoch. Die App liest den Wert ohnehin aus der Antwort.
+
+**`boss_health`** wird aus dem Schaden am Boss abgeleitet — die
+maximale Trefferpunktzahl steht in keiner API-Antwort. Sie ergibt sich
+aus Gesamtschaden und Endprozentwert (ein Kill endet bei 0 %, ein Wipe
+bei 42,5 % bedeutet, dass der Gesamtschaden 57,5 % entsprach). Ist der
+Endwert unbekannt und war es kein Kill, bleibt die Reihe **leer**:
+eine Leiste, die einfach bis 0 läuft, würde einen Kill behaupten, den
+es nicht gab. Welcher Gegner der Boss ist, kommt aus
+`masterData.actors[].subType == "Boss"`; fehlt die Rolle, entscheidet
+der Schadensanteil, und nur wenn er deutlich genug ist — sonst gibt es
+lieber keine Bossleiste als eine, die die Adds einer Phase anzeigt.
+
+**Leere Reihen werden weggelassen**, nicht als Nullreihe geschickt:
+die App unterscheidet „keine Daten" von „nachweislich null", und eine
+Nullreihe wäre die falsche der beiden Aussagen.
 
 **Größenordnung:** 25 Spieler × 6 Reihen × 360 Stützpunkte ist
 unproblematisch. Reihen **je Spieler und Fähigkeit** werden
 ausdrücklich **nicht** verlangt — das wären Megabyte pro Kampf.
 Deshalb kommt die vollständige Aufschlüsselung aus `aggregate`.
 
-Quellen: `graph(dataType: DamageDone|Healing|DamageTaken)` für die
-Reihen, `events(...)` für die Ereignislisten.
+Quellen: rohe `events(dataType: DamageDone|Healing|DamageTaken|Casts)`
+für Reihen *und* Ereignislisten. Bewusst nicht `graph()`: dieselben
+Ereignisse liefern zugleich den Verlauf, die Positionsangaben für die
+Laufwege und die Einzeltreffer — ein zweiter Abruf mit einem zweiten
+Antwortformat wäre eine zusätzliche Fehlerquelle ohne zusätzlichen
+Nutzen. Es ist der teuerste Abruf der ganzen Brücke und passiert genau
+einmal je Druck auf „Wiedergabe", nicht im Poll-Takt.
 
 
 ---

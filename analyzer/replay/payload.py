@@ -18,7 +18,7 @@ auf eine plausible Länge gebracht.
 
 from __future__ import annotations
 
-from analyzer.data import encounters
+from analyzer.data import avoidable, encounters
 from analyzer.models import (
     SUPPORT_DISPEL,
     SUPPORT_INTERRUPT,
@@ -103,7 +103,31 @@ def build_player_series(rows: list) -> tuple[PlayerSeries, ...]:
     return tuple(entries)
 
 
-def build_avoidable_hits(rows: list) -> tuple[AvoidableHit, ...]:
+def build_avoidable_hits(
+    rows: list,
+    encounter_name: str = "",
+    roles: dict | None = None,
+    classify: bool = False,
+) -> tuple[AvoidableHit, ...]:
+    """
+    Die vermeidbaren Einzeltreffer der Zeitleiste.
+
+    Zwei Quellen, und der Unterschied ist wichtig. `avoidable_hits`
+    aus der Antwort sind bereits als vermeidbar gemeldet und werden
+    unverändert übernommen. `damage_taken_hits` sind dagegen **alle**
+    Treffer mit Zeitpunkt - dort fällt das Urteil hier, über
+    `analyzer/data/avoidable.py`, mit `classify=True`.
+
+    Dass der Bot die Rohtreffer schickt und nicht sein eigenes Urteil,
+    ist Absicht: ob ein Treffer vermeidbar war, hängt von
+    Schwierigkeitsgrad und Taktik ab, muss für WeintTV und die Academy
+    identisch sein und ohne Bot-Deploy korrigierbar bleiben. Ein
+    fehlender Tabelleneintrag ergibt `unknown` und damit **keinen**
+    Eintrag - lieber eine Lücke als ein Vorwurf an jemanden, der
+    nichts falsch gemacht hat.
+    """
+
+    roles = roles or {}
 
     entries = []
 
@@ -116,6 +140,13 @@ def build_avoidable_hits(rows: list) -> tuple[AvoidableHit, ...]:
         ability = _text(row.get("ability"))
 
         if not name or not ability:
+            continue
+
+        if classify and not avoidable.is_avoidable(
+            encounter_name,
+            ability,
+            role=roles.get(name, ""),
+        ):
             continue
 
         entries.append(
@@ -182,6 +213,35 @@ def timeline_from_payload(
         _sequence(payload.get("heroism_windows"))
     )
 
+    player_series = build_player_series(players)
+
+    roles = {
+        series.actor.name: series.actor.role
+        for series in player_series
+    }
+
+    encounter_name = (
+        encounter.name
+        if encounter is not None
+        else _text(fight.get("name"))
+    )
+
+    #
+    # Bereits als vermeidbar gemeldete Treffer und die rohe
+    # Trefferliste ergeben zusammen die Liste, aus der die Wiedergabe
+    # ihre Schadensaufschlüsselung baut - die zweite Quelle läuft
+    # dabei durch die eigene Bewertung (siehe build_avoidable_hits).
+    #
+
+    avoidable_hits = build_avoidable_hits(
+        _sequence(payload.get("avoidable_hits"))
+    ) + build_avoidable_hits(
+        _sequence(payload.get("damage_taken_hits")),
+        encounter_name=encounter_name,
+        roles=roles,
+        classify=True,
+    )
+
     return FightTimeline(
         encounter=encounter,
         source_label=source_label or "Wiedergabe",
@@ -194,7 +254,7 @@ def timeline_from_payload(
             or aggregate.battle_res_max
         ),
         boss_health=_series(payload.get("boss_health")),
-        players=build_player_series(players),
+        players=player_series,
         deaths=build_deaths(_sequence(payload.get("deaths"))),
         resurrections=build_resurrections(
             _sequence(payload.get("resurrects"))
@@ -206,9 +266,7 @@ def timeline_from_payload(
             duration,
             heroism_windows,
         ),
-        avoidable_hits=build_avoidable_hits(
-            _sequence(payload.get("avoidable_hits"))
-        ),
+        avoidable_hits=avoidable_hits,
         interrupts=build_support_events(
             _sequence(payload.get("interrupts")),
             SUPPORT_INTERRUPT,
