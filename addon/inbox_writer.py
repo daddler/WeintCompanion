@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from addon.sync_reader import SyncReader
-from core.lua_table import upsert_variable
+from core.lua_table import quote_lua_string, to_lua, upsert_variable
 
 
 class InboxWriter:
@@ -24,6 +24,14 @@ class InboxWriter:
         messages: Liste von {"type": ..., "payload": ...}. Ersetzt die
         komplette Inbox-Queue - das Addon leert sie ohnehin bei jedem
         Login vollständig, es gibt also nichts zu erhalten.
+
+        payload darf eine Zeichenkette sein (so kommen die
+        WCIMPORT-Strings des Bots herüber) oder eine verschachtelte
+        Struktur aus Dictionaries, Listen, Zahlen und Wahrheitswerten.
+        Letztere wird als echtes Lua geschrieben und landet im Addon
+        direkt als Tabelle - siehe INBOX_HANDLERS in
+        modules/companion.lua. Ein Trennzeichen-Format wäre für die
+        Auswertungs- und Lektionstexte nicht eindeutig genug.
         """
 
         file = self.reader.get_file()
@@ -35,21 +43,20 @@ class InboxWriter:
 
         for message in messages:
 
-            payload = message.get("payload") or ""
+            payload = message.get("payload")
 
             if not payload:
                 continue
 
-            escaped = (
-                payload
-                .replace("\\", "\\\\")
-                .replace('"', '\\"')
-            )
+            if isinstance(payload, str):
+                rendered = quote_lua_string(payload)
+            else:
+                rendered = to_lua(payload, indent=0)
 
             entries.append(
                 "{\n"
-                f'["type"] = "{message["type"]}",\n'
-                f'["payload"] = "{escaped}",\n'
+                f'["type"] = {quote_lua_string(message["type"])},\n'
+                f'["payload"] = {rendered},\n'
                 "},\n"
             )
 

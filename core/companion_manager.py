@@ -21,6 +21,8 @@ from core.discord_status import DiscordStatus
 from core.discord_account import DiscordAccountStore
 from core.discord_auth import DiscordAuth
 from core.discord_roster_sync import DiscordRosterSync
+from addon.addon_inbox import AddonInbox
+from core.addon_analysis_sync import AddonAnalysisSync
 from core.raid_data_service import RaidDataService
 from core.academy_service import AcademyService
 
@@ -81,7 +83,15 @@ class CompanionManager(QObject):
         self.discord = DiscordStatus()
         self.discord_account = DiscordAccountStore()
         self.discord_auth = DiscordAuth()
-        self.discord_roster_sync = DiscordRosterSync(self)
+        #
+        # Alles, was Richtung Addon zugestellt wird, laeuft ueber eine
+        # gemeinsame Inbox - sonst wuerde der zuletzt schreibende
+        # Absender die Nachrichten der uebrigen ueberschreiben.
+        #
+
+        self.addon_inbox = AddonInbox(self)
+
+        self.discord_roster_sync = DiscordRosterSync(self, self.addon_inbox)
 
         #
         # WeintTV und WeintAcademy hängen beide am selben
@@ -94,6 +104,14 @@ class CompanionManager(QObject):
 
         self.raid_data = RaidDataService(self)
         self.academy = AcademyService(self)
+
+        #
+        # Stellt die zuletzt ausgewertete Auswertung samt Lernpfad ins
+        # Addon (WeintTV/Academy ingame). Meldet den RaidDataService
+        # bewusst nicht an, siehe core/addon_analysis_sync.py.
+        #
+
+        self.addon_analysis_sync = AddonAnalysisSync(self, self.addon_inbox)
 
         self.sync_timer = QTimer()
 
@@ -262,6 +280,26 @@ class CompanionManager(QObject):
 
             self.logger.error(
                 f"Gilden-Kalender-Sync fehlgeschlagen: {exc}"
+            )
+
+        #
+        # Wieder eigener try/except: eine fehlerhafte Auswertung darf
+        # weder den Material-Sync noch den Roster-Abruf mitreissen.
+        #
+
+        try:
+
+            if self.config.data.get(
+                "addon_analysis_sync_enabled",
+                True,
+            ):
+
+                self.addon_analysis_sync.process()
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"WeintTV/Academy-Zustellung fehlgeschlagen: {exc}"
             )
 
         finally:

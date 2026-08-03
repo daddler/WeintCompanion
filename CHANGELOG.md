@@ -1,6 +1,41 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.6.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.3.0.
+
+## 1.3.0
+
+WeintTV und die Academy gibt es jetzt auch im Spiel - abgespeckt, für
+alle, die nur einen Monitor haben und im Raid nicht dauernd aus WoW
+heraus wollen. Diese Version stellt die Auswertung dem Addon zu; die
+Anzeige selbst bringt WeintCodex 1.0.1.0 mit.
+
+- Neu: Die zuletzt ausgewertete Analyse wird ins Addon gestellt -
+  erhaltener und vermeidbarer Schaden samt "Was tun"-Hinweis,
+  Wirkungsdauern, Aktivzeit, Laufwege, Cooldown-Nutzung,
+  Unterbrechungen und Mechanikfehler. Dazu Sternebewertung,
+  Trainingsplan und Lektionskatalog des gewählten Charakters.
+- Neu: Bridge-Karte "WeintTV & Academy ingame" auf der Sync-Seite,
+  mit der sich die Zustellung abschalten lässt.
+- Neu: Ingame abgehakte Lektionen und abgewählte Katalogeinträge
+  kommen zurück auf den Desktop - der Lernpfad ist damit auf beiden
+  Seiten derselbe.
+- Wichtig: Zugestellt wird, was WeintTV oder die Academy zuletzt
+  ausgewertet haben. Der Raid-Datendienst wird dafür bewusst nicht
+  dauerhaft gestartet, damit die Anwendung nicht im Hintergrund
+  pollt, wenn niemand die beiden Seiten benutzt.
+- Wichtig: Das Addon liest die Zustellung beim Login bzw. nach
+  /reload - dieselbe Bedingung wie beim Raid-Roster-Import. Ein
+  Live-Bild im Spiel ist technisch nicht möglich, WoW liest seine
+  SavedVariables nur beim Laden ein.
+- Intern: Die Inbox Richtung Addon hat jetzt Kanäle. Vorher hat jeder
+  Absender die komplette Warteschlange ersetzt - mit zwei Absendern
+  im selben Sync-Durchlauf hätte der zweite die Nachrichten des
+  ersten gelöscht.
+- Intern: Nutzlasten Richtung Addon dürfen verschachtelte Tabellen
+  sein und werden als echtes Lua geschrieben. Ein Trennzeichen-Format
+  wäre für Lektionstexte und Schadenshinweise nicht eindeutig
+  gewesen - genau die Zeichen, die als Trenner taugen, kommen darin
+  vor.
 
 ## 1.2.6
 
