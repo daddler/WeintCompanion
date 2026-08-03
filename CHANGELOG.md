@@ -1,6 +1,17 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.4.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.5.
+
+## 1.2.5
+
+Enthält alles aus 1.2.4 - dieses Release kam nie bei euch an: sein Tag
+zeigte auf den Stand von 1.2.3, das Update installierte deshalb wieder
+1.2.3 und bot sich danach erneut selbst an.
+
+- Fix: Der Build bricht jetzt ab, wenn ein Tag nicht zu der im Code
+  hinterlegten Version passt, statt ein Release mit falscher
+  Versionsnummer zu veröffentlichen. Genau das hatte zuvor schon
+  v1.2.0 und v1.2.1 getroffen.
 
 ## 1.2.4
 
