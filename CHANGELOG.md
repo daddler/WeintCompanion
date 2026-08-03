@@ -1,6 +1,35 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.3.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.4.
+
+## 1.2.4
+
+- Fix: Der Wiedergabe-Knopf in WeintTV und der Academy funktioniert
+  jetzt wirklich. Er blieb im Live-Modus unsichtbar, weil die
+  Verfügbarkeit geprüft wurde, bevor die Datenquelle überhaupt
+  bestand. Und selbst wenn eine Wiedergabe startete, stand sie
+  danach still: die Uhr wurde aus dem Ladethread heraus gestartet,
+  was Qt stillschweigend ablehnt.
+- Fix: Ein Wechsel des Berichts, des Pulls oder der Datenquelle
+  verwarf die bereits geladene Zeitleiste nicht - der nächste Druck
+  auf Wiedergabe spielte deshalb den vorherigen Kampf ab, eingefroren
+  bei 00:00.
+- Fix: Ein Klick in die Zeitleiste (statt Ziehen am Regler) sprang
+  nicht an die gewählte Stelle.
+- Fix: Die Wiedergabe wird nicht mehr im Klick-Moment berechnet -
+  die Oberfläche bleibt beim Start bedienbar.
+- WeintTV: "Kampfereignisse" zeigt jetzt den ganzen Verlauf eines
+  Pulls - zusätzlich zu Toden, Kampf-Rezz und Heldentum auch
+  Unterbrechungen, Dispels, Mechanikfehler mit Zeitpunkt sowie
+  Phasenwechsel und angesagte Bossfähigkeiten der Datenquelle.
+- WeintTV: Liefert die Datenquelle keine Tiefenauswertung, steht dort
+  jetzt ein erklärender Hinweis statt zehn leerer Karten - mit dem
+  Unterschied zwischen "kein Raid", "kein Pull läuft" und "diese
+  Quelle liefert nur Summen".
+- WeintAcademy: Derselbe Hinweis erscheint bei der Bewertung, damit
+  unbewertete Bereiche nicht wie ein Defekt aussehen.
+- WeintTV: Aktivzeit nennt zusätzlich die längste Pause, Uptimes die
+  Zahl der Anwendungen.
 
 ## 1.2.3
 

@@ -39,6 +39,7 @@ from analyzer.models import (
     UPTIME_HOT,
     ActivityEntry,
     Actor,
+    CombatEvent,
     ConsumableState,
     CooldownState,
     CooldownUsage,
@@ -466,6 +467,7 @@ class MockRaidDataProvider(RaidDataProvider):
             interrupts=final.interrupts,
             dispels=final.dispels,
             mechanics=final.mechanics,
+            events=final.events,
             damage_taken_totals=final.damage_taken,
             dot_uptimes=final.dot_uptimes,
             hot_uptimes=final.hot_uptimes,
@@ -608,6 +610,7 @@ class MockRaidDataProvider(RaidDataProvider):
                 SUPPORT_DISPEL,
                 seconds,
             ),
+            events=self._events(seconds),
         )
 
     # --------------------------------------------------
@@ -1217,6 +1220,27 @@ class MockRaidDataProvider(RaidDataProvider):
                 ability=ability,
             )
             for name, at, target, ability in table
+            if seconds >= at
+        )
+
+    def _events(self, seconds: float) -> tuple[CombatEvent, ...]:
+        """
+        Die Ereignisse bis zur laufenden Sekunde - dieselbe Regel wie
+        bei Toden und Unterbrechungen.
+        """
+
+        return tuple(
+            CombatEvent(
+                at_seconds=at,
+                kind=kind,
+                actor_name=actor,
+                target=target,
+                ability=ability,
+                detail=detail,
+                severity=severity,
+            )
+            for at, kind, actor, target, ability, detail, severity
+            in schedule.EVENT_SCHEDULE
             if seconds >= at
         )
 

@@ -229,6 +229,48 @@ def _wait_until(condition, timeout=5.0):
     return False
 
 
+#
+# Jeder im Test erzeugte Dienst, damit die Nachbereitung ihn
+# garantiert herunterfahren kann.
+#
+
+_SERVICES = []
+
+
+@pytest.fixture(autouse=True)
+def _shutdown_services():
+    """
+    Nach jedem Test alle erzeugten Dienste beenden.
+
+    Nicht bloß Ordnungsliebe: ein Dienst mit laufender Wiedergabe hat
+    einen aktiven QTimer. Wird das Objekt später eingesammelt, während
+    gerade ein Arbeitsthread rechnet (die Speicherbereinigung läuft in
+    dem Thread, der die Zuteilung auslöst), läuft der QObject-
+    Destruktor im FALSCHEN Thread - Qt meldet "Timers cannot be
+    stopped from another thread" und der Prozess stürzt ab. In der
+    Anwendung kann das nicht passieren: dort hält der
+    CompanionManager den Dienst und ruft shutdown() beim Beenden.
+    """
+
+    yield
+
+    from PySide6.QtWidgets import QApplication
+
+    while _SERVICES:
+
+        _SERVICES.pop().shutdown()
+
+    #
+    # Noch anstehende Cross-Thread-Signale zustellen, solange die
+    # Objekte sicher am Leben sind.
+    #
+
+    app = QApplication.instance()
+
+    if app is not None:
+        app.processEvents()
+
+
 def _make_service(archive_client=None):
 
     from PySide6.QtWidgets import QApplication
@@ -253,6 +295,8 @@ def _make_service(archive_client=None):
     service = RaidDataService(_Manager())
 
     service._archive_client = archive_client or _FakeArchiveClient()
+
+    _SERVICES.append(service)
 
     return service
 
@@ -960,3 +1004,189 @@ def test_replay_availability_follows_the_selection():
     )
 
     assert service.replay_available() is True
+
+
+def test_the_replay_clock_actually_runs_after_a_worker_thread_load():
+    """
+    Der Fehler, der die Wiedergabe unbedienbar machte.
+
+    Die Zeitleiste wird in einem Arbeitsthread geladen, und dort
+    wurde die Uhr auch gestartet. Ein QTimer darf aber nur in seinem
+    Besitzerthread bedient werden: Qt lehnt das mit einer Meldung auf
+    stderr ab und wirft dabei KEINE Ausnahme - die Wiedergabe blieb
+    also stumm bei 00:00 stehen, obwohl Zustand und Oberfläche
+    "läuft" anzeigten.
+
+    Deshalb prüft dieser Test nicht den Zustand (der war schon vorher
+    richtig), sondern den Timer selbst.
+    """
+
+    from core.raid_data_service import MODE_REPLAY
+
+    service = _make_service()
+
+    service.start_replay()
+
+    assert _wait_until(
+        lambda: service.archive_state().mode == MODE_REPLAY
+    )
+
+    #
+    # Die Uhr wird über ein Signal in den Hauptthread gereicht -
+    # _wait_until pumpt die Event-Loop, hier wird also genau die
+    # Zustellung mitgeprüft.
+    #
+
+    assert _wait_until(lambda: service._replay_timer.isActive())
+
+    service.stop_replay()
+
+    assert service._replay_timer.isActive() is False
+
+
+def test_choosing_another_pull_discards_the_loaded_timeline():
+    """
+    Sonst spielt der Wiedergabe-Knopf den vorherigen Kampf ab.
+
+    `start_replay()` erkennt eine bereits geladene Zeitleiste und
+    spult sie nur zurück, statt neu zu laden. Blieb sie beim Wechsel
+    der Auswahl liegen, gehörte sie zum falschen Pull - und weil der
+    Moduswechsel dabei ausblieb, stand die Wiedergabe zusätzlich bei
+    00:00 still.
+    """
+
+    from core.raid_data_service import MODE_ARCHIVE, MODE_REPLAY
+
+    service = _make_service()
+
+    service.start_replay()
+
+    assert _wait_until(
+        lambda: service.archive_state().mode == MODE_REPLAY
+    )
+
+    service.select_archive_fight("aBc", 12)
+
+    assert service._timeline is None
+
+    assert service.archive_state().mode == MODE_ARCHIVE
+
+    assert service.replay_state().duration == 0.0
+
+
+def test_restarting_a_loaded_replay_returns_to_replay_mode():
+    """
+    Ein zweiter Druck auf Wiedergabe spult zurück - und muss den
+    Modus wieder setzen, sonst rührt sich der Takt nicht.
+    """
+
+    from core.raid_data_service import MODE_REPLAY
+
+    service = _make_service()
+
+    service.start_replay()
+
+    assert _wait_until(
+        lambda: service.archive_state().mode == MODE_REPLAY
+    )
+
+    service._advance_replay(10.0)
+
+    assert service.replay_state().position == 10.0
+
+    #
+    # Pausieren, ohne die Zeitleiste zu verwerfen - der Zustand, in
+    # dem der Knopf ein zweites Mal gedrückt werden kann.
+    #
+
+    service.set_replay_playing(False)
+
+    service.start_replay()
+
+    assert service.archive_state().mode == MODE_REPLAY
+
+    assert service.replay_state().position == 0.0
+
+    service._advance_replay(2.0)
+
+    assert service.replay_state().position == 2.0
+
+
+def test_replay_is_offered_before_the_poll_thread_ever_ran():
+    """
+    Der Grund, aus dem der Wiedergabe-Knopf im Live-Modus unsichtbar
+    blieb.
+
+    `replay_available()` fragte den Provider ab, erzeugte ihn aber
+    nicht - und beim Aufbau der Seite existiert er noch nicht, weil
+    ihn erst der Poll-Thread anlegt. Die Antwort war deshalb "nein",
+    und die Oberfläche fragt danach nie wieder.
+    """
+
+    service = _make_service()
+
+    assert service._provider is None
+
+    assert service.replay_available() is True
+
+
+def test_a_source_without_a_timeline_offers_no_replay():
+    """
+    Die Gegenprobe: `hasattr(provider, "timeline")` war immer wahr,
+    weil die Basisklasse die Methode mitbringt. Gefragt ist, ob die
+    Quelle sie überschreibt.
+    """
+
+    from analyzer.models import RaidSnapshot
+    from analyzer.providers.base import RaidDataProvider
+
+    class _Summen(RaidDataProvider):
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+        def snapshot(self):
+            return RaidSnapshot.empty("Nur Summen")
+
+        @property
+        def source_label(self):
+            return "Nur Summen"
+
+    service = _make_service()
+
+    service._provider = _Summen()
+
+    assert service.replay_available() is False
+
+
+def test_switching_the_data_source_discards_the_replay():
+    """
+    Eine Zeitleiste gehört der Quelle, aus der sie stammt.
+    """
+
+    from core.raid_data_service import MODE_LIVE, MODE_REPLAY
+
+    service = _make_service()
+
+    service.start_replay()
+
+    assert _wait_until(
+        lambda: service.archive_state().mode == MODE_REPLAY
+    )
+
+    service.reload_provider()
+
+    assert service._timeline is None
+
+    assert service.replay_state().duration == 0.0
+
+    #
+    # Und zurück in die Ansicht, aus der abgespielt wurde - wer aus
+    # dem Live-Feed heraus gestartet hat, soll nicht ungefragt in der
+    # Archiv-Auswahl landen.
+    #
+
+    assert service.archive_state().mode == MODE_LIVE

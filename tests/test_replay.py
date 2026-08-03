@@ -168,6 +168,41 @@ def test_events_appear_exactly_at_their_timestamp():
     assert snapshot_at(timeline, first_death).death_count == 1
 
 
+def test_combat_events_reach_the_snapshot_up_to_the_current_second():
+    """
+    Die Zeitleiste trug ihre sonstigen Ereignisse (Phasenwechsel,
+    angesagte Bossfähigkeiten) bisher nur mit sich herum: gelesen hat
+    sie niemand, also zeigte die Wiedergabe sie auch nicht an. Sie
+    gehören in den Snapshot, und zwar nach derselben Regel wie Tode -
+    nur bis zur laufenden Sekunde.
+    """
+
+    timeline = _timeline()
+
+    assert timeline.events
+
+    first = timeline.events[0].at_seconds
+
+    later = max(event.at_seconds for event in timeline.events)
+
+    assert len(snapshot_at(timeline, first).events) >= 1
+
+    assert snapshot_at(timeline, later).events == timeline.events
+
+    #
+    # Und nichts aus der Zukunft.
+    #
+
+    middle = snapshot_at(timeline, (first + later) / 2.0)
+
+    assert all(
+        event.at_seconds <= (first + later) / 2.0
+        for event in middle.events
+    )
+
+    assert len(middle.events) < len(timeline.events)
+
+
 def test_resurrections_return_a_battle_res_charge_over_time():
     """
     Vor dem Rezz sind alle Ladungen da, danach eine weniger - genau

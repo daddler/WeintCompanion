@@ -503,6 +503,44 @@ Bot-Texte auf englische Fähigkeitsnamen abbildet. Der Bot muss dafür
 nichts tun; er kann seine Regeln behalten oder mit der Zeit zugunsten
 der Rohzeilen abbauen.
 
+### `events[]` (optional, oberste Ebene)
+
+Alles, was den Verlauf eines Kampfes erzählt, ohne dass die App es
+auswerten müsste: Phasenwechsel, angesagte Bossfähigkeiten, Adds.
+Die App zeigt sie in WeintTVs Karte "Kampfereignisse" auf derselben
+Zeitachse wie Tode, Kampf-Rezz und Heldentum — und während einer
+Wiedergabe jeweils nur bis zur laufenden Sekunde.
+
+```json
+"events": [
+  { "at": 45.0, "kind": "phase", "detail": "Gurubashi-Tor offen" },
+  { "at": 72.0, "kind": "cast", "actor": "Horridon",
+    "ability": "Double Swipe", "detail": "Doppelhieb angesagt",
+    "severity": "warning" }
+]
+```
+
+| Feld | Typ | Pflicht | Bedeutung |
+|---|---|---|---|
+| `at` | Float | – | Sekunde im Kampf |
+| `kind` | String | **ja** | Art des Ereignisses |
+| `actor` | String | – | Verursacher |
+| `target` | String | – | Ziel |
+| `ability` | String | – | Fähigkeit |
+| `detail` | String | – | Anzeigetext |
+| `severity` | String | – | `info` (Vorgabe), `success`, `warning`, `error` |
+
+**`kind` wird bewusst nicht gegen eine feste Liste geprüft.** Eine
+neue Ereignisart erscheint ohne Companion-Update in der Liste; der
+Companion beschriftet nur die ihm bekannten Arten schöner. Deshalb
+gehört alles, was die App *auswerten* soll (Tode, Rezz, Heldentum,
+Unterbrechungen, Dispels, Mechanikfehler), weiterhin in seinen
+eigenen, typisierten Block und **nicht** hierher — sonst wäre es
+doppelt gezählt.
+
+Derselbe Block ist auch in der Zeitleisten-Antwort erlaubt und wird
+dort identisch gelesen.
+
 ---
 
 ## v2: Zeitleiste eines Fights (Wiedergabe)
@@ -629,6 +667,10 @@ Ab v2 zusätzlich:
 - **Die Ableitung von Mechanikfehlern aus vermeidbarem Schaden** und
   das Zusammenführen mit den Regeln des Bots.
 - **Die Rekonstruktion jeder Sekunde** aus der Zeitleiste.
+- **Die gemeinsame Zeitachse** in WeintTVs "Kampfereignisse": Tode,
+  Kampf-Rezz, Heldentum, Unterbrechungen, Dispels, Mechanikfehler und
+  `events[]` werden erst in der Oberfläche zusammengeführt. Der Bot
+  liefert sie getrennt weiter — die Academy braucht sie getrennt.
 
 ---
 
@@ -781,6 +823,7 @@ nur eben für einen bestimmten statt den letzten Kampf.
 | `core/raid_data_service.py` | Registrierung der Quelle, Live/Archiv/Wiedergabe-Zustandsmaschine |
 | `gui/widgets/tv/archive_picker.py` | Live/Archiv-Umschalter und Wiedergabe-Start (WeintTV + Academy) |
 | `gui/widgets/tv/replay_bar.py` | Steuerung der Wiedergabe |
+| `gui/widgets/tv/analysis_gap.py` | Begründung, wenn die Quelle keine Tiefenauswertung liefert (WeintTV + Academy) |
 | `gui/pages/settings_sections/modules.py` | Auswahl der Live-Quelle und Statusanzeige |
 | `tests/test_warcraftlogs_payload.py` | Mapping und Robustheit, auch der v2-Blöcke |
 | `tests/test_warcraftlogs_provider.py` | Lebenszyklus und Fehlerfälle (Live) |

@@ -41,6 +41,7 @@ from analyzer.models import (
     UPTIME_HOT,
     ActivityEntry,
     Actor,
+    CombatEvent,
     ConsumableState,
     CooldownState,
     CooldownUsage,
@@ -983,6 +984,50 @@ def build_support_events(rows: list, kind: str) -> tuple[SupportEvent, ...]:
     return tuple(entries)
 
 
+def build_events(rows: list) -> tuple[CombatEvent, ...]:
+    """
+    Sonstige Kampfereignisse (Phasenwechsel, angesagte
+    Bossfähigkeiten, Adds).
+
+    `kind` ist die einzige Pflichtangabe - alles Weitere darf fehlen.
+    Die Art wird bewusst NICHT gegen eine Liste geprüft: eine neue
+    Ereignisart soll ohne Companion-Update in der Ereignisliste
+    erscheinen können.
+
+    Steht hier bei den übrigen `build_*` und nicht bei der
+    Wiedergabe, weil beide Antworten (Einzel-Fight und Zeitleiste)
+    denselben Block liefern dürfen - analyzer/replay/payload.py holt
+    sich diese Funktion von hier.
+    """
+
+    entries = []
+
+    for row in rows:
+
+        row = _mapping(row)
+
+        kind = _text(row.get("kind"))
+
+        if not kind:
+            continue
+
+        entries.append(
+            CombatEvent(
+                at_seconds=_number(row.get("at")),
+                kind=kind,
+                actor_name=_text(row.get("actor")) or _text(row.get("name")),
+                target=_text(row.get("target")),
+                ability=_text(row.get("ability")),
+                detail=_text(row.get("detail")),
+                severity=_text(row.get("severity")) or "info",
+            )
+        )
+
+    entries.sort(key=lambda event: event.at_seconds)
+
+    return tuple(entries)
+
+
 #
 # --------------------------------------------------
 # Hinweise
@@ -1163,6 +1208,7 @@ def snapshot_from_payload(
             _sequence(payload.get("dispels")),
             SUPPORT_DISPEL,
         ),
+        events=build_events(_sequence(payload.get("events"))),
     )
 
 

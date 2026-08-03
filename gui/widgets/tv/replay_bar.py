@@ -141,11 +141,16 @@ class ReplayBar(QWidget):
         """
         Auch während des Ziehens springen, nicht erst beim Loslassen -
         sonst sieht man beim Suchen einer Stelle nichts.
+
+        Ohne Prüfung auf `_seeking`: ein Klick in die Rille und die
+        Pfeiltasten ändern den Wert, ohne vorher sliderPressed zu
+        senden. Mit der Prüfung passierte dabei nichts, und der Regler
+        sprang beim nächsten Takt an seine alte Stelle zurück - er
+        sah kaputt aus. Ein vom Takt selbst gesetzter Wert kann hier
+        nicht ankommen, weil `_refresh()` dafür die Signale abschaltet.
         """
 
-        if self._seeking:
-
-            self._seek_to(value)
+        self._seek_to(value)
 
     def _seek_to(self, value: int):
 

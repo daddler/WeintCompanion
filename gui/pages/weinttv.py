@@ -34,7 +34,11 @@ from PySide6.QtWidgets import (
 )
 
 from analyzer.analysis.movement import format_meters
-from analyzer.models import MECHANIC_SOURCE_LOCAL, RaidSnapshot
+from analyzer.models import (
+    MECHANIC_SOURCE_LOCAL,
+    SUPPORT_INTERRUPT,
+    RaidSnapshot,
+)
 
 from core.resources import Resources
 
@@ -44,6 +48,7 @@ from gui.theme.wow_colors import class_color, role_label
 from gui.widgets.card import Card
 from gui.widgets.section_card import SectionCard
 from gui.widgets.segmented_control import SegmentedControl
+from gui.widgets.tv.analysis_gap import analysis_gap_text
 from gui.widgets.tv.archive_picker import ArchivePicker
 from gui.widgets.tv.data_table import (
     DataTable,
@@ -81,6 +86,23 @@ def _format_amount(value: float) -> str:
         return f"{value / 1_000:.0f}k"
 
     return f"{value:.0f}"
+
+
+#
+# Beschriftung der Ereignisarten aus `CombatEvent.kind`. Die Liste
+# ist bewusst NICHT vollständig und darf es nicht sein: eine
+# unbekannte Art wird unverändert angezeigt, statt verworfen zu
+# werden - sonst müsste der Companion jedes Mal nachziehen, wenn der
+# Bot eine neue Art mitschickt.
+#
+
+EVENT_KIND_LABELS = {
+    "phase": "Phase",
+    "cast": "Ansage",
+    "add": "Add",
+    "wipe": "Wipe",
+    "kill": "Kill",
+}
 
 
 TAB_LIVE = "live"
@@ -289,6 +311,38 @@ class WeintTvPage(QWidget):
 
         return card
 
+    def _build_analysis_notice(self) -> Card:
+        """
+        Erklärt, warum die Tiefenauswertung leer ist - statt sie als
+        Reihe leerer Karten stehen zu lassen.
+        """
+
+        card = Card()
+
+        title = QLabel("Keine Tiefenauswertung für diesen Stand")
+
+        title.setStyleSheet(
+            f"font-size:15px;font-weight:600;color:{Colors.WHITE};"
+            "background:transparent;border:none;"
+        )
+
+        card.addWidget(title)
+
+        self.analysis_notice_text = QLabel("")
+
+        self.analysis_notice_text.setWordWrap(True)
+
+        self.analysis_notice_text.setStyleSheet(
+            f"font-size:13px;color:{Colors.TEXT_SECONDARY};"
+            "background:transparent;border:none;"
+        )
+
+        card.addWidget(self.analysis_notice_text)
+
+        card.setVisible(False)
+
+        return card
+
     # --------------------------------------------------
     # Aufbau: Live
     # --------------------------------------------------
@@ -475,11 +529,14 @@ class WeintTvPage(QWidget):
         events_card = SectionCard(
             Resources.logs(),
             "Kampfereignisse",
-            "Tode, Kampf-Rezz und Heldentum in zeitlicher Folge.",
+            (
+                "Tode, Kampf-Rezz, Heldentum, Unterbrechungen und "
+                "Phasen in zeitlicher Folge."
+            ),
         )
 
         self.events_list = EntryList(
-            capacity=12,
+            capacity=20,
             placeholder="Noch nichts passiert.",
         )
 
@@ -542,6 +599,38 @@ class WeintTvPage(QWidget):
         layout.addLayout(filter_row)
 
         #
+        # Hinweis, wenn die Quelle keine Tiefenauswertung liefert
+        #
+        # `RaidSnapshot.has_analysis` ist der eine Schalter dafür.
+        # Ohne ihn stand die Seite in genau diesem Fall voller leerer
+        # Karten: für jede einzelne wäre "keine Angaben" formal
+        # richtig, in Summe sah es aber nach einem Defekt aus statt
+        # nach einer Quelle, die diese Werte (noch) nicht liefert.
+        #
+
+        self.analysis_notice = self._build_analysis_notice()
+
+        layout.addWidget(self.analysis_notice)
+
+        #
+        # Alle Karten der Tiefenauswertung in einem gemeinsamen
+        # Behälter, damit sie zusammen ein- und ausgeblendet werden
+        # können. Die Karten darunter (Cooldowns, Verbrauchsgüter,
+        # Mechanikfehler, Warnungen) bleiben stehen - sie kommen schon
+        # aus dem Grunddatensatz jeder Quelle.
+        #
+
+        self.deep_analysis = QWidget()
+
+        deep = QVBoxLayout(self.deep_analysis)
+
+        deep.setContentsMargins(0, 0, 0, 0)
+
+        deep.setSpacing(16)
+
+        layout.addWidget(self.deep_analysis)
+
+        #
         # Erhaltener Schaden
         #
         # Steht bewusst ganz oben: es ist die Zahl, die am ehesten
@@ -573,7 +662,7 @@ class WeintTvPage(QWidget):
 
         damage_taken_card.addWidget(self.damage_taken_table)
 
-        layout.addWidget(damage_taken_card)
+        deep.addWidget(damage_taken_card)
 
         #
         # Vermeidbarer Schaden nach Fähigkeit
@@ -606,7 +695,7 @@ class WeintTvPage(QWidget):
 
         avoidable_card.addWidget(self.avoidable_table)
 
-        layout.addWidget(avoidable_card)
+        deep.addWidget(avoidable_card)
 
         #
         # Wirkungsdauern
@@ -646,7 +735,7 @@ class WeintTvPage(QWidget):
 
         uptimes.addWidget(hot_card, 1)
 
-        layout.addLayout(uptimes)
+        deep.addLayout(uptimes)
 
         #
         # Laufwege und Aktivzeit
@@ -686,7 +775,7 @@ class WeintTvPage(QWidget):
 
         movement_row.addWidget(activity_card, 1)
 
-        layout.addLayout(movement_row)
+        deep.addLayout(movement_row)
 
         #
         # Cooldown-Nutzung
@@ -720,7 +809,7 @@ class WeintTvPage(QWidget):
 
         cooldown_usage_card.addWidget(self.cooldown_table)
 
-        layout.addWidget(cooldown_usage_card)
+        deep.addWidget(cooldown_usage_card)
 
         #
         # Unterbrechungen und Dispels
@@ -739,7 +828,7 @@ class WeintTvPage(QWidget):
 
         support_card.addWidget(self.support_list)
 
-        layout.addWidget(support_card)
+        deep.addWidget(support_card)
 
         cooldowns = QHBoxLayout()
 
@@ -1142,12 +1231,94 @@ class WeintTvPage(QWidget):
 
     def _event_rows(self, snapshot: RaidSnapshot):
         """
-        Tode, Kampf-Rezz und Heldentum auf einer gemeinsamen
-        Zeitachse - neueste zuerst, damit das Jüngste ohne Scrollen
-        sichtbar ist.
+        Alles, was zu einem Zeitpunkt passiert ist, auf einer
+        gemeinsamen Zeitachse - neueste zuerst, damit das Jüngste ohne
+        Scrollen sichtbar ist.
+
+        Zusammengeführt wird hier und nicht in der Auswertung: der
+        Snapshot hält die Ereignisarten getrennt, weil die Academy sie
+        getrennt braucht (ein Dispel bewertet einen anderen Bereich
+        als ein Tod). Für den Verlauf eines Pulls zählt dagegen nur
+        die Reihenfolge - drei fast leere Karten nebeneinander würden
+        sie nicht erzählen.
         """
 
         rows = []
+
+        #
+        # Was die Quelle zusätzlich erzählt (Phasenwechsel, angesagte
+        # Bossfähigkeiten). Unbekannte Arten laufen ohne
+        # Fallunterscheidung mit - genau dafür ist `kind` eine freie
+        # Zeichenkette.
+        #
+
+        for event in snapshot.events:
+
+            rows.append((
+                event.at_seconds,
+                EntryData(
+                    title=event.detail or event.ability or event.kind,
+                    detail=(
+                        event.clock
+                        + (
+                            f" · {event.actor_name}"
+                            if event.actor_name
+                            else ""
+                        )
+                    ),
+                    level=event.severity,
+                    trailing=EVENT_KIND_LABELS.get(event.kind, event.kind),
+                ),
+            ))
+
+        for event in snapshot.interrupts + snapshot.dispels:
+
+            rows.append((
+                event.at_seconds,
+                EntryData(
+                    title=(
+                        f"{event.actor_name} → {event.target}"
+                        if event.target
+                        else event.actor_name
+                    ),
+                    detail=(
+                        f"{int(event.at_seconds) // 60:02d}:"
+                        f"{int(event.at_seconds) % 60:02d}"
+                        + (f" · {event.ability}" if event.ability else "")
+                    ),
+                    level="success",
+                    trailing=(
+                        "Unterbrechung"
+                        if event.kind == SUPPORT_INTERRUPT
+                        else "Dispel"
+                    ),
+                ),
+            ))
+
+        #
+        # Mechanikfehler nur, wenn sie sich an einer Sekunde
+        # festmachen lassen - ein Eintrag ohne Zeitpunkt (at_seconds
+        # < 0) hätte auf einer Zeitachse keinen Platz und steht
+        # ohnehin in der Analyse.
+        #
+
+        for issue in snapshot.mechanics:
+
+            if issue.at_seconds < 0:
+                continue
+
+            rows.append((
+                issue.at_seconds,
+                EntryData(
+                    title=f"{issue.actor_name}: {issue.mechanic}",
+                    detail=(
+                        f"{int(issue.at_seconds) // 60:02d}:"
+                        f"{int(issue.at_seconds) % 60:02d}"
+                    ),
+                    level=issue.severity,
+                    trailing=f"{issue.count}×",
+                ),
+            ))
 
         for window in snapshot.heroism_windows:
 
@@ -1280,6 +1451,8 @@ class WeintTvPage(QWidget):
 
     def _apply_deep_analysis(self, snapshot: RaidSnapshot):
 
+        self._apply_analysis_availability(snapshot)
+
         self._sync_filter(snapshot)
 
         self._apply_damage_taken(snapshot)
@@ -1316,6 +1489,30 @@ class WeintTvPage(QWidget):
                 key=lambda event: event.at_seconds,
                 reverse=True,
             )
+        )
+
+    def _apply_analysis_availability(self, snapshot: RaidSnapshot):
+        """
+        Die Tiefenauswertung ganz aus- oder einblenden.
+
+        Der Grund wird benannt, weil er drei völlig verschiedene sein
+        kann: es wird gar kein Raid ausgewertet, es läuft gerade kein
+        Pull, oder die Quelle liefert diese Werte nicht. Ein
+        einheitliches "keine Daten" ließe den Nutzer im Unklaren
+        darüber, ob er etwas ändern kann.
+        """
+
+        available = snapshot.has_analysis
+
+        self.deep_analysis.setVisible(available)
+
+        self.analysis_notice.setVisible(not available)
+
+        if available:
+            return
+
+        self.analysis_notice_text.setText(
+            analysis_gap_text(snapshot)
         )
 
     def _apply_damage_taken(self, snapshot: RaidSnapshot):
@@ -1401,6 +1598,11 @@ class WeintTvPage(QWidget):
                     detail=(
                         entry.actor_name
                         + (
+                            f" · {entry.applications}× aufgelegt"
+                            if entry.applications
+                            else ""
+                        )
+                        + (
                             f" · Ziel {entry.expected_percent:.0f} %"
                             if entry.expected_percent > 0
                             else ""
@@ -1471,7 +1673,22 @@ class WeintTvPage(QWidget):
         self.activity_list.setRows(
             MeterRowData(
                 title=entry.actor_name,
-                detail=f"{entry.apm:.0f} Aktionen/min",
+                detail=(
+                    f"{entry.apm:.0f} Aktionen/min"
+                    + (
+                        #
+                        # Die längste Pause steht daneben, weil sie
+                        # etwas anderes erzählt als der Mittelwert:
+                        # 90 % Aktivzeit können gleichmäßig verteilt
+                        # sein oder aus einem einzigen 18-Sekunden-Loch
+                        # bestehen - und nur das zweite ist ein Fehler,
+                        # den man abstellen kann.
+                        #
+                        f" · längste Pause {entry.longest_gap:.0f} s"
+                        if entry.longest_gap >= 3.0
+                        else ""
+                    )
+                ),
                 value=f"{entry.active_percent:.0f} %",
                 ratio=entry.active_percent / 100.0,
                 color=(

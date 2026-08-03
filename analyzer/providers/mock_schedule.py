@@ -90,6 +90,55 @@ HEROISM_WINDOWS: tuple[tuple[float, float, str, str], ...] = (
 
 #
 # --------------------------------------------------
+# Sonstige Kampfereignisse
+# --------------------------------------------------
+#
+# (Zeitpunkt, Art, Handelnder, Ziel, Fähigkeit, Beschreibung, Stufe)
+#
+# Das, was der Bot als `events[]` liefern darf und was der Companion
+# ausdrücklich NICHT auswertet, sondern nur erzählt: Phasenwechsel,
+# angesagte Bossfähigkeiten, Adds. Ohne diese Zeilen wäre der ganze
+# Weg (Zeitleiste -> Snapshot -> Ereignisliste) in der Simulation
+# nicht vorführbar - und damit erst prüfbar, wenn der Bot den
+# Endpunkt liefert.
+#
+# Inhaltlich die Türen von Horridon, weil die Simulation diesen Kampf
+# nachstellt: vier Stämme nacheinander, danach Jalak.
+#
+
+EVENT_SCHEDULE: tuple[
+    tuple[float, str, str, str, str, str, str], ...
+] = (
+
+    (0.0, "phase", "", "", "", "Farraki-Tor offen", "info"),
+    (12.0, "add", "", "", "Farraki Sand Reaver",
+     "Sandschinder betritt den Kampf", "warning"),
+    (36.0, "cast", "Horridon", "", "Double Swipe",
+     "Doppelhieb angesagt", "warning"),
+
+    (45.0, "phase", "", "", "", "Gurubashi-Tor offen", "info"),
+    (57.0, "add", "", "", "Gurubashi Bloodlord",
+     "Blutfürst betritt den Kampf", "warning"),
+    (72.0, "cast", "Horridon", "", "Double Swipe",
+     "Doppelhieb angesagt", "warning"),
+
+    (90.0, "phase", "", "", "", "Drakkari-Tor offen", "info"),
+    (102.0, "add", "", "", "Drakkari Frozen Warlord",
+     "Gefrorener Kriegsherr betritt den Kampf", "warning"),
+    (118.0, "cast", "Horridon", "", "Double Swipe",
+     "Doppelhieb angesagt", "warning"),
+
+    (135.0, "phase", "", "", "", "Amani-Tor offen", "info"),
+    (147.0, "add", "", "", "Amani'shi Flame Caster",
+     "Flammenwirker betritt den Kampf", "warning"),
+
+    (165.0, "phase", "Jalak", "", "", "War-God Jalak greift ein", "error"),
+
+)
+
+
+#
+# --------------------------------------------------
 # Mechanikfehler, die der "Bot" schon eingeordnet mitschickt
 # --------------------------------------------------
 #

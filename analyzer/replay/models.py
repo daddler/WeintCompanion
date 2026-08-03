@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 
 from analyzer.models import (
     Actor,
+    CombatEvent,
     CooldownUsage,
     DamageTakenEntry,
     DeathEntry,
@@ -98,29 +99,20 @@ class AvoidableHit:
     note: str = ""
 
 
-@dataclass(frozen=True)
-class TimelineEvent:
-    """
-    Ein sonstiges Ereignis, das die Wiedergabe anzeigen soll.
+#
+# Ein sonstiges Ereignis, das die Wiedergabe anzeigen soll.
+#
+# Bewusst derselbe Typ, den auch der Snapshot trägt, und nicht mehr
+# eine eigene Kopie: die Zeitleiste liefert diese Ereignisse, und
+# `snapshot_at()` reicht genau sie an WeintTVs Ereignisliste weiter.
+# Zwei Datenklassen mit identischen Feldern hätten dafür bei jedem
+# Bild eine Umwandlung gebraucht - und wären beim nächsten neuen Feld
+# auseinandergelaufen. Der alte Name bleibt als Alias bestehen, weil
+# er im Vertrag (docs/warcraftlogs-bridge.md) und im Payload-Mapper
+# so heißt.
+#
 
-    Bewusst frei gehalten (`kind` als Zeichenkette): der Bot darf
-    Ereignisarten nachliefern, ohne dass der Companion sie kennen
-    muss - unbekannte Arten laufen einfach in die Ereignisliste.
-    """
-
-    at_seconds: float
-
-    kind: str
-
-    actor_name: str = ""
-
-    target: str = ""
-
-    ability: str = ""
-
-    detail: str = ""
-
-    severity: str = "info"
+TimelineEvent = CombatEvent
 
 
 #

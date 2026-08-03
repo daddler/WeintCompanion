@@ -33,6 +33,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 
 from analyzer.combatlog.locator import CombatLogLocation, find_combat_log
 from analyzer.models import PullSummary, RaidSnapshot
+from analyzer.providers.base import RaidDataProvider
 from analyzer.providers.mock import MockRaidDataProvider
 from analyzer.providers.warcraftlogs import FetchResult, WarcraftLogsProvider
 from analyzer.providers.warcraftlogs_payload import (
@@ -341,6 +342,34 @@ class RaidDataService(QObject):
 
     replayChanged = Signal()
 
+    #
+    # Rein interner Kanal: "bring die Wiedergabe-Uhr in Einklang mit
+    # dem Zustand".
+    #
+    # Er ist nötig, weil ein QTimer nur in dem Thread bedient werden
+    # darf, dem er gehört - hier der Hauptthread. Die Zeitleiste wird
+    # aber in einem kurzlebigen Arbeitsthread geladen, und der rief
+    # bisher direkt `QTimer.start()` auf. Qt lehnt das ab
+    # ("Timers cannot be started from another thread"), OHNE eine
+    # Ausnahme zu werfen: die Wiedergabe blieb stumm bei 00:00 stehen,
+    # und der Wiedergabe-Knopf sah schlicht kaputt aus.
+    #
+    # Über ein Signal wird der Aufruf in den Besitzerthread
+    # zugestellt. Aus dem Hauptthread heraus bleibt er direkt und
+    # damit synchron - dieselbe Mechanik wie bei
+    # _AutoSyncStarter.requested im CompanionManager.
+    #
+    # Bewusst OHNE "starten/anhalten" als Nutzlast: aus einem
+    # Arbeitsthread wird das Signal in die Warteschlange gelegt und
+    # erst später zugestellt. Ein mitgeschicktes "starten" könnte bis
+    # dahin überholt sein und die Uhr für eine längst beendete
+    # Wiedergabe anwerfen. Der Empfänger liest den Zustand deshalb
+    # selbst - eine späte Zustellung ist dann höchstens überflüssig,
+    # nie falsch.
+    #
+
+    _clockRequested = Signal()
+
     def __init__(self, manager):
 
         super().__init__()
@@ -409,6 +438,8 @@ class RaidDataService(QObject):
 
         self._replay_timer.timeout.connect(self._on_replay_tick)
 
+        self._clockRequested.connect(self._apply_replay_clock)
+
     # --------------------------------------------------
     # Datenquelle
     # --------------------------------------------------
@@ -460,6 +491,15 @@ class RaidDataService(QObject):
         Nach einer Änderung der Einstellung: alten Provider sauber
         beenden und beim nächsten Poll einen neuen erzeugen.
         """
+
+        #
+        # Eine aus der alten Quelle gebaute Zeitleiste gehört ihr -
+        # sie in der neuen weiterlaufen zu lassen wäre dieselbe
+        # Vermischung, die weiter unten für die Historie ausgeschlossen
+        # wird.
+        #
+
+        self._discard_replay()
 
         with self._lock:
 
@@ -865,7 +905,7 @@ class RaidDataService(QObject):
         nächsten Poll-Takt zu warten.
         """
 
-        self._halt_replay()
+        self._discard_replay()
 
         with self._lock:
 
@@ -947,8 +987,17 @@ class RaidDataService(QObject):
                 and (self._archive.fights or self._archive.fights_loading)
             )
 
-            if same_selection:
-                return
+        if same_selection:
+            return
+
+        #
+        # Eine geladene Zeitleiste gehört zum bisher gewählten Pull
+        # und darf einen anderen Bericht nicht überdauern.
+        #
+
+        self._discard_replay()
+
+        with self._lock:
 
             self._archive = replace(
                 self._archive,
@@ -1012,6 +1061,14 @@ class RaidDataService(QObject):
         Setzt den Modus wie select_archive_report() defensiv selbst
         auf Archiv.
         """
+
+        #
+        # Wie beim Bericht: die Zeitleiste des zuvor gewählten Pulls
+        # verwerfen, sonst spielt der Wiedergabe-Knopf den falschen
+        # Kampf ab.
+        #
+
+        self._discard_replay()
 
         with self._lock:
 
@@ -1150,6 +1207,22 @@ class RaidDataService(QObject):
         Ob für die aktuelle Auswahl überhaupt eine Wiedergabe in
         Frage kommt - im Archiv, sobald ein Pull gewählt ist, live
         nur bei Quellen, die eine Zeitleiste liefern können.
+
+        Zwei frühere Fehler stecken in dieser kleinen Methode:
+
+        `hasattr(provider, "timeline")` war immer wahr, weil
+        RaidDataProvider die Methode selbst mitbringt (und None
+        zurückgibt). Der Wiedergabe-Knopf erschien damit auch für
+        Quellen, die gar keine Zeitleiste liefern können, und
+        quittierte den Druck mit einer Fehlermeldung. Gefragt ist,
+        ob die Klasse sie ÜBERSCHREIBT - das bleibt automatisch
+        richtig, wenn eine neue Quelle dazukommt.
+
+        Und der Provider wurde nur geprüft, nicht erzeugt: beim
+        Aufbau der Seite existiert er noch nicht (er entsteht erst im
+        Poll-Thread), also war die Antwort "nein" und der Knopf blieb
+        unsichtbar. Die Konstruktoren machen keine Ein-/Ausgabe,
+        deshalb ist das Erzeugen hier unbedenklich.
         """
 
         with self._lock:
@@ -1160,9 +1233,21 @@ class RaidDataService(QObject):
             if self._archive.mode == MODE_ARCHIVE:
                 return self._archive.selected_fight is not None
 
-            provider = self._provider
+            try:
+                provider = self._ensure_provider()
 
-        return provider is not None and hasattr(provider, "timeline")
+            except Exception as exc:
+
+                self.manager.logger.error(
+                    f"Datenquelle konnte nicht erzeugt werden: {exc}"
+                )
+
+                return False
+
+        return (
+            type(provider).timeline
+            is not RaidDataProvider.timeline
+        )
 
     # --------------------------------------------------
 
@@ -1190,6 +1275,16 @@ class RaidDataService(QObject):
                     playing=True,
                     error="",
                 )
+
+                #
+                # Auch beim Zurückspulen den Modus setzen. Ohne das
+                # blieb ein Neustart aus dem Archiv heraus in
+                # MODE_ARCHIVE stehen - und _advance_replay() rührt
+                # sich in jedem anderen Modus als MODE_REPLAY nicht,
+                # die Wiedergabe stand also bei 00:00 still.
+                #
+
+                self._archive = replace(self._archive, mode=MODE_REPLAY)
 
                 restart = True
 
@@ -1220,9 +1315,11 @@ class RaidDataService(QObject):
 
         if restart:
 
-            self._start_replay_clock()
+            self._sync_replay_clock()
 
             self._publish_replay_frame()
+
+            self.archiveChanged.emit()
 
             self.replayChanged.emit()
 
@@ -1230,9 +1327,20 @@ class RaidDataService(QObject):
 
         self.replayChanged.emit()
 
+        #
+        # Beide Wege laden in einem eigenen kurzlebigen Thread. Beim
+        # Archiv ist das ein HTTP-Abruf, live eine Rechnung über den
+        # ganzen Kampf (25 Spieler mal 180 Sekunden) - beides gehört
+        # nicht in den Klick-Handler, sonst steht die Oberfläche.
+        #
+
         if origin == MODE_LIVE:
 
-            self._begin_live_replay()
+            threading.Thread(
+                target=self._begin_live_replay,
+                daemon=True,
+                name="ReplayTimelineBuild",
+            ).start()
 
             return
 
@@ -1249,7 +1357,16 @@ class RaidDataService(QObject):
         einzige Weg, die Wiedergabe ohne Bot vorzuführen.
         """
 
-        provider = self._ensure_provider()
+        with self._lock:
+
+            #
+            # Unter dem Lock wie im Poll: sonst könnten Klick und
+            # Poll-Takt gleichzeitig je einen Provider erzeugen, und
+            # die Wiedergabe käme aus einem anderen Objekt als das
+            # Live-Bild.
+            #
+
+            provider = self._ensure_provider()
 
         timeline = None
 
@@ -1358,7 +1475,7 @@ class RaidDataService(QObject):
 
         self._publish_replay_frame()
 
-        self._start_replay_clock()
+        self._sync_replay_clock()
 
         self.archiveChanged.emit()
 
@@ -1400,7 +1517,7 @@ class RaidDataService(QObject):
 
             archived = self._archive_snapshot
 
-        self._stop_replay_clock()
+        self._sync_replay_clock()
 
         #
         # Der gemerkte Archiv-Snapshot macht die Rückkehr sofortig -
@@ -1441,10 +1558,7 @@ class RaidDataService(QObject):
                 position=position,
             )
 
-        if playing:
-            self._start_replay_clock()
-        else:
-            self._stop_replay_clock()
+        self._sync_replay_clock()
 
         self._publish_replay_frame()
 
@@ -1504,34 +1618,81 @@ class RaidDataService(QObject):
 
     # --------------------------------------------------
 
-    def _start_replay_clock(self):
-
-        if not self._replay_timer.isActive():
-            self._replay_timer.start()
-
-    def _stop_replay_clock(self):
-
-        if self._replay_timer.isActive():
-            self._replay_timer.stop()
-
-    def _halt_replay(self):
+    def _apply_replay_clock(self):
         """
-        Wiedergabe ohne Rückkehr beenden - für Moduswechsel, die
-        ohnehin ein anderes Bild veröffentlichen.
+        Die Uhr läuft genau dann, wenn eine Wiedergabe läuft.
+
+        Läuft immer im Besitzerthread des Timers (siehe
+        _clockRequested) und leitet die Antwort aus dem Zustand ab,
+        statt sie sich sagen zu lassen.
         """
 
         with self._lock:
 
-            if self._archive.mode != MODE_REPLAY:
+            running = (
+                self._archive.mode == MODE_REPLAY
+                and self._replay.playing
+            )
+
+        if running:
+
+            if not self._replay_timer.isActive():
+                self._replay_timer.start()
+
+            return
+
+        if self._replay_timer.isActive():
+            self._replay_timer.stop()
+
+    def _sync_replay_clock(self):
+        """
+        Nach jeder Zustandsänderung der Wiedergabe aufzurufen -
+        gleichgültig aus welchem Thread.
+        """
+
+        self._clockRequested.emit()
+
+    def _discard_replay(self):
+        """
+        Zeitleiste und Wiedergabezustand verwerfen.
+
+        Wird vor jedem Wechsel der Auswahl gerufen (anderer Bericht,
+        anderer Pull, andere Datenquelle). Ohne das überlebte die
+        Zeitleiste des vorherigen Pulls: `start_replay()` hätte sie
+        als "schon geladen" erkannt und statt der neuen Auswahl den
+        ALTEN Kampf abgespielt - im Archiv-Modus, in dem die Uhr gar
+        nicht läuft, also als Standbild bei 00:00.
+        """
+
+        with self._lock:
+
+            was_replaying = self._archive.mode == MODE_REPLAY
+
+            if (
+                self._timeline is None
+                and not was_replaying
+                and self._replay == ReplayState(speed=self._replay.speed)
+            ):
                 return
+
+            #
+            # Zurück in die Ansicht, aus der die Wiedergabe gestartet
+            # wurde. Pauschal ins Archiv zu wechseln hätte einen
+            # Nutzer, der aus dem Live-Feed heraus abgespielt hat,
+            # ohne sein Zutun in der Archiv-Auswahl abgesetzt.
+            #
+
+            origin = self._replay.origin
 
             self._timeline = None
 
             self._replay = ReplayState(speed=self._replay.speed)
 
-            self._archive = replace(self._archive, mode=MODE_ARCHIVE)
+            if was_replaying:
 
-        self._stop_replay_clock()
+                self._archive = replace(self._archive, mode=origin)
+
+        self._sync_replay_clock()
 
         self.replayChanged.emit()
 
@@ -1575,7 +1736,7 @@ class RaidDataService(QObject):
             # bei der Nachlaufphase der Simulation.
             #
 
-            self._stop_replay_clock()
+            self._sync_replay_clock()
 
         self._publish_replay_frame()
 
@@ -1622,6 +1783,12 @@ class RaidDataService(QObject):
 
             self._listeners = 0
 
-        self._stop_replay_clock()
+        #
+        # Erst die Wiedergabe verwerfen, dann die Uhr angleichen: sie
+        # leitet ihren Lauf aus dem Zustand ab, ein bloßes "anhalten"
+        # gäbe es hier gar nicht mehr.
+        #
+
+        self._discard_replay()
 
         self._stop_thread()

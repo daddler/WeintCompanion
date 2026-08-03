@@ -180,6 +180,17 @@ def snapshot_at(
             for event in timeline.dispels
             if event.at_seconds <= at
         ),
+        #
+        # Alles, was die Quelle zusätzlich erzählt (Phasenwechsel,
+        # angesagte Bossfähigkeiten). Sie werden nicht ausgewertet,
+        # nur bis zur laufenden Sekunde durchgereicht - dieselbe
+        # Regel wie bei Toden und Kampf-Rezz.
+        #
+        events=tuple(
+            event
+            for event in timeline.events
+            if event.at_seconds <= at
+        ),
     )
 
 

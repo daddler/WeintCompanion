@@ -59,6 +59,7 @@ from gui.widgets.eyebrow import eyebrow_label
 from gui.widgets.hero_banner import HeroButton
 from gui.widgets.section_card import SectionCard
 from gui.widgets.segmented_control import SegmentedControl
+from gui.widgets.tv.analysis_gap import rating_gap_text
 from gui.widgets.tv.archive_picker import ArchivePicker
 from gui.widgets.tv.entry_list import EntryData, EntryList
 from gui.widgets.tv.meter_bar import MeterBar
@@ -367,6 +368,25 @@ class AcademyPage(QWidget):
             "Aus dem zuletzt ausgewerteten Kampf abgeleitet.",
         )
 
+        #
+        # Erklärt, warum mehrere Bereiche unbewertet bleiben, wenn die
+        # Quelle keine Tiefenauswertung liefert. Ohne diesen Satz
+        # stünden dort fünf Zeilen "noch keine Daten", und der
+        # naheliegende Schluss wäre "die Academy ist kaputt" statt
+        # "diese Quelle kann das noch nicht".
+        #
+
+        self.rating_notice = QLabel("")
+
+        self.rating_notice.setWordWrap(True)
+
+        self.rating_notice.setStyleSheet(
+            f"font-size:12px;color:{Colors.TEXT_MUTED};"
+            "background:transparent;border:none;"
+        )
+
+        self.rating_notice.setVisible(False)
+
         self.rating_widgets = {}
 
         for category in CATEGORY_ORDER:
@@ -404,6 +424,8 @@ class AcademyPage(QWidget):
             rating_card.addLayout(row)
 
             self.rating_widgets[category] = (stars, detail)
+
+        rating_card.addWidget(self.rating_notice)
 
         layout.addWidget(rating_card)
 
@@ -805,6 +827,26 @@ class AcademyPage(QWidget):
 
     # --------------------------------------------------
 
+    def _apply_rating_notice(self, snapshot: RaidSnapshot):
+        """
+        Benennt den Grund, wenn Bereiche unbewertet bleiben.
+
+        Null Sterne heißen in der Academy "keine Daten", nicht
+        "schlecht" - das steht auch je Zeile dran. Woran es liegt,
+        beantwortet die Zeile aber nicht, und genau das ist die Frage,
+        die sich beim Blick auf fünf unbewertete Bereiche stellt.
+
+        Der Text kommt aus derselben Quelle wie der Hinweis in
+        WeintTV, damit beide Seiten denselben Sachverhalt nicht
+        unterschiedlich erklären.
+        """
+
+        reason = rating_gap_text(snapshot)
+
+        self.rating_notice.setText(reason)
+
+        self.rating_notice.setVisible(bool(reason))
+
     def _apply_metric_tiles(self):
         """
         Die drei Zahlen hinter den neuen Bewertungen.
@@ -933,6 +975,8 @@ class AcademyPage(QWidget):
                 rating.detail
                 or f"{rating.hint} - noch keine Daten."
             )
+
+        self._apply_rating_notice(self.service.current())
 
         self._apply_metric_tiles()
 
@@ -1083,13 +1127,7 @@ class AcademyPage(QWidget):
         WeintTV öffnen und dort direkt die Analyse zeigen.
         """
 
-        weinttv = getattr(self.window(), "weinttv", None)
-
-        if weinttv is not None and hasattr(weinttv, "show_tab"):
-
-            weinttv.show_tab("analysis")
-
-        self.pageRequested.emit(PageId.WEINTTV)
+        self._open_weinttv("analysis")
 
     def _reset_selection(self):
 
@@ -1204,6 +1242,23 @@ class AcademyPage(QWidget):
             self.service.seek_replay(seconds)
 
             self.service.set_replay_playing(False)
+
+        self._open_weinttv("live")
+
+    def _open_weinttv(self, tab: str):
+        """
+        WeintTV öffnen und dort einen bestimmten Bereich zeigen.
+
+        Ohne die Bereichswahl landete man in dem Tab, den WeintTV
+        zuletzt zeigte - beim Sprung auf eine Sekunde also womöglich
+        in der Rückschau statt bei dem Moment, den man sehen wollte.
+        """
+
+        weinttv = getattr(self.window(), "weinttv", None)
+
+        if weinttv is not None and hasattr(weinttv, "show_tab"):
+
+            weinttv.show_tab(tab)
 
         self.pageRequested.emit(PageId.WEINTTV)
 

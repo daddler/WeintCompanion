@@ -35,6 +35,7 @@ from analyzer.providers.warcraftlogs_payload import (
     _text,
     build_cooldown_usage,
     build_deaths,
+    build_events,
     build_heroism_windows,
     build_mechanics,
     build_resurrections,
@@ -48,7 +49,6 @@ from analyzer.replay.models import (
     AvoidableHit,
     FightTimeline,
     PlayerSeries,
-    TimelineEvent,
 )
 
 
@@ -129,36 +129,6 @@ def build_avoidable_hits(rows: list) -> tuple[AvoidableHit, ...]:
         )
 
     entries.sort(key=lambda hit: hit.at_seconds)
-
-    return tuple(entries)
-
-
-def build_events(rows: list) -> tuple[TimelineEvent, ...]:
-
-    entries = []
-
-    for row in rows:
-
-        row = _mapping(row)
-
-        kind = _text(row.get("kind"))
-
-        if not kind:
-            continue
-
-        entries.append(
-            TimelineEvent(
-                at_seconds=_number(row.get("at")),
-                kind=kind,
-                actor_name=_text(row.get("actor")),
-                target=_text(row.get("target")),
-                ability=_text(row.get("ability")),
-                detail=_text(row.get("detail")),
-                severity=_text(row.get("severity")) or "info",
-            )
-        )
-
-    entries.sort(key=lambda event: event.at_seconds)
 
     return tuple(entries)
 

@@ -633,6 +633,48 @@ class SupportEvent:
     ability: str = ""
 
 
+@dataclass(frozen=True)
+class CombatEvent:
+    """
+    Ein sonstiges Kampfereignis mit Zeitpunkt.
+
+    Bewusst frei gehalten (`kind` als Zeichenkette): eine Datenquelle
+    darf Ereignisarten nachliefern, ohne dass der Companion sie kennen
+    muss - unbekannte Arten laufen einfach in die Ereignisliste von
+    WeintTV. Was der Analyzer selbst auswertet (Tode, Kampf-Rezz,
+    Unterbrechungen, Dispels) hat dagegen einen eigenen, typisierten
+    Platz im Snapshot; hier landet nur, was die Quelle zusätzlich
+    erzählt - Phasenwechsel, angesagte Bossfähigkeiten, Adds.
+
+    Liegt in `analyzer/models.py` und nicht bei der Wiedergabe, weil
+    beide Wege dieselbe Art Ereignis meinen: die Zeitleiste eines
+    archivierten Pulls liefert sie ebenso wie später der Live-
+    Combat-Log. Ein zweiter Typ dafür wäre genau die Doppelung, die
+    WeintTV und die Academy auseinanderlaufen ließe.
+    """
+
+    at_seconds: float
+
+    kind: str
+
+    actor_name: str = ""
+
+    target: str = ""
+
+    ability: str = ""
+
+    detail: str = ""
+
+    severity: str = "info"
+
+    @property
+    def clock(self) -> str:
+
+        total = max(0, int(self.at_seconds))
+
+        return f"{total // 60:02d}:{total % 60:02d}"
+
+
 #
 # --------------------------------------------------
 # Encounter
@@ -767,6 +809,15 @@ class RaidSnapshot:
     interrupts: tuple[SupportEvent, ...] = ()
 
     dispels: tuple[SupportEvent, ...] = ()
+
+    #
+    # Alles, was die Quelle darüber hinaus erzählt (Phasenwechsel,
+    # angesagte Bossfähigkeiten, Adds). Getrennt von den typisierten
+    # Listen darüber, weil der Companion diese Ereignisse nicht
+    # auswertet, sondern nur zeigt - siehe CombatEvent.
+    #
+
+    events: tuple[CombatEvent, ...] = ()
 
     # --------------------------------------------------
 
