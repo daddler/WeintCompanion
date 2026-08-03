@@ -1,6 +1,37 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.5.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.2.6.
+
+## 1.2.6
+
+Der Wiedergabe-Knopf meldete für jeden Pull "Für diesen Pull liefert
+der Bot keine Zeitleiste", und die Analyse blieb bei DoT-/HoT-Uptimes,
+Laufwegen, Unterbrechungen und Cooldowns leer. Beides lag am Bot, der
+die Daten nie geliefert hat - diese Version wertet aus, was er ab
+sofort schickt.
+
+- Wichtig: Diese Version wertet Daten aus, die erst ein
+  aktualisierter WeintCodex-Bot liefert. Solange der Bot noch nicht
+  aktualisiert ist, ändert sich in WeintTV und der Academy nichts.
+- Fix: Die Wiedergabe hat nie funktionieren können - den Endpunkt für
+  die Zeitleiste gab es im Bot schlicht nicht, und seine Antwort
+  "nicht gefunden" erschien als "Für diesen Pull liefert der Bot keine
+  Zeitleiste". Er ist jetzt umgesetzt.
+- Fix: DoT-/HoT-Uptimes, Laufwege, Unterbrechungen und Dispels sowie
+  Raid- und Heil-Cooldowns blieben leer, weil der Bot Fähigkeiten über
+  ihren englischen Namen suchte. WarcraftLogs liefert die Namen aber
+  in der Sprache des Berichts - in einem deutschen Log passte kein
+  einziger. Erkannt wird jetzt über die Zauber-ID sowie den deutschen
+  und den englischen Namen.
+- Neu: Laufwege werden geliefert. Der Wert ist eine Schätzung aus den
+  Positionsangaben der Kampfereignisse und ist als solche
+  beschriftet - als Vergleich innerhalb eines Pulls belastbar, als
+  absolute Zahl nicht.
+- Die Bewertung, ob ein Treffer vermeidbar war, liegt wieder
+  ausschließlich in der App. Der Bot schickt nur noch Treffer mit
+  Zeitpunkt. Fähigkeiten ohne hinterlegte Regel erzeugen weiterhin
+  keinen Eintrag - lieber eine Lücke als ein Vorwurf an jemanden, der
+  nichts falsch gemacht hat.
 
 ## 1.2.5
 
