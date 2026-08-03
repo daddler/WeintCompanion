@@ -21,7 +21,7 @@ entfernt hat.
 import pytest
 
 from core.addon_analysis_sync import AddonAnalysisSync
-from core.sync_manager import SyncManager
+from core.academy_progress_sync import apply_addon_progress, parse_addon_progress
 
 from analyzer.academy.models import PlayerProfile, TrainingPlan
 from analyzer.models import Actor, RaidSnapshot
@@ -224,42 +224,11 @@ def test_a_failed_write_is_retried_next_time():
 # --------------------------------------------------
 
 
-class _Reader:
+def test_progress_from_the_addon_is_applied():
 
-    def __init__(self):
-        self.wow_path = None
+    academy = _Academy()
 
-    def exists(self):
-        return False
-
-    def get_messages(self):
-        return []
-
-    def remove_message(self, message_id):
-        return True
-
-
-@pytest.fixture
-def sync_manager(monkeypatch):
-
-    monkeypatch.setattr(SyncManager, "__init__", lambda self, manager: None)
-
-    manager = _Manager(RaidSnapshot.empty())
-
-    sync = SyncManager(manager)
-    sync.manager = manager
-    sync.reader = _Reader()
-
-    return sync
-
-
-def test_progress_from_the_addon_is_applied(sync_manager):
-
-    sync_manager._apply_academy_progress(
-        "Testchar|a,b|z;Zweitchar|c|"
-    )
-
-    academy = sync_manager.manager.academy
+    assert apply_addon_progress(academy, "Testchar|a,b|z;Zweitchar|c|") is True
 
     assert academy.data["completed"]["Testchar"] == ["a", "b"]
     assert academy.data["excluded"]["Testchar"] == ["z"]
@@ -268,43 +237,57 @@ def test_progress_from_the_addon_is_applied(sync_manager):
     assert academy.saved == 1
 
 
-def test_clearing_the_last_entry_reaches_the_desktop(sync_manager):
+def test_clearing_the_last_entry_reaches_the_desktop():
 
-    academy = sync_manager.manager.academy
+    academy = _Academy()
 
     academy.data["completed"]["Testchar"] = ["a"]
 
     # Das Addon meldet auch leere Listen - sonst bliebe der alte
-    # Stand hier stehen und das Abwählen wäre folgenlos.
-    sync_manager._apply_academy_progress("Testchar||")
+    # Stand hier stehen und das Abwaehlen waere folgenlos.
+    apply_addon_progress(academy, "Testchar||")
 
     assert academy.data["completed"]["Testchar"] == []
     assert academy.saved == 1
 
 
-def test_unchanged_progress_is_not_saved_again(sync_manager):
+def test_unchanged_progress_is_not_saved_again():
 
-    academy = sync_manager.manager.academy
+    academy = _Academy()
 
     academy.data["completed"]["Testchar"] = ["a"]
     academy.data["excluded"]["Testchar"] = []
 
-    sync_manager._apply_academy_progress("Testchar|a|")
-
+    assert apply_addon_progress(academy, "Testchar|a|") is False
     assert academy.saved == 0
 
 
-def test_malformed_blocks_are_skipped(sync_manager):
+def test_malformed_blocks_are_skipped():
 
-    sync_manager._apply_academy_progress("kaputt;Testchar|a|;|b|c")
+    academy = _Academy()
 
-    academy = sync_manager.manager.academy
+    apply_addon_progress(academy, "kaputt;Testchar|a|;|b|c")
 
     assert academy.data["completed"] == {"Testchar": ["a"]}
 
 
-def test_empty_payload_does_nothing(sync_manager):
+def test_empty_payload_does_nothing():
 
-    sync_manager._apply_academy_progress("")
+    academy = _Academy()
 
-    assert sync_manager.manager.academy.saved == 0
+    assert apply_addon_progress(academy, "") is False
+    assert academy.saved == 0
+
+
+def test_parsing_returns_both_lists_per_character():
+
+    parsed = parse_addon_progress("A|x,y|z;B||")
+
+    assert parsed == {"A": (["x", "y"], ["z"]), "B": ([], [])}
+
+
+def test_parsing_survives_a_missing_academy():
+
+    # Der SyncManager reicht getattr(..., "academy", None) durch -
+    # eine halb aufgebaute Anwendung darf hier nicht abstuerzen.
+    assert apply_addon_progress(None, "A|x|") is False

@@ -1,6 +1,7 @@
 from addon.sync_reader import SyncReader
 from discord.sync_client import SyncClient
 from core.character_sync_client import CharacterSyncClient
+from core.academy_progress_sync import apply_addon_progress
 
 
 class SyncManager:
@@ -163,67 +164,14 @@ class SyncManager:
 
     def _apply_academy_progress(self, payload: str):
         """
-        Format (siehe SendAcademyProgress in modules/companion.lua):
-
-            <Charakter>|<erledigt,...>|<abgewaehlt,...>;<Charakter2>|...
-
-        Lektions-IDs sind ASCII-Bezeichner ohne Komma, Pipe oder
-        Semikolon - das Format ist damit eindeutig.
-
-        Die Listen des Addons ERSETZEN die hiesigen. Das Addon hat
-        beim Login den Desktop-Stand erhalten und seitdem nur
-        ergaenzt; es ist fuer diesen Charakter also die juengere
-        Quelle. Ein Zusammenfuehren statt Ersetzen wuerde bedeuten,
-        dass ingame abgehakte Lektionen nie wieder geoeffnet werden
-        koennten.
+        Der ingame gesetzte Stand ersetzt den hiesigen - Format und
+        Begruendung siehe core/academy_progress_sync.py.
         """
 
         academy = getattr(self.manager, "academy", None)
 
-        if academy is None or not payload:
-            return
+        if apply_addon_progress(academy, payload):
 
-        changed = False
-
-        for block in payload.split(";"):
-
-            parts = block.split("|")
-
-            if len(parts) != 3:
-                continue
-
-            name = parts[0].strip()
-
-            if not name:
-                continue
-
-            completed = [
-                entry
-                for entry in parts[1].split(",")
-                if entry
-            ]
-
-            excluded = [
-                entry
-                for entry in parts[2].split(",")
-                if entry
-            ]
-
-            if academy.data["completed"].get(name) != completed:
-
-                academy.data["completed"][name] = completed
-                changed = True
-
-            if academy.data["excluded"].get(name) != excluded:
-
-                academy.data["excluded"][name] = excluded
-                changed = True
-
-        if not changed:
-            return
-
-        academy.save()
-
-        self.manager.logger.info(
-            "Academy: Fortschritt aus dem Addon uebernommen."
-        )
+            self.manager.logger.info(
+                "Academy: Fortschritt aus dem Addon uebernommen."
+            )

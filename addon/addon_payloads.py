@@ -36,6 +36,14 @@ from analyzer.academy.models import (
 )
 from analyzer.models import RaidSnapshot
 
+#
+# Der Import aus gui/ ist Absicht: analysis_gap() ist die eine Stelle,
+# die entscheidet, WARUM eine Auswertung leer ist, und sie enthaelt
+# bewusst kein Qt (siehe Modulkommentar dort). Genau darauf ruht er -
+# ein Qt-Import in analysis_gap.py wuerde den Test-Job der CI
+# lahmlegen, der nur pytest installiert und sonst nichts.
+#
+
 from gui.widgets.tv.analysis_gap import analysis_gap
 
 
