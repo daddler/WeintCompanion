@@ -15,7 +15,40 @@ permissions:
 
 jobs:
 
+  #
+  # Läuft vor allem anderen und bricht ab, wenn der Tag nicht zu den
+  # Versionsnummern im Repo passt.
+  #
+  # Der Fall, den das verhindert, ist dreimal passiert (v1.2.0,
+  # v1.2.1, v1.2.4): getaggt wurde ein Stand ohne die zugehörige
+  # Versionserhöhung. Nichts schlägt dabei fehl - der Build ist grün,
+  # das Release entsteht, die Installation läuft. Erst der Updater
+  # fällt auf, und zwar unbehebbar: er sieht ein neueres Release,
+  # installiert es und meldet danach unverändert die alte Version.
+  #
+
+  version:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Python installieren
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Tag gegen core/version.py, installer.iss und Changelog prüfen
+        run: >
+          python scripts/check_version.py
+          "${{ github.event.inputs.tag || github.ref_name }}"
+
   test:
+
+    needs: version
 
     runs-on: ubuntu-latest
 
