@@ -311,6 +311,15 @@ class SyncPage(QWidget):
             ),
         )
 
+        self.analysis_bridge = _BridgeCard(
+            "WeintTV & Academy ingame",
+            "Letzte Auswertung → Addon",
+            real=True,
+            checked=self.manager.config.data.get(
+                "addon_analysis_sync_enabled", True,
+            ),
+        )
+
         self.chat_bridge = _BridgeCard(
             "Chat-Bridge",
             "Guild-Chat ↔ Discord-Channel",
@@ -320,7 +329,8 @@ class SyncPage(QWidget):
         bridge_grid.addWidget(self.calendar_bridge, 0, 0)
         bridge_grid.addWidget(self.roster_bridge, 0, 1)
         bridge_grid.addWidget(self.loot_bridge, 1, 0)
-        bridge_grid.addWidget(self.chat_bridge, 1, 1)
+        bridge_grid.addWidget(self.analysis_bridge, 1, 1)
+        bridge_grid.addWidget(self.chat_bridge, 2, 0)
 
         bridge_grid.setColumnStretch(0, 1)
         bridge_grid.setColumnStretch(1, 1)
@@ -355,6 +365,10 @@ class SyncPage(QWidget):
 
         self.roster_bridge.toggle.toggled.connect(
             self.set_character_roster_sync_enabled
+        )
+
+        self.analysis_bridge.toggle.toggled.connect(
+            self.set_addon_analysis_sync_enabled
         )
 
         self.refresh()
@@ -446,6 +460,33 @@ class SyncPage(QWidget):
 
             self.manager.logger.info(
                 "Loot-Sync deaktiviert."
+            )
+
+    # --------------------------------------------------
+
+    def set_addon_analysis_sync_enabled(self, enabled: bool):
+        """
+        Stellt die zuletzt ausgewertete Analyse ins Addon, damit
+        WeintTV und die Academy auch im Spiel nachlesbar sind (siehe
+        core/addon_analysis_sync.py). Ausgeschaltet wird nichts mehr
+        zugestellt; bereits im Addon gespeicherte Berichte bleiben
+        dort, sie werden nur nicht mehr aktualisiert.
+        """
+
+        self.manager.config.data["addon_analysis_sync_enabled"] = enabled
+
+        self.manager.config.save()
+
+        if enabled:
+
+            self.manager.logger.success(
+                "Ingame-Auswertung aktiviert."
+            )
+
+        else:
+
+            self.manager.logger.info(
+                "Ingame-Auswertung deaktiviert."
             )
 
     # --------------------------------------------------

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import httpx
 
-from addon.inbox_writer import InboxWriter
 from core.backend_config import BOT_BASE_URL
 from core.discord_account import DiscordAccountStore
 
@@ -15,9 +14,10 @@ class DiscordRosterSync:
     bestehende Material-Sync (siehe CompanionManager._run_sync_worker).
     """
 
-    def __init__(self, manager):
+    def __init__(self, manager, inbox):
 
         self.manager = manager
+        self.inbox = inbox
         self.account_store = DiscordAccountStore()
 
         #
@@ -81,14 +81,14 @@ class DiscordRosterSync:
         if fingerprint == self._last_delivered:
             return
 
-        wow_path = self.manager.state.wow_path
+        #
+        # Ueber die gemeinsame Inbox, nicht direkt ueber den Writer:
+        # der Auswertungs-Sync stellt im selben Worker-Durchlauf
+        # ebenfalls zu, und ein direktes send_batch() wuerde dessen
+        # Nachrichten mitloeschen (siehe addon/addon_inbox.py).
+        #
 
-        if wow_path is None:
-            return
-
-        writer = InboxWriter(wow_path)
-
-        delivered = writer.send_batch([
+        delivered = self.inbox.publish("roster", [
             {"type": "raid_import", "payload": wednesday},
             {"type": "raid_import", "payload": thursday},
         ])

@@ -135,3 +135,152 @@ def upsert_variable(path: Path, var_name: str, body: str) -> None:
     tmp_path.write_text(text, encoding="utf-8")
 
     os.replace(tmp_path, path)
+
+
+#
+# Lua-Serialisierung (Companion -> Addon)
+#
+# Der Inbox-Writer hat bislang nur flache Zeichenketten geschrieben.
+# Auswertung und Lektionskatalog sind aber verschachtelte Strukturen,
+# und ein handgeschriebenes Trennzeichen-Format daraus wäre in
+# deutschem Fließtext (Lektionstexte, "Was tun"-Hinweise) nicht
+# eindeutig: genau die Zeichen, die als Trenner taugen, kommen darin
+# vor. Deshalb wird echtes Lua geschrieben, das WoW ohnehin selbst
+# parst - das Addon braucht dafür keinen Parser.
+#
+
+
+_LUA_ESCAPES = {
+    "\\": "\\\\",
+    '"': '\\"',
+    "\n": "\\n",
+    "\r": "\\r",
+    "\t": "\\t",
+}
+
+
+def quote_lua_string(value: str) -> str:
+    """
+    Ein Lua-String-Literal inklusive Anführungszeichen.
+
+    Steuerzeichen werden numerisch escapet: eine SavedVariables-Datei
+    muss von WoWs Lua-Parser gelesen werden, und ein rohes Steuerzeichen
+    im Literal ist dort ein Syntaxfehler - der die GESAMTE Datei
+    unbrauchbar machen würde, samt der Variablen anderer Features.
+    """
+
+    out = ['"']
+
+    for char in value:
+
+        escaped = _LUA_ESCAPES.get(char)
+
+        if escaped is not None:
+            out.append(escaped)
+
+        elif ord(char) < 32 or ord(char) == 127:
+            out.append(f"\\{ord(char):03d}")
+
+        else:
+            out.append(char)
+
+    out.append('"')
+
+    return "".join(out)
+
+
+def _lua_number(value) -> str:
+
+    #
+    # inf/nan gibt es in Lua zwar, sie würden hier aber als "inf"
+    # bzw. "nan" ausgeschrieben und wären beim Einlesen ein
+    # Syntaxfehler. Rechenfehler in der Auswertung dürfen die Datei
+    # nicht zerlegen - sie werden zu 0.
+    #
+
+    if isinstance(value, bool):
+        return "true" if value else "false"
+
+    if isinstance(value, int):
+        return str(value)
+
+    if value != value or value in (float("inf"), float("-inf")):
+        return "0"
+
+    return repr(float(value))
+
+
+def to_lua(value, indent: int = 0) -> str:
+    """
+    Wandelt Zahlen, Wahrheitswerte, Zeichenketten, Listen und
+    Dictionaries in eine Lua-Tabellenliteral-Darstellung.
+
+    Nicht unterstützte Typen lösen einen TypeError aus, statt still
+    etwas Falsches zu schreiben - eine kaputte SavedVariables-Datei
+    fällt sonst erst im Spiel auf.
+
+    None wird zu nil; in Dictionaries werden None-Werte übersprungen,
+    weil ein Lua-Tabellenfeld mit nil-Wert dasselbe ist wie ein
+    fehlendes Feld.
+    """
+
+    pad = "    " * indent
+    inner_pad = "    " * (indent + 1)
+
+    if value is None:
+        return "nil"
+
+    if isinstance(value, bool):
+        return "true" if value else "false"
+
+    if isinstance(value, (int, float)):
+        return _lua_number(value)
+
+    if isinstance(value, str):
+        return quote_lua_string(value)
+
+    if isinstance(value, dict):
+
+        parts = []
+
+        for key, item in value.items():
+
+            if item is None:
+                continue
+
+            parts.append(
+                f"{inner_pad}[{quote_lua_string(str(key))}] = "
+                f"{to_lua(item, indent + 1)},"
+            )
+
+        if not parts:
+            return "{}"
+
+        return "{\n" + "\n".join(parts) + f"\n{pad}}}"
+
+    if isinstance(value, (list, tuple)):
+
+        parts = []
+
+        for item in value:
+
+            #
+            # In einer Lua-Sequenz würde ein nil das Feld beenden -
+            # ipairs bräche dort ab und der Rest der Liste wäre im
+            # Addon unsichtbar. None-Einträge werden deshalb
+            # ausgelassen, nicht als nil geschrieben.
+            #
+
+            if item is None:
+                continue
+
+            parts.append(f"{inner_pad}{to_lua(item, indent + 1)},")
+
+        if not parts:
+            return "{}"
+
+        return "{\n" + "\n".join(parts) + f"\n{pad}}}"
+
+    raise TypeError(
+        f"to_lua: nicht unterstützter Typ {type(value).__name__}"
+    )

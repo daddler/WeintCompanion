@@ -32,6 +32,13 @@ class Config:
 
             "character_roster_sync_enabled": True,
 
+            #
+            # Stellt die zuletzt ausgewertete WeintTV-/Academy-Analyse
+            # ins Addon (core/addon_analysis_sync.py).
+            #
+
+            "addon_analysis_sync_enabled": True,
+
             "start_on_boot": False,
 
             "minimize_to_tray": False,
@@ -104,6 +111,7 @@ class Config:
                     "sync_interval": 5,
                     "roster_sync_enabled": True,
                     "character_roster_sync_enabled": True,
+                    "addon_analysis_sync_enabled": True,
                     "start_on_boot": False,
                     "minimize_to_tray": False,
                     "linux_launcher_type": "custom",

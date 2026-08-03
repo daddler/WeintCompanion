@@ -38,7 +38,7 @@ CI (`.github/workflows/build.yml`) builds Linux (AppImage) and Windows (Inno Set
 - **`core/`** – all business logic, framework-agnostic where possible (Qt is used for `QObject`/`Signal` in a few places like `CompanionManager`, `RaidDataService` and `AppState`).
 - **`gui/`** – PySide6 UI: `main_window.py`, `navigation.py` (the page registry, see below), `pages/` (Dashboard, Addon, Sync, WeintTV, Academy, Settings, Logs), `widgets/`, `theme/` (colors/typography/metrics/stylesheet/wow_colors), `controllers/`, `dialogs/` (currently `whats_new_dialog.py` – the onboarding/changelog popup, see below).
 - **`analyzer/`** – the Raidlog Analyzer. **Contains no Qt import at all**, deliberately: it must stay testable without a running UI and extractable into its own package later. Holds the data models, the combat-log locator, the encounter/lesson reference data, the data providers, and the academy evaluation.
-- **`addon/`** – reads the WoW addon's Lua `SavedVariables` files (`finder.py` locates the WoW install, `reader.py` reads the addon's own version/state, `sync_reader.py` reads the outbound message queue).
+- **`addon/`** – reads and writes the WoW addon's Lua `SavedVariables` files (`finder.py` locates the WoW install, `reader.py` reads the addon's own version/state, `sync_reader.py` reads the outbound message queue, `inbox_writer.py`/`addon_inbox.py` write the inbound one, `addon_payloads.py` builds the WeintTV/Academy payloads).
 - **`discord/`** – `sync_client.py`, a thin HTTP client for the material-sync bridge.
 
 ### `CompanionManager` is the app's central hub
@@ -126,7 +126,13 @@ The addon writes outbound messages into its WoW SavedVariables Lua file (`WeintC
 - `"loot"` → dropped unless `loot_sync_enabled` (off by default)
 - everything else → the generic `discord.sync_client.SyncClient`
 
-`DiscordRosterSync` (`core/discord_roster_sync.py`) runs the opposite direction: it polls the bot's `/companion/raid-roster` endpoint (bearer-token-authenticated via the stored `companion_token`) and, on new data, writes a `raid_import` message *into* the addon via `InboxWriter` — this is how the addon receives raid-roster/calendar data from Discord. It runs in the same sync cycle as the material sync but is isolated in its own try/except so a roster-sync failure never blocks material sync or vice versa.
+`DiscordRosterSync` (`core/discord_roster_sync.py`) runs the opposite direction: it polls the bot's `/companion/raid-roster` endpoint (bearer-token-authenticated via the stored `companion_token`) and, on new data, publishes a `raid_import` message *into* the addon — this is how the addon receives raid-roster/calendar data from Discord. It runs in the same sync cycle as the material sync but is isolated in its own try/except so a roster-sync failure never blocks material sync or vice versa.
+
+`AddonAnalysisSync` (`core/addon_analysis_sync.py`) is the second inbound sender: it publishes the last analysed `RaidSnapshot` as three messages — `academy_catalog`, `academy_state`, `weinttv_report` — so the slimmed-down in-game WeintTV/Academy in WeintCodex 1.0.1.0 has something to render. Their payloads are **nested tables**, not strings: `core/lua_table.to_lua()` writes real Lua, because a delimiter format is not unambiguous for German lesson text and damage advice. The shapes are built in `addon/addon_payloads.py` and must stay in step with the header comment of the addon's `modules/companion.lua`. Two Companion conventions are passed through unchanged and must never be normalised: `stars == 0` means *no data* (not *bad*) and `at_seconds == -1` means *no timestamp known* (not second 0). The service deliberately never calls `RaidDataService.attach()` — that would make the app poll forever for users who never open either page — so what gets delivered is whatever WeintTV or the Academy last analysed.
+
+All inbound senders go through `AddonInbox` (`addon/addon_inbox.py`), which keeps one channel per sender and writes the union. `InboxWriter.send_batch()` replaces the *whole* queue (correct, since the addon empties it at login), so without channels the second sender in a sync cycle would silently delete the first one's messages.
+
+The return path is the outbound `academy` state message: lesson checkboxes ticked in-game come back as `<char>|<done,…>|<excluded,…>;…` and `SyncManager._apply_academy_progress()` replaces the local `AcademyService` lists with them. It never reaches the bot — this is desktop-local data.
 
 The bot backend base URL is centralized as `BOT_BASE_URL` in `core/backend_config.py`, imported by `core/discord_auth.py`, `core/character_sync_client.py`, and `core/discord_roster_sync.py`.
 
