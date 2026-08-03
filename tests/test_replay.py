@@ -426,3 +426,113 @@ def test_timeline_payload_tolerates_series_of_different_lengths():
         snapshot = snapshot_at(timeline, at)
 
         assert isinstance(snapshot, RaidSnapshot)
+
+
+#
+# --------------------------------------------------
+# Vermeidbarkeit: Urteil bleibt in der App
+# --------------------------------------------------
+#
+
+
+def _hits_payload(hits):
+
+    return {
+        "interval": 1.0,
+        "fight": {
+            "name": "Horridon",
+            "encounter_id": 1640,
+            "duration": 60.0,
+            "raid_size": 2,
+        },
+        "players": [
+            {"name": "Dolchtanz", "class": "Rogue", "role": "dps"},
+            {"name": "Bramborn", "class": "Warrior", "role": "tank"},
+        ],
+        "damage_taken_hits": hits,
+    }
+
+
+def test_raw_hits_are_judged_by_the_app_not_by_the_bot():
+    """
+    Der Bot schickt Treffer mit Zeitpunkt, kein Urteil. Ob ein Treffer
+    vermeidbar war, entscheidet analyzer/data/avoidable.py - sonst
+    ließe sich die Wertung nicht ohne Bot-Deploy korrigieren, und
+    WeintTV und die Academy könnten auseinanderlaufen.
+    """
+
+    timeline = timeline_from_payload(
+        _hits_payload([
+            {"player": "Dolchtanz", "ability": "Double Swipe",
+             "at": 34.0, "amount": 96000},
+            {"player": "Dolchtanz", "ability": "Dire Call",
+             "at": 40.0, "amount": 12000},
+        ]),
+        "Wiedergabe",
+    )
+
+    abilities = [hit.ability for hit in timeline.avoidable_hits]
+
+    # "Double Swipe" ist vermeidbar, "Dire Call" ausdrücklich nicht.
+    assert abilities == ["Double Swipe"]
+
+
+def test_an_unknown_ability_produces_no_accusation():
+    """
+    Fehlt eine Fähigkeit in der Tabelle, ist das Urteil `unknown` -
+    und `unknown` ergibt keinen Eintrag. Eine Lücke ist besser als
+    ein Vorwurf gegen jemanden, der nichts falsch gemacht hat.
+    """
+
+    timeline = timeline_from_payload(
+        _hits_payload([
+            {"player": "Dolchtanz", "ability": "Völlig Unbekannt",
+             "at": 10.0, "amount": 5000},
+        ]),
+        "Wiedergabe",
+    )
+
+    assert timeline.avoidable_hits == ()
+
+
+def test_unavoidable_tank_damage_is_never_counted_as_a_hit():
+    """
+    Tankschaden gehört zum Job und ist ausdrücklich `unavoidable` -
+    dieselbe Regel wie im Archivbild, sonst bewertete die Academy
+    denselben Treffer in der Wiedergabe anders als im Gesamtstand.
+    Die Rolle wird dabei mitgegeben, damit eine später ergänzte Regel
+    mit `tank_exempt` hier ohne weitere Verdrahtung greift.
+    """
+
+    hit = {"ability": "Triple Puncture", "at": 20.0, "amount": 300000}
+
+    timeline = timeline_from_payload(
+        _hits_payload([
+            {**hit, "player": "Bramborn"},
+            {**hit, "player": "Dolchtanz"},
+        ]),
+        "Wiedergabe",
+    )
+
+    assert [hit.actor_name for hit in timeline.avoidable_hits] == []
+
+
+def test_pre_judged_hits_from_the_bot_are_still_accepted():
+    """
+    `avoidable_hits` bleibt gültig: meldet der Bot einen Treffer selbst
+    als vermeidbar, wird er unverändert übernommen.
+    """
+
+    timeline = timeline_from_payload(
+        {
+            **_hits_payload([]),
+            "avoidable_hits": [
+                {"player": "Dolchtanz", "ability": "Eigene Regel",
+                 "at": 5.0, "amount": 1000, "note": "vom Bot"},
+            ],
+        },
+        "Wiedergabe",
+    )
+
+    assert len(timeline.avoidable_hits) == 1
+    assert timeline.avoidable_hits[0].note == "vom Bot"
