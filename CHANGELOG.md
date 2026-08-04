@@ -1,6 +1,16 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.0.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.1.
+
+## 1.4.1
+
+Reiner Versionssprung: der Tag `v1.4.0` war versehentlich auf einen
+Stand vor der 1.4.0-Versionserhöhung gesetzt worden, wodurch
+`scripts/check_version.py` den Build zu Recht abbrach. Da GitHub das
+Verschieben eines bereits veröffentlichten Tags per Tag-Protection
+blockiert, gibt es statt eines korrigierten `v1.4.0` diesen Patch-Tag
+auf demselben Funktionsstand. Kein Code hat sich gegenüber 1.4.0
+geändert.
 
 ## 1.4.0
 
