@@ -1,6 +1,20 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.4.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.5.
+
+## 1.4.5
+
+Für niemanden in der Gilde kam ein Zugriffsprofil an: Discord-Rollen wie
+"Admin", "Gildenleitung", "Klassen-Support" oder "Member" fehlten in der
+Standard-Zuordnung Rolle → Rang, sodass `resolve_tier()` nie einen Rang
+fand und im Addon (bewusst fail-open) immer alles offen blieb, statt echte
+Freigaben zuzustellen. `core/access_roles.py`s `DEFAULT_ROLE_MAP` kennt jetzt
+die tatsächlichen Rollennamen: Admin/Gildenleitung/Klassen-Support/Member als
+gildeninterne Rollen bekommen "offizier", Raider/Friends als gildenexterne
+Rollen "extern". Letzteres korrigiert nebenbei einen zu großzügigen
+Alt-Stand, in dem "raider" fälschlich auf "mitglied" abgebildet war und
+externen Mitraidern damit `materials.scan`/`loot.report`/`weinttv.raid`
+freigegeben hätte.
 
 ## 1.4.4
 
