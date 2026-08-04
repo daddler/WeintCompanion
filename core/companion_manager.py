@@ -20,6 +20,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from core.discord_status import DiscordStatus
 from core.discord_account import DiscordAccountStore
 from core.discord_auth import DiscordAuth
+from core.access_profile_sync import AccessProfileSync
 from core.discord_roster_sync import DiscordRosterSync
 from addon.addon_inbox import AddonInbox
 from core.addon_analysis_sync import AddonAnalysisSync
@@ -92,6 +93,14 @@ class CompanionManager(QObject):
         self.addon_inbox = AddonInbox(self)
 
         self.discord_roster_sync = DiscordRosterSync(self, self.addon_inbox)
+
+        #
+        # Holt die Discord-Rollen beim Bot ab und stellt dem Addon
+        # daraus Rang und Freigaben zu. Eigener Kanal in der Inbox, wie
+        # die uebrigen Absender.
+        #
+
+        self.access_profile_sync = AccessProfileSync(self, self.addon_inbox)
 
         #
         # WeintTV und WeintAcademy hängen beide am selben
@@ -259,6 +268,30 @@ class CompanionManager(QObject):
 
             self.logger.error(
                 f"Sync fehlgeschlagen: {exc}"
+            )
+
+        #
+        # Zugriffsprofil zuerst: es entscheidet im Addon darüber, was
+        # von den nachfolgend zugestellten Daten überhaupt angezeigt
+        # wird. Die Reihenfolge in der Inbox ist dem Addon zwar egal (es
+        # zieht Profile in einem eigenen ersten Durchgang vor), aber so
+        # steht das Profil auch in der Datei vor den Daten, auf die es
+        # sich bezieht.
+        #
+
+        try:
+
+            if self.config.data.get(
+                "access_profile_sync_enabled",
+                True,
+            ):
+
+                self.access_profile_sync.process()
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"Zugriffsprofil-Zustellung fehlgeschlagen: {exc}"
             )
 
         #

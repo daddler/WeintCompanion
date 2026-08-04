@@ -33,6 +33,24 @@ class Config:
             "character_roster_sync_enabled": True,
 
             #
+            # Zugriffsprofil: holt die Discord-Rollen beim Bot ab und
+            # stellt dem Addon daraus Rang und Freigaben zu
+            # (core/access_profile_sync.py). Ohne zugestelltes Profil
+            # bleiben im Addon alle Bereiche offen.
+            #
+
+            "access_profile_sync_enabled": True,
+
+            #
+            # Zuordnung Discord-Rollenname -> Rang
+            # ("gast"/"extern"/"mitglied"/"offizier"). Leer bedeutet:
+            # die Standardzuordnung aus core/access_roles.py verwenden.
+            # Hier eintragen, wenn Rollen im Discord anders heissen.
+            #
+
+            "access_role_map": {},
+
+            #
             # Stellt die zuletzt ausgewertete WeintTV-/Academy-Analyse
             # ins Addon (core/addon_analysis_sync.py).
             #

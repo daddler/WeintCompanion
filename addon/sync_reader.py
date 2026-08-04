@@ -225,6 +225,29 @@ class SyncReader:
                     continue
 
                 #
+                # community (ab WeintCodex 1.2.0.0)
+                #
+                # Die Discord-Guild-ID, mit der das Addon verknüpft
+                # ist. Immer als Zeichenkette behandeln, nie als Zahl:
+                # eine Snowflake ist zu groß für Luas 5.1-Zahlen und
+                # würde beim Vergleich als "1.23e+18" nie passen.
+                #
+                # Ältere Addon-Versionen schreiben das Feld nicht - es
+                # fehlt dann einfach, was kein Fehler ist.
+                #
+
+                if line.startswith('["community"]'):
+
+                    current["community"] = (
+                        line.split("=",1)[1]
+                        .strip()
+                        .rstrip(",")
+                        .strip('"')
+                    )
+
+                    continue
+
+                #
                 # payload
                 #
 
@@ -345,9 +368,29 @@ class SyncReader:
                 f'["payload"] = "{payload}",',
                 f'["id"] = {message["id"]},',
 
-                "},",
-
             ])
+
+            #
+            # Die verbleibenden Nachrichten werden hier komplett neu
+            # geschrieben, nicht bearbeitet. Jedes Feld, das nicht
+            # ausdrücklich mitkommt, ist danach weg - deshalb muss
+            # community mit durch, sonst verliert eine Nachricht, die
+            # auf den nächsten Zyklus wartet, still ihre Herkunft.
+            #
+
+            community = message.get("community")
+
+            if community not in (None, ""):
+
+                escaped = (
+                    str(community)
+                    .replace("\\", "\\\\")
+                    .replace('"', '\\"')
+                )
+
+                lines.append(f'["community"] = "{escaped}",')
+
+            lines.append("},")
 
         lines.append("},")
 

@@ -32,6 +32,14 @@ class InboxWriter:
         direkt als Tabelle - siehe INBOX_HANDLERS in
         modules/companion.lua. Ein Trennzeichen-Format wäre für die
         Auswertungs- und Lektionstexte nicht eindeutig genug.
+
+        Optional darf eine Nachricht ein "community" (Discord-Guild-ID
+        als Zeichenkette) tragen. Das Addon verwirft ab 1.2.0.0
+        Nachrichten, deren Community nicht zu der passt, mit der es
+        verknüpft ist - so vermischen sich die Daten zweier Gilden
+        nicht, wenn in der Companion der verknüpfte Discord-Account
+        gewechselt wird. Fehlt das Feld, gilt die Nachricht dort als
+        Alt-Format und wird angenommen.
         """
 
         file = self.reader.get_file()
@@ -53,9 +61,28 @@ class InboxWriter:
             else:
                 rendered = to_lua(payload, indent=0)
 
+            community = message.get("community")
+
+            community_line = ""
+
+            if community not in (None, ""):
+
+                #
+                # Immer als Zeichenkette: eine Discord-Snowflake ist zu
+                # groß für Luas 5.1-Zahlen und würde als Zahl
+                # geschrieben zu "1.23e+18" - im Addon passt das dann
+                # nie gegen die Dezimaldarstellung der Bindung.
+                #
+
+                community_line = (
+                    f'["community"] = '
+                    f'{quote_lua_string(str(community))},\n'
+                )
+
             entries.append(
                 "{\n"
                 f'["type"] = {quote_lua_string(message["type"])},\n'
+                f"{community_line}"
                 f'["payload"] = {rendered},\n'
                 "},\n"
             )

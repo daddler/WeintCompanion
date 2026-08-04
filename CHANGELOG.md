@@ -1,6 +1,42 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.3.0.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.0.
+
+## 1.4.0
+
+Wer mitraidet, aber nicht in der Gilde ist, kann WeintCompanion jetzt
+gefahrlos bekommen: die App fragt die Discord-Rolle ab und stellt dem
+Addon daraus ein Zugriffsprofil zu. WeintCodex 1.2.0.0 richtet danach
+aus, welche Bereiche offenstehen - und verknüpft sich mit genau einer
+Community, sodass sich die Daten zweier Gilden nicht mehr in derselben
+SavedVariables-Datei vermischen können.
+
+- Neu: Zugriffsprofil-Zustellung. Die Rollennamen kommen vom Bot
+  (`GET /companion/access-profile`), die Zuordnung auf Rang und
+  Freigaben passiert hier in `core/access_roles.py` - eine im Discord
+  umbenannte Rolle lässt sich damit ohne neue Companion-Version
+  nachziehen.
+- Neu: Einstellung `access_role_map`, um die Zuordnung
+  Rollenname → Rang zu überschreiben, und
+  `access_profile_sync_enabled`, um die Zustellung abzuschalten.
+- Neu: Nachrichten an das Addon tragen die Discord-Guild-ID. Das Addon
+  verwirft damit Daten, die zu einer anderen Community gehören, statt
+  sie einzuarbeiten - relevant, wenn in der App der verknüpfte
+  Discord-Account gewechselt wird.
+- Behoben: `SyncReader.remove_message()` baute die verbleibenden
+  Nachrichten aus einer festen Feldliste neu auf und verlor dabei
+  Felder, die es noch nicht kannte. Eine Nachricht, die auf den
+  nächsten Zyklus wartete, verlor so still ihre Herkunftsangabe.
+- Wichtig: Solange der Bot den Endpunkt nicht bereitstellt, wird kein
+  Profil zugestellt und im Addon bleibt alles offen - genau wie vor
+  WeintCodex 1.2.0.0. Der Vertrag steht in
+  `docs/access-profile-bridge.md`.
+- Wichtig: Das ist **keine Sicherheitsgrenze.** Die Zuordnungstabelle
+  liegt wie die SavedVariables des Addons auf dem Rechner des Spielers.
+  Der Nutzen ist zweierlei: die Community-Bindung verhindert das
+  Vermischen zweier Gilden, und die Freigaben halten die Oberfläche
+  ehrlich. Vertraulichkeit leistet das nicht - dafür müsste der Bot
+  eine unberechtigte Nutzlast gar nicht erst ausliefern.
 
 ## 1.3.0
 
