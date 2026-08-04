@@ -53,6 +53,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Gebrechen",
             checks=(cooldown_check("Dark Soul: Misery"),),
         ),
+        Lesson(
+            lesson_id="warlock-affliction.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Gebrechen",
+        ),
     ),
 
     "Zerstörung": (
@@ -89,6 +108,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             class_name=CLASS_NAME,
             spec="Zerstörung",
         ),
+        Lesson(
+            lesson_id="warlock-destruction.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Zerstörung",
+        ),
     ),
 
     "Dämonologie": (
@@ -104,6 +142,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 "Eine feste Wutschwelle für den Wechsel festlegen.",
                 "In der Form nur die verstärkten Zauber nutzen.",
                 "Vor dem Wechsel die Effekte auffrischen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Dämonologie",
+        ),
+        Lesson(
+            lesson_id="warlock-demonology.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
             ),
             class_name=CLASS_NAME,
             spec="Dämonologie",

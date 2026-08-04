@@ -46,6 +46,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             class_name=CLASS_NAME,
             spec="Feuer",
         ),
+        Lesson(
+            lesson_id="mage-fire.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Feuer",
+        ),
     ),
 
     "Arkan": (
@@ -83,6 +102,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Arkan",
             checks=(cooldown_check("Arcane Power"),),
         ),
+        Lesson(
+            lesson_id="mage-arcane.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Arkan",
+        ),
     ),
 
     "Frost": (
@@ -114,6 +152,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 "Die weiten Wege des Kampfes vorher benennen.",
                 "Blinzeln fest dafür einplanen.",
                 "Für echte Notfälle einen zweiten Ausweg behalten.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Frost",
+        ),
+        Lesson(
+            lesson_id="mage-frost.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
             ),
             class_name=CLASS_NAME,
             spec="Frost",

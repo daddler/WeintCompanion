@@ -65,6 +65,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Treffsicherheit",
             checks=(cooldown_check("Rapid Fire", 90.0),),
         ),
+        Lesson(
+            lesson_id="hunter-marksmanship.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Treffsicherheit",
+        ),
     ),
 
     "Tierherrschaft": (
@@ -101,6 +120,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             class_name=CLASS_NAME,
             spec="Tierherrschaft",
         ),
+        Lesson(
+            lesson_id="hunter-beastmastery.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Tierherrschaft",
+        ),
     ),
 
     "Überleben": (
@@ -116,6 +154,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 "Genug Fokus für ihn zurückhalten.",
                 "Bei jeder Verfügbarkeit sofort setzen.",
                 "Nie durch einen Fülzauber verzögern.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Überleben",
+        ),
+        Lesson(
+            lesson_id="hunter-survival.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
             ),
             class_name=CLASS_NAME,
             spec="Überleben",

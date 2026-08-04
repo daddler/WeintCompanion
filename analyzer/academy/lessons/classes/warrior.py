@@ -84,6 +84,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Waffen",
             checks=(cooldown_check("Recklessness"),),
         ),
+        Lesson(
+            lesson_id="warrior-arms.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Waffen",
+        ),
     ),
 
     "Furor": (
@@ -99,6 +118,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 "Die Wutrausch-Anzeige deutlich einrichten.",
                 "Den Auslöser rechtzeitig nachsetzen.",
                 "Verstärkte Fähigkeiten nur im Rausch nutzen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Furor",
+        ),
+        Lesson(
+            lesson_id="warrior-fury.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
             ),
             class_name=CLASS_NAME,
             spec="Furor",

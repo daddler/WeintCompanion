@@ -127,6 +127,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Schatten",
             checks=(cooldown_check("Shadowfiend"),),
         ),
+        Lesson(
+            lesson_id="priest-shadow.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Schatten",
+        ),
     ),
 
 }
