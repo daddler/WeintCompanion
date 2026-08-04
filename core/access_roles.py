@@ -131,7 +131,6 @@ DEFAULT_ROLE_MAP = {
     "raidlead": "offizier",
     "raidleitung": "offizier",
 
-    "raider": "mitglied",
     "mitglied": "mitglied",
     "gildenmitglied": "mitglied",
     "trial": "mitglied",
@@ -140,6 +139,23 @@ DEFAULT_ROLE_MAP = {
     "gast": "extern",
     "extern": "extern",
     "twink": "extern",
+
+    #
+    # Tatsaechliche Discord-Rollennamen von "Bis Einer Weint": Admin,
+    # Gildenleitung, Klassen-Support und Member sind gildenintern und
+    # sollen den vollen Funktionsumfang bekommen. Raider und Friends
+    # sind gildenexterne Rollen fuer Mitraidende ohne Gildenmitgliedschaft
+    # - deshalb "extern" statt "mitglied", obwohl "Raider" andernorts oft
+    # ein Gildenmitglied waere.
+    #
+
+    "admin": "offizier",
+    "gildenleitung": "offizier",
+    "klassen-support": "offizier",
+    "member": "offizier",
+
+    "raider": "extern",
+    "friends": "extern",
 
 }
 

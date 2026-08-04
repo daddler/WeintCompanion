@@ -134,9 +134,27 @@ def _response(**overrides):
 
 def test_known_roles_map_to_their_tier():
 
-    assert resolve_tier(["Raider"])[0] == "mitglied"
+    assert resolve_tier(["Trial"])[0] == "mitglied"
     assert resolve_tier(["Offizier"])[0] == "offizier"
     assert resolve_tier(["Raidgast"])[0] == "extern"
+
+
+def test_bis_einer_weint_roles_map_to_their_tier():
+    """
+    Die tatsaechlichen Discord-Rollennamen der Gilde: Admin,
+    Gildenleitung, Klassen-Support und Member sind gildenintern und
+    bekommen "offizier". Raider und Friends sind gildenextern und
+    bekommen "extern" - nicht "mitglied", obwohl "raider" andernorts
+    oft ein Gildenmitglied waere.
+    """
+
+    assert resolve_tier(["Admin"])[0] == "offizier"
+    assert resolve_tier(["Gildenleitung"])[0] == "offizier"
+    assert resolve_tier(["Klassen-Support"])[0] == "offizier"
+    assert resolve_tier(["Member"])[0] == "offizier"
+
+    assert resolve_tier(["Raider"])[0] == "extern"
+    assert resolve_tier(["Friends"])[0] == "extern"
 
 
 def test_the_highest_tier_wins():
@@ -153,7 +171,7 @@ def test_the_highest_tier_wins():
 
 def test_role_matching_ignores_case_and_whitespace():
 
-    assert resolve_tier(["  rAiDeR "])[0] == "mitglied"
+    assert resolve_tier(["  tRiAl "])[0] == "mitglied"
 
 
 def test_unknown_roles_yield_no_tier():
@@ -318,7 +336,7 @@ def test_a_nonsense_tier_from_the_bot_falls_back_to_the_local_map():
 
     payload = _build(_response(tier="grossmeister"))
 
-    assert payload["tier"] == "mitglied"
+    assert payload["tier"] == "extern"
 
 
 def test_issued_at_is_taken_from_the_caller_and_advances():
