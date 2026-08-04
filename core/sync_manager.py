@@ -2,6 +2,7 @@ from addon.sync_reader import SyncReader
 from discord.sync_client import SyncClient
 from core.character_sync_client import CharacterSyncClient
 from core.academy_progress_sync import apply_addon_progress
+from core.academy_dummy_sync import apply_dummy_practice_session
 
 
 class SyncManager:
@@ -79,6 +80,27 @@ class SyncManager:
 
                 self._apply_academy_progress(
                     message.get("payload") or ""
+                )
+
+                self.reader.remove_message(
+                    message["id"]
+                )
+
+                continue
+
+            #
+            # Rotationstrainer-Sitzung am Trainingsdummy (siehe
+            # modules/rotationtrainer.lua im Addon). Genau wie
+            # "academy" persönliche Übungsdaten, die hier auf dem
+            # Rechner bleiben und den Bot nichts angehen - deshalb
+            # ebenfalls lokal verarbeitet statt über den SyncClient.
+            #
+
+            if message.get("type") == "dummy_practice_session":
+
+                apply_dummy_practice_session(
+                    getattr(self.manager, "academy", None),
+                    message.get("payload") or "",
                 )
 
                 self.reader.remove_message(

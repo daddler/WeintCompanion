@@ -207,7 +207,7 @@ def test_a_corrupt_file_is_discarded_with_a_warning(tmp_path, monkeypatch):
 
     service = _service(tmp_path, monkeypatch)
 
-    assert service.data == {"completed": {}, "excluded": {}}
+    assert service.data == {"completed": {}, "excluded": {}, "dummy_practice": {}}
 
     assert service.manager.logger.warnings
 

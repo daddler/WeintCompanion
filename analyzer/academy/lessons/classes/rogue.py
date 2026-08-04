@@ -64,6 +64,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Meucheln",
             checks=(cooldown_check("Shadow Blades"),),
         ),
+        Lesson(
+            lesson_id="rogue-assassination.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Meucheln",
+        ),
     ),
 
     "Kampf": (
@@ -100,6 +119,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             class_name=CLASS_NAME,
             spec="Kampf",
         ),
+        Lesson(
+            lesson_id="rogue-combat.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Kampf",
+        ),
     ),
 
     "Täuschung": (
@@ -115,6 +153,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 "Das Fenster bewusst mitzählen.",
                 "Darin nur die stärksten Fähigkeiten nutzen.",
                 "Das Öffnen für Phasenwechsel aufsparen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Täuschung",
+        ),
+        Lesson(
+            lesson_id="rogue-subtlety.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
             ),
             class_name=CLASS_NAME,
             spec="Täuschung",

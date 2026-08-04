@@ -54,6 +54,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 uptime_check("Frost Fever", 92.0),
             ),
         ),
+        Lesson(
+            lesson_id="deathknight-unholy.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Unheilig",
+        ),
     ),
 
     "Frost": (
@@ -86,6 +105,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 "Die Runenanzeige deutlich einrichten.",
                 "Nie mehr als zwei Runen gleichzeitig bereit halten.",
                 "Runenmacht vor dem Maximum ausgeben.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Frost",
+        ),
+        Lesson(
+            lesson_id="deathknight-frost.rotation.dummy_practice",
+            title="Prioritätenliste an der Trainingspuppe üben",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Prioritätenliste sitzt erst, wenn sie ohne "
+                "Nachdenken kommt - eine Trainingspuppe ist der "
+                "richtige Ort dafür, nicht der Raid."
+            ),
+            steps=(
+                "Im Addon an eine Trainingspuppe treten oder "
+                "/wc training nutzen.",
+                "Das Fenster zeigt die Prioritätenliste live mit.",
+                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "hakt sich danach von selbst ab.",
             ),
             class_name=CLASS_NAME,
             spec="Frost",

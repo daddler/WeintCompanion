@@ -57,8 +57,15 @@ class AcademyService:
         # Nutzer. Andersherum wäre jeder Katalogausbau für
         # Bestandsnutzer unsichtbar geblieben.
         #
+        # "dummy_practice" (seit WeintCodex 1.3.0.0) hält pro Charakter
+        # und Spec-Schlüssel die letzte gültige Übungssitzung am
+        # Trainingsdummy fest ({"lastDate": "YYYYMMDD", "streak": int}) -
+        # siehe core/academy_dummy_sync.py. Erreicht die Serie drei
+        # Tage, wird die passende Lektion automatisch über
+        # set_completed() abgehakt.
+        #
 
-        self.data: dict = {"completed": {}, "excluded": {}}
+        self.data: dict = {"completed": {}, "excluded": {}, "dummy_practice": {}}
 
         self.load()
 
@@ -91,6 +98,40 @@ class AcademyService:
                             if isinstance(ids, list)
                         }
 
+                dummy_section = loaded.get("dummy_practice")
+
+                if isinstance(dummy_section, dict):
+
+                    parsed: dict = {}
+
+                    for character, specs in dummy_section.items():
+
+                        if not isinstance(specs, dict):
+                            continue
+
+                        parsed_specs = {}
+
+                        for spec_key, record in specs.items():
+
+                            if not isinstance(record, dict):
+                                continue
+
+                            last_date = record.get("lastDate")
+                            streak = record.get("streak")
+
+                            if not isinstance(last_date, str) or not isinstance(streak, int):
+                                continue
+
+                            parsed_specs[str(spec_key)] = {
+                                "lastDate": last_date,
+                                "streak": streak,
+                            }
+
+                        if parsed_specs:
+                            parsed[str(character)] = parsed_specs
+
+                    self.data["dummy_practice"] = parsed
+
         except Exception as exc:
 
             #
@@ -104,7 +145,7 @@ class AcademyService:
                 f"({exc}) - es wird neu begonnen."
             )
 
-            self.data = {"completed": {}, "excluded": {}}
+            self.data = {"completed": {}, "excluded": {}, "dummy_practice": {}}
 
     def save(self):
         """

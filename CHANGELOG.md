@@ -1,6 +1,24 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.1.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.2.
+
+## 1.4.2
+
+WeintCodex 1.3.0.0 bringt einen Rotationstrainer - ein kleines Fenster
+im Addon, das live an einer Trainingspuppe die Prioritätenliste der
+eigenen Spec abhakt. Diese Version verzahnt das mit dem Trainingsplan.
+
+- Neu: Der Lektionskatalog bekommt pro DPS-Spec (alle 23) eine
+  Rotations-Lektion "Prioritätenliste an der Trainingspuppe üben"
+  (`analyzer/academy/lessons/classes/<klasse>.py`).
+- Neu: `core/academy_dummy_sync.py` verarbeitet die vom Addon gemeldeten
+  Übungssitzungen (`dummy_practice_session`, siehe
+  `core/sync_manager.py`) und führt pro Charakter und Spec eine
+  Tage-Serie. Drei aufeinanderfolgende Tage mit mindestens 80 %
+  Trefferquote haken die zugehörige Lektion automatisch ab - über
+  dieselbe Persistenz wie das manuell gesetzte Häkchen.
+- `core/academy_service.py` speichert diese Serien jetzt zusätzlich
+  unter `dummy_practice` in `academy_progress.json`.
 
 ## 1.4.1
 
