@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from core.companion_manager import CompanionManager
 from core.resources import Resources
 
+from gui.dialogs.discord_link_prompt import show_discord_link_prompt_if_needed
 from gui.dialogs.whats_new_dialog import show_whats_new_if_needed
 
 from gui.theme.colors import Colors
@@ -299,19 +300,18 @@ class MainWindow(QMainWindow):
         self.change_page(PageId.DASHBOARD)
 
         #
-        # "Was ist neu"-Popup - unabhängig vom asynchronen
-        # CompanionManager-Init (siehe CLAUDE.md: initialize()
-        # läuft über einen eigenen QTimer.singleShot), da der Inhalt
-        # (Tour-Text bzw. gebündeltes CHANGELOG.md) rein lokal ist
-        # und nicht auf full_refresh() warten muss. singleShot(0, ...)
+        # "Was ist neu"-Popup, danach ggf. der Discord-Verknüpfungs-
+        # Hinweis - beide unabhängig vom asynchronen CompanionManager-
+        # Init (siehe CLAUDE.md: initialize() läuft über einen eigenen
+        # QTimer.singleShot), da beide nur lokal vorhandene Daten
+        # brauchen (gebündeltes CHANGELOG.md bzw. discord_account.json)
+        # und nicht auf full_refresh() warten müssen. singleShot(0, ...)
         # statt eines direkten Aufrufs, damit das Fenster zuerst
-        # sichtbar wird, bevor der modale Dialog erscheint.
+        # sichtbar wird, bevor der erste modale Dialog erscheint. Die
+        # beiden exec()-Aufrufe laufen nacheinander, nie gleichzeitig.
         #
 
-        QTimer.singleShot(
-            0,
-            lambda: show_whats_new_if_needed(self.manager, self),
-        )
+        QTimer.singleShot(0, self._show_startup_popups)
 
     # --------------------------------------------------
     # Scroll Wrapper
@@ -428,6 +428,16 @@ class MainWindow(QMainWindow):
         #
 
         self.sidebar.refresh()
+
+    # --------------------------------------------------
+    # Start-Popups
+    # --------------------------------------------------
+
+    def _show_startup_popups(self):
+
+        show_whats_new_if_needed(self.manager, self)
+
+        show_discord_link_prompt_if_needed(self.manager, self)
 
     # --------------------------------------------------
     # Zu einem Settings-Unterabschnitt springen

@@ -1,6 +1,25 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.2.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.3.
+
+## 1.4.3
+
+Reiner Versionssprung wie schon bei 1.4.1: der Tag `v1.4.2` war
+versehentlich auf einen veralteten Stand (`Version 1.2.6`, weit vor
+der 1.4.2-Versionserhöhung) gesetzt worden, wodurch
+`scripts/check_version.py` den Build zu Recht abgebrochen hat. Da
+GitHub das Verschieben eines bereits veröffentlichten Tags per
+Tag-Protection blockiert, gibt es statt eines korrigierten `v1.4.2`
+diesen Patch-Tag - diesmal zusammen mit einer echten Änderung.
+
+- Neu: Popup beim Programmstart, solange kein Discord-Account
+  verknüpft ist (`gui/dialogs/discord_link_prompt.py`). Es weist
+  darauf hin, dass der volle Funktionsumfang erst mit verknüpftem
+  Discord-Account zur Verfügung steht und dass die Anmeldedaten
+  ausschließlich lokal und temporär auf dem eigenen Rechner liegen.
+  Schließbar wie jeder andere Dialog, erscheint aber - anders als das
+  "Was ist neu"-Popup - bei jedem Start erneut, solange nicht
+  verknüpft ist.
 
 ## 1.4.2
 
