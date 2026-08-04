@@ -1,6 +1,17 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.3.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.4.
+
+## 1.4.4
+
+Der Discord-Verknüpfungshinweis aus 1.4.3 hat seinen zweiten Absatz
+abgeschnitten: Titel und Fließtext lagen direkt im Root-Layout, und
+das wortumbrechende `QLabel` hat seine Höhe nicht zuverlässig an den
+vollen Text angepasst, sodass der Hinweis auf die lokale Speicherung
+der Anmeldedaten nicht mehr lesbar war. `gui/dialogs/discord_link_prompt.py`
+packt Titel und Text jetzt - wie schon der "Was ist neu"-Dialog - in
+eine `QScrollArea`, damit der Inhalt unabhängig von Schriftgröße oder
+Zeilenzahl immer vollständig sichtbar bleibt.
 
 ## 1.4.3
 

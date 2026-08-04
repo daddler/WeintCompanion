@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QHBoxLayout, QLabel, QVBoxLayout
+from PySide6.QtWidgets import (
+    QDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from gui.theme.colors import Colors
 from gui.theme.metrics import Metrics
@@ -13,6 +21,14 @@ class DiscordLinkPromptDialog(QDialog):
     Start-Hinweis, solange kein Discord-Account verknüpft ist.
     Schließbar wie jeder andere Dialog (X, Escape, "Später") - die
     Verknüpfung wird nur empfohlen, nie erzwungen.
+
+    Titel und Fließtext stecken in einer QScrollArea statt direkt im
+    Root-Layout (dasselbe Muster wie WhatsNewDialog): eine feste
+    Dialoggröße plus wortumbrechendes QLabel allein hat den zweiten
+    Absatz abgeschnitten, weil das Layout die Label-Höhe nicht
+    zuverlässig an den vollen Text angepasst hat. Mit Scroll-Bereich
+    bleibt der Text immer vollständig lesbar, unabhängig von
+    Schriftgröße oder Zeilenzahl.
     """
 
     def __init__(self, parent=None):
@@ -24,7 +40,7 @@ class DiscordLinkPromptDialog(QDialog):
 
         self.setModal(True)
 
-        self.setFixedWidth(480)
+        self.setFixedSize(480, 360)
 
         self.setAttribute(Qt.WA_StyledBackground, True)
 
@@ -41,6 +57,13 @@ class DiscordLinkPromptDialog(QDialog):
         root.setContentsMargins(32, 28, 32, 24)
         root.setSpacing(16)
 
+        content = QWidget()
+
+        content_layout = QVBoxLayout(content)
+
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(16)
+
         title = QLabel("Discord noch nicht verknüpft")
 
         title.setWordWrap(True)
@@ -49,7 +72,7 @@ class DiscordLinkPromptDialog(QDialog):
             f"font-size:18px;font-weight:700;color:{Colors.WHITE};"
         )
 
-        root.addWidget(title)
+        content_layout.addWidget(title)
 
         body = QLabel(
             "Der volle Funktionsumfang von WeintCompanion - unter anderem "
@@ -67,7 +90,23 @@ class DiscordLinkPromptDialog(QDialog):
             f"font-size:14px;color:{Colors.TEXT_SECONDARY};"
         )
 
-        root.addWidget(body)
+        content_layout.addWidget(body)
+
+        content_layout.addStretch()
+
+        scroll = QScrollArea()
+
+        scroll.setWidgetResizable(True)
+
+        scroll.setFrameShape(QFrame.NoFrame)
+
+        scroll.setStyleSheet(
+            "QScrollArea{background:transparent;border:none;}"
+        )
+
+        scroll.setWidget(content)
+
+        root.addWidget(scroll, 1)
 
         footer = QHBoxLayout()
 
