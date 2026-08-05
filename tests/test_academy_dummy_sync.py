@@ -1,14 +1,15 @@
 """
 Rotationstrainer-Sitzungen vom Addon -> Streak -> Trainingsplan.
 
-Der Kernpunkt: nur Tage mit ausreichender Trefferquote zählen, und nur
-KALENDERTAG-AUF-KALENDERTAG ohne Lücke verlängert die Serie. Nach drei
-solchen Tagen hakt sich die zugehörige Lektion automatisch ab - über
-denselben AcademyService.set_completed(), den auch das manuell
-gesetzte Häkchen benutzt.
+Der Kernpunkt: nur Tage mit ausreichend langer Übung und ausreichender
+Note zählen, und nur KALENDERTAG-AUF-KALENDERTAG ohne Lücke verlängert
+die Serie. Nach drei solchen Tagen hakt sich die zugehörige Lektion
+automatisch ab - über denselben AcademyService.set_completed(), den
+auch das manuell gesetzte Häkchen benutzt.
 """
 
 from core.academy_dummy_sync import (
+    MIN_SESSION_SECONDS,
     STREAK_TARGET,
     apply_dummy_practice_session,
     parse_dummy_practice_session,
@@ -63,7 +64,7 @@ def _service(tmp_path, monkeypatch):
 
 
 def _payload(character="Windschritt", spec_key="WARRIOR_ARMS", date="20260804",
-             duration=90, hits=40, compliant=36, compliance=90.0):
+             duration=240, hits=40, compliant=36, compliance=90.0):
 
     return "|".join([
         character, spec_key, date,
@@ -111,6 +112,34 @@ def test_a_qualifying_day_starts_a_streak_of_one(tmp_path, monkeypatch):
 
     assert record["streak"] == 1
     assert record["lastDate"] == "20260804"
+
+
+def test_a_session_shorter_than_the_minimum_is_ignored(tmp_path, monkeypatch):
+    #
+    # Neuere Addon-Versionen melden solche Sitzungen gar nicht erst;
+    # ältere schon, und auch die dürfen keine Serie tragen.
+    #
+
+    academy = _service(tmp_path, monkeypatch)
+
+    changed = apply_dummy_practice_session(
+        academy, _payload(date="20260804", duration=MIN_SESSION_SECONDS - 1)
+    )
+
+    assert changed is False
+    assert academy.data["dummy_practice"] == {}
+
+
+def test_a_session_at_the_minimum_counts(tmp_path, monkeypatch):
+
+    academy = _service(tmp_path, monkeypatch)
+
+    changed = apply_dummy_practice_session(
+        academy, _payload(date="20260804", duration=MIN_SESSION_SECONDS)
+    )
+
+    assert changed is True
+    assert academy.data["dummy_practice"]["Windschritt"]["WARRIOR_ARMS"]["streak"] == 1
 
 
 def test_a_day_below_the_threshold_is_ignored(tmp_path, monkeypatch):

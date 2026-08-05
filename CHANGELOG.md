@@ -1,6 +1,23 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.5.0.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.5.1.
+
+## 1.5.1
+
+Eine Übungssitzung am Trainingsdummy zählt erst ab drei Minuten.
+
+Bisher genügten dreißig Sekunden, und die trugen dieselbe Tage-Serie
+wie eine richtige Übungseinheit: dreimal kurz auf die Puppe geschlagen
+hakte die Rotationslektion im Trainingsplan ab. `MIN_SESSION_SECONDS`
+in `core/academy_dummy_sync.py` verwirft Sitzungen unter drei Minuten
+jetzt schon vor der Serie. Die Zahl steht bewusst doppelt - WeintCodex
+1.3.2.0 meldet nichts Kürzeres mehr, aber welche Addon-Version
+installiert ist, entscheidet der Spieler, und eine ältere schickt
+weiterhin kurze Sitzungen.
+
+Die 23 Lektionen "Prioritätenliste an der Trainingspuppe üben" nennen
+die Mindestdauer jetzt in ihren Schritten, statt sie stillschweigend
+vorauszusetzen.
 
 ## 1.5.0
 
