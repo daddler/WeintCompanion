@@ -368,6 +368,18 @@ class UptimeEntry:
 
     expected_percent: float = 0.0
 
+    #
+    # Die Spell-ID, falls die Quelle sie mitschickt. Sie ist die
+    # einzige Angabe an einer Fähigkeit, die keine Sprache hat: ein
+    # deutscher Bericht meldet "Verjüngung", ein englischer
+    # "Rejuvenation", beide 774. Deshalb erkennt
+    # analyzer/analysis/spec_reference.py zuerst über sie und erst
+    # danach über den Namen. 0 heißt "nicht mitgeliefert", nicht
+    # "unbekannte Fähigkeit".
+    #
+
+    spell_id: int = 0
+
 
 @dataclass(frozen=True)
 class MovementEntry:
@@ -506,6 +518,13 @@ class CooldownUsage:
     in_burst: int = 0
 
     category: str = CD_PERSONAL
+
+    #
+    # Wie bei UptimeEntry: die sprachlose Angabe, 0 heißt "nicht
+    # mitgeliefert".
+    #
+
+    spell_id: int = 0
 
     @property
     def uses(self) -> int:
@@ -1010,6 +1029,39 @@ class RaidSnapshot:
     def avoidable_total(self) -> float:
 
         return sum(entry.avoidable for entry in self.damage_taken)
+
+    @property
+    def actors(self) -> tuple[Actor, ...]:
+        """
+        Alle bekannten Spieler des Snapshots.
+
+        Die Spezialisierung hängt am `Actor` und sonst nirgends -
+        ohne diesen Zugriff müsste jede Stelle, die sie braucht (die
+        Spec-Anreicherung, die Academy, WeintTVs Hinweistexte), die
+        drei Listen selbst durchsuchen.
+        """
+
+        found: dict[str, Actor] = {}
+
+        for entry in self.top_damage + self.top_healing:
+            found.setdefault(entry.actor.name, entry.actor)
+
+        for tank in self.tanks:
+            found.setdefault(tank.actor.name, tank.actor)
+
+        return tuple(found.values())
+
+    def actor_of(self, name: str) -> "Actor | None":
+
+        if not name:
+            return None
+
+        for actor in self.actors:
+
+            if actor.name == name:
+                return actor
+
+        return None
 
     @property
     def actor_names(self) -> tuple[str, ...]:

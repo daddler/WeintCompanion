@@ -26,6 +26,7 @@ from datetime import datetime
 from analyzer.analysis import damage as damage_analysis
 from analyzer.analysis.movement import build_movement
 from analyzer.analysis.ranking import build_ranking
+from analyzer.analysis.spec_reference import apply_spec_reference
 from analyzer.data import encounters, specs
 from analyzer.models import (
     CD_HEAL,
@@ -201,6 +202,28 @@ def _percent(value, default: float = 100.0) -> float:
     """
 
     return max(0.0, min(100.0, _number(value, default)))
+
+
+def _spell_id(row: dict) -> int:
+    """
+    Die Spell-ID einer gemeldeten Fähigkeit.
+
+    Vier Feldnamen, weil WarcraftLogs je nach Tabelle `guid`,
+    `abilityGameID` oder `id` schreibt und der Bot sie mal
+    durchreicht, mal umbenennt. Die ID ist die einzige Angabe an einer
+    Fähigkeit ohne Sprache, und genau daran ist die Erkennung schon
+    einmal gescheitert (siehe docs/warcraftlogs-bridge.md) - deshalb
+    wird sie großzügig gelesen und nirgends erzwungen.
+    """
+
+    for key in ("spell_id", "guid", "ability_id", "abilityGameID"):
+
+        value = _count(row.get(key))
+
+        if value > 0:
+            return value
+
+    return 0
 
 
 def _flag(value, default: bool = False) -> bool:
@@ -666,7 +689,16 @@ def build_uptimes(
 
             ability = _text(aura.get("aura")) or _text(aura.get("name"))
 
-            if not ability:
+            spell_id = _spell_id(aura)
+
+            #
+            # Ohne Namen, aber mit Spell-ID ist die Zeile trotzdem
+            # brauchbar: die Spec-Tabelle kennt den Namen dann. Sie
+            # ganz zu verwerfen hieße, eine gemeldete Wirkungsdauer
+            # wegen einer fehlenden Beschriftung zu verlieren.
+            #
+
+            if not ability and not spell_id:
                 continue
 
             entries.append(
@@ -684,6 +716,7 @@ def build_uptimes(
                         aura.get("expected_percent"),
                         default=0.0,
                     ),
+                    spell_id=spell_id,
                 )
             )
 
@@ -881,7 +914,9 @@ def build_cooldown_usage(
 
             ability = _text(cooldown.get("name"))
 
-            if not ability:
+            spell_id = _spell_id(cooldown)
+
+            if not ability and not spell_id:
                 continue
 
             cast_times = tuple(
@@ -909,6 +944,7 @@ def build_cooldown_usage(
                         ability,
                         _text(cooldown.get("category")),
                     ),
+                    spell_id=spell_id,
                 )
             )
 
@@ -1207,7 +1243,17 @@ def snapshot_from_payload(
         or _sequence(payload.get("resurrections"))
     )
 
-    return RaidSnapshot(
+    #
+    # Zum Schluss gegen die Spezialisierungen halten: Namen erkennen,
+    # DoT/HoT/Buff richtig einsortieren, Richtwerte anhängen und
+    # fehlende Fähigkeiten der Spec als Null ergänzen, wo die Quelle
+    # diese Art überhaupt liefert. Das passiert hier und nicht in der
+    # Oberfläche, damit WeintTV, die Academy, das Addon-Payload und
+    # die Wiedergabe dasselbe sehen - siehe
+    # analyzer/analysis/spec_reference.py.
+    #
+
+    return apply_spec_reference(RaidSnapshot(
         source_label=source_label,
         live=live,
         in_combat=in_combat,
@@ -1257,7 +1303,7 @@ def snapshot_from_payload(
             SUPPORT_DISPEL,
         ),
         events=build_events(_sequence(payload.get("events"))),
-    )
+    ))
 
 
 def _heroism_used(

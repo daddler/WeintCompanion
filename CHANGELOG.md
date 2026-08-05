@@ -1,6 +1,57 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.5.2.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.0.
+
+## 1.6.0
+
+WeintTV und die WeintAcademy kennen jetzt die Fähigkeiten jeder
+Spezialisierung.
+
+Bisher konnten beide nur wiedergeben, was die Datenquelle geschickt
+hat. Kam nichts, stand dort "Keine Angaben zu DoT-Uptimes" - und zwar
+wortgleich für drei völlig verschiedene Sachverhalte: der Spieler hat
+seinen DoT tatsächlich nie aufgelegt, die Quelle liefert diesen Block
+nicht, oder es gibt für diesen Kampf gar keine Tiefenauswertung. Wer
+seine HoT-Uptimes, DoT-Uptimes oder Cooldown-Einsätze vermisst hat,
+konnte an der Oberfläche nicht erkennen, welcher der drei Fälle
+vorlag.
+
+Neu ist `analyzer/data/class_abilities.py`: alle 34
+Spezialisierungen von Mists of Pandaria mit ihren DoTs, HoTs,
+Selbstbuffs (bei Tanks die aktive Schadensminderung) und Cooldowns -
+je mit Spell-ID, englischem und deutschem Namen, Richtwert und
+Abklingzeit. Die Spell-IDs stammen aus dem Raidlog-Analyzer und sind
+um die Spezialisierungen ergänzt, die dort keine hatten.
+
+Was sich dadurch ändert:
+
+- **Erkennung in drei Sprachen.** Jede gemeldete Zeile wird über
+  Spell-ID, englischen und deutschen Namen erkannt - einer genügt.
+  Ein deutscher Bericht ("Verjüngung") und ein englischer
+  ("Rejuvenation") landen in derselben Zeile, und in der Oberfläche
+  steht durchgängig der deutsche Name.
+- **Richtige Einsortierung.** Ein HoT, den die Quelle unter die Buffs
+  legt, landet trotzdem in der HoT-Karte. Vorher blieb sie leer,
+  obwohl die Zahl da war.
+- **Fehlendes wird sichtbar.** Liefert die Quelle eine Art von
+  Wirkungsdauern, erscheinen die nicht gemeldeten Fähigkeiten der
+  Spezialisierung mit null Prozent und dem Hinweis "nie aufgelegt" -
+  ein Befund statt einer Leerstelle. Liefert sie diese Art gar nicht,
+  wird auch nichts behauptet; stattdessen nennt der Platzhaltertext,
+  was für diese Spezialisierung zu sehen wäre.
+- **Talentabhängiges wird nie ergänzt.** Eine Zeile "Inkarnation - nie
+  genutzt" bei jemandem ohne dieses Talent wäre ein Vorwurf für
+  nichts.
+- **Cooldown-Quoten sind fair geworden.** Gewertet wird nur noch, was
+  auf Abklingzeit gehört. Ein ungenutzter Schildwall ist kein
+  verschenkter Einsatz - vorher zog genau das die Bewertung von Tanks
+  und Heilern nach unten, also der Rollen mit den meisten
+  Defensivcooldowns.
+- **Die Simulation zeigt jede Spezialisierung.** Bisher hatten nur
+  siebzehn der fünfundzwanzig simulierten Spieler überhaupt
+  Wirkungsdauern; ein Elementarschamane, ein Windwandler oder ein
+  Arkanmagier hatte keine einzige Zeile. Jetzt bekommt jeder Spieler
+  das, was seine Spezialisierung mitbringt.
 
 ## 1.5.2
 

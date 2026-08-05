@@ -25,7 +25,9 @@ Analyse unglaubwürdig macht.
 from __future__ import annotations
 
 from analyzer.analysis.ranking import split_by_role
+from analyzer.analysis.spec_reference import apply_spec_reference
 from analyzer.models import (
+    CD_PERSONAL,
     AbilityDamage,
     ActivityEntry,
     CooldownState,
@@ -110,7 +112,15 @@ def snapshot_at(
 
     finished = at >= timeline.duration
 
-    return RaidSnapshot(
+    #
+    # Auch die Wiedergabe läuft durch die Spec-Anreicherung. Sie ist
+    # rein und arbeitet auf höchstens 25 Spielern, kostet bei vier
+    # Bildern je Sekunde also nichts Nennenswertes - und ohne sie
+    # zeigte eine wiedergegebene Sekunde andere Zeilen als derselbe
+    # Kampf im Archiv, obwohl beide aus demselben Bericht stammen.
+    #
+
+    return apply_spec_reference(RaidSnapshot(
         source_label=label,
         live=False,
         in_combat=not finished,
@@ -192,7 +202,7 @@ def snapshot_at(
             for event in timeline.events
             if event.at_seconds <= at
         ),
-    )
+    ))
 
 
 #
@@ -504,9 +514,17 @@ def _cooldowns_until(
                 ability=usage.ability,
                 cast_times=used,
                 cooldown=usage.cooldown,
+                #
+                # Eine Obergrenze nur für Cooldowns, die auf
+                # Abklingzeit gehören - dieselbe Regel wie in
+                # analyzer/analysis/spec_reference.py und in der
+                # Simulation. Ein Schildwall, der in diesem Kampf
+                # nicht gebraucht wurde, ist kein verschenkter
+                # Einsatz.
+                #
                 possible=(
                     int(seconds // usage.cooldown) + 1
-                    if usage.cooldown > 0
+                    if usage.cooldown > 0 and usage.category == CD_PERSONAL
                     else 0
                 ),
                 in_burst=sum(

@@ -27,9 +27,11 @@ from dataclasses import replace
 from analyzer.analysis import damage as damage_analysis
 from analyzer.data import avoidable as avoidable_data
 from analyzer.data import encounters
+from analyzer.analysis.spec_reference import apply_spec_reference
 from analyzer.providers import mock_schedule as schedule
 from analyzer.providers.base import RaidDataProvider
 from analyzer.models import (
+    CD_PERSONAL,
     ROLE_DPS,
     ROLE_HEALER,
     ROLE_TANK,
@@ -68,7 +70,7 @@ from analyzer.models import (
 
 PREPARE_SECONDS = 12.0
 
-PULL_SECONDS = 180.0
+PULL_SECONDS = schedule.PULL_SECONDS
 
 AFTER_SECONDS = 18.0
 
@@ -93,55 +95,14 @@ BATTLE_RES_MAX = 3
 # Roster
 # --------------------------------------------------
 #
-# (Name, Klasse, Spezialisierung, Rolle, Grundwert pro Sekunde)
+# Steht in mock_schedule.py, zusammen mit den übrigen
+# Spielerprofilen: der dortige Fahrplan leitet aus Klasse und
+# Spezialisierung jedes Spielers seine Wirkungsdauern und
+# Cooldowns ab und braucht das Roster deshalb selbst. Hier bleibt
+# der Name stehen, weil ihn Tests und Auswertung von hier kennen.
 #
-# Der Grundwert ist die Kennzahl, um die der Spieler pendelt - bei
-# Tanks und DPS die Schadensleistung, bei Heilern die Heilleistung.
-#
 
-_ROSTER: tuple[tuple[str, str, str, str, float], ...] = (
-
-    #
-    # Tanks
-    #
-
-    ("Bramborn", "Warrior", "Schutz", ROLE_TANK, 41000.0),
-    ("Sigmara", "Monk", "Braumeister", ROLE_TANK, 38500.0),
-
-    #
-    # Heiler
-    #
-
-    ("Elvenne", "Druid", "Wiederherstellung", ROLE_HEALER, 74000.0),
-    ("Torvald", "Paladin", "Heilig", ROLE_HEALER, 69500.0),
-    ("Miraia", "Priest", "Disziplin", ROLE_HEALER, 66000.0),
-    ("Kaldrun", "Shaman", "Wiederherstellung", ROLE_HEALER, 71500.0),
-    ("Yunwei", "Monk", "Nebelwirker", ROLE_HEALER, 63500.0),
-
-    #
-    # Schadensausteiler
-    #
-
-    ("Nachtblatt", "Druid", "Gleichgewicht", ROLE_DPS, 128000.0),
-    ("Pyrothal", "Mage", "Feuer", ROLE_DPS, 134500.0),
-    ("Grimmzahn", "Warrior", "Waffen", ROLE_DPS, 121000.0),
-    ("Silbermond", "Rogue", "Meucheln", ROLE_DPS, 126500.0),
-    ("Falkenauge", "Hunter", "Treffsicherheit", ROLE_DPS, 119500.0),
-    ("Verdammnis", "Warlock", "Gebrechen", ROLE_DPS, 131000.0),
-    ("Schattenruf", "Priest", "Schatten", ROLE_DPS, 117500.0),
-    ("Sturmklinge", "Shaman", "Elementar", ROLE_DPS, 114000.0),
-    ("Lichthammer", "Paladin", "Vergeltung", ROLE_DPS, 112500.0),
-    ("Seuchenherz", "Death Knight", "Unheilig", ROLE_DPS, 123500.0),
-    ("Windschritt", "Monk", "Windwandler", ROLE_DPS, 116000.0),
-    ("Krallenwut", "Druid", "Wilder Kampf", ROLE_DPS, 109500.0),
-    ("Arkanis", "Mage", "Arkan", ROLE_DPS, 122000.0),
-    ("Dolchtanz", "Rogue", "Kampf", ROLE_DPS, 113500.0),
-    ("Feuerbrand", "Warlock", "Zerstörung", ROLE_DPS, 118000.0),
-    ("Frostgrimm", "Death Knight", "Frost", ROLE_DPS, 110500.0),
-    ("Bestienrufer", "Hunter", "Tierherrschaft", ROLE_DPS, 107500.0),
-    ("Donnerfaust", "Shaman", "Verstärkung", ROLE_DPS, 115500.0),
-
-)
+_ROSTER = schedule.ROSTER
 
 
 def _build_actors() -> tuple[tuple[Actor, float], ...]:
@@ -569,7 +530,15 @@ class MockRaidDataProvider(RaidDataProvider):
             damage_analysis.derive_mechanics(damage_taken, self._encounter_name),
         )
 
-        return RaidSnapshot(
+        #
+        # Auch die Simulation läuft durch die Spec-Anreicherung.
+        # Nicht, weil sie etwas ergänzen müsste - ihr Fahrplan kommt
+        # ja aus derselben Tabelle -, sondern damit die Simulation
+        # denselben Weg nimmt wie ein echter Bericht. Liefe die
+        # Erkennung falsch, stünde hier sofort eine doppelte Zeile.
+        #
+
+        return apply_spec_reference(RaidSnapshot(
             source_label=self.source_label,
             live=False,
             in_combat=True,
@@ -614,7 +583,7 @@ class MockRaidDataProvider(RaidDataProvider):
                 seconds,
             ),
             events=self._events(seconds),
-        )
+        ))
 
     # --------------------------------------------------
     # Einzelwerte
@@ -1151,9 +1120,18 @@ class MockRaidDataProvider(RaidDataProvider):
                         ability=ability,
                         cast_times=used,
                         cooldown=cooldown,
+                        #
+                        # Eine Obergrenze nur für Cooldowns, die auf
+                        # Abklingzeit gehören - dieselbe Regel wie in
+                        # analyzer/analysis/spec_reference.py. Ein
+                        # Schildwall, der in diesem Pull nicht
+                        # gebraucht wurde, ist kein verschenkter
+                        # Einsatz, und die Simulation darf ihn nicht
+                        # als einen ausweisen.
+                        #
                         possible=(
                             int(seconds // cooldown) + 1
-                            if cooldown > 0
+                            if cooldown > 0 and category == CD_PERSONAL
                             else 0
                         ),
                         in_burst=sum(

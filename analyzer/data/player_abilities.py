@@ -34,6 +34,8 @@ Drei Regeln, nach denen diese Tabelle gepflegt wird:
 
 from __future__ import annotations
 
+from analyzer.data import class_abilities
+
 
 #
 # --------------------------------------------------
@@ -375,6 +377,34 @@ def _key(value: str) -> str:
     )
 
 
+def _all_names() -> dict[str, tuple[str, ...]]:
+    """
+    Diese Tabelle **plus** die Übersetzungen aus
+    analyzer/data/class_abilities.py.
+
+    Dort steht ohnehin zu jeder Fähigkeit einer Spezialisierung beides
+    - englisch und deutsch -, und zwei Listen derselben Übersetzungen
+    laufen unweigerlich auseinander. Das Symptom wäre still: eine
+    Lektion, deren Kriterium eine Fähigkeit nennt, die hier fehlt,
+    sagt für immer "keine Daten", ohne dass irgendwo ein Fehler
+    auftaucht. Die Einträge dieser Datei gewinnen, wo sich beide
+    überschneiden - sie sind die von Hand gepflegten.
+    """
+
+    merged: dict[str, set[str]] = {
+        english: set(german)
+        for english, german in class_abilities.translations().items()
+    }
+
+    for english, german in ABILITY_NAMES.items():
+        merged.setdefault(english, set()).update(german)
+
+    return {
+        english: tuple(sorted(german))
+        for english, german in merged.items()
+    }
+
+
 def _build_groups() -> dict[str, frozenset[str]]:
     """
     Zu jedem Namensschlüssel die Menge aller gleichbedeutenden
@@ -384,7 +414,7 @@ def _build_groups() -> dict[str, frozenset[str]]:
 
     groups: dict[str, frozenset[str]] = {}
 
-    for english, german in ABILITY_NAMES.items():
+    for english, german in _all_names().items():
 
         keys = frozenset(
             _key(name)
@@ -402,7 +432,7 @@ def _build_canonical() -> dict[str, str]:
 
     table: dict[str, str] = {}
 
-    for english, german in ABILITY_NAMES.items():
+    for english, german in _all_names().items():
 
         for name in (english,) + tuple(german):
             table[_key(name)] = english

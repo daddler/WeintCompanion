@@ -37,7 +37,9 @@ from analyzer.academy.models import (
     TrainingPlan,
 )
 from analyzer.analysis.damage import has_usable_classification
+from analyzer.analysis.spec_reference import cooldown_hint, reference_hint
 from analyzer.models import (
+    CD_PERSONAL,
     MECHANIC_DEFENSIVE,
     MECHANIC_INTERRUPT,
     MECHANIC_MOVEMENT,
@@ -482,10 +484,28 @@ def _rate_rotation(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
 
     if activity is None and not groups:
 
+        #
+        # Der Hinweis nennt die Fähigkeiten der Spezialisierung. Ohne
+        # ihn ist "keine Wirkungsdauern" für den Spieler nicht davon
+        # zu unterscheiden, dass für seine Spec gar nichts vorgesehen
+        # ist - und genau diese Frage stellt sich vor einer leeren
+        # Karte als erste.
+        #
+
+        expected = ", ".join(
+            hint
+            for hint in (
+                reference_hint(actor, kind)
+                for kind, _label, _weight in _uptime_parts(actor)
+            )
+            if hint
+        )
+
         return _no_data(
             CATEGORY_ROTATION,
             "Keine Angaben zu Aktivzeit oder Wirkungsdauern - die "
-            "Datenquelle liefert sie für diesen Kampf nicht.",
+            "Datenquelle liefert sie für diesen Kampf nicht."
+            + (f" Erwartet wären: {expected}." if expected else ""),
         )
 
     parts = []
@@ -620,13 +640,28 @@ def _rate_cooldowns(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
     ehrlich: aus einem einzelnen Snapshot ging nicht hervor, ob ein
     bereiter Cooldown ungenutzt oder gerade wieder verfügbar war. Mit
     den Einsatzzeitpunkten ist die Frage beantwortbar geworden.
+
+    Gewertet werden nur Cooldowns, die **auf Abklingzeit gehören**
+    (`CD_PERSONAL`). Ein Schildwall, ein Gottesschild oder eine Aura
+    der Hingabe warten auf ihren Moment; sie in dieselbe Quote zu
+    rechnen hieße, Umsicht als verschenkten Einsatz zu zählen - und
+    da ein Tank mehr Defensives hat als jeder andere, träfe es genau
+    die Rolle am härtesten, die am meisten davon richtig macht.
+    Liefert eine Quelle ausschließlich situative Cooldowns, bleibt es
+    beim alten Verhalten, statt die Bewertung ganz fallen zu lassen.
     """
 
-    usage = [
+    rows = [
         entry
         for entry in snapshot.cooldowns_of(actor.name)
         if entry.possible > 0
     ]
+
+    usage = [
+        entry
+        for entry in rows
+        if entry.category == CD_PERSONAL
+    ] or rows
 
     missing = _missing_consumables(snapshot, actor.name)
 
@@ -642,9 +677,12 @@ def _rate_cooldowns(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
 
         if not defensive and not missing:
 
+            expected = cooldown_hint(actor)
+
             return _no_data(
                 CATEGORY_COOLDOWNS,
-                "Keine Angaben zur Cooldown-Nutzung.",
+                "Keine Angaben zur Cooldown-Nutzung."
+                + (f" Erwartet wären: {expected}." if expected else ""),
             )
 
         return SkillRating(

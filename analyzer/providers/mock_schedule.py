@@ -28,6 +28,9 @@ zeigt, was der Bot später liefern soll.
 
 from __future__ import annotations
 
+from zlib import crc32
+
+from analyzer.data import class_abilities, player_abilities
 from analyzer.models import (
     CD_DEFENSIVE,
     CD_HEAL,
@@ -37,10 +40,22 @@ from analyzer.models import (
     MECHANIC_INTERRUPT,
     MECHANIC_MOVEMENT,
     MECHANIC_POSITIONING,
+    ROLE_DPS,
+    ROLE_HEALER,
+    ROLE_TANK,
     UPTIME_BUFF,
     UPTIME_DOT,
     UPTIME_HOT,
 )
+
+
+#
+# Die Länge eines simulierten Pulls. Sie steht hier, weil sämtliche
+# Zeitpunkte dieses Fahrplans darin liegen müssen - mock.py führt sie
+# unter demselben Namen weiter.
+#
+
+PULL_SECONDS = 180.0
 
 
 #
@@ -527,6 +542,275 @@ APM_BY_ROLE: dict[str, float] = {
 
 #
 # --------------------------------------------------
+# Roster
+# --------------------------------------------------
+#
+# (Name, Klasse, Spezialisierung, Rolle, Grundwert pro Sekunde)
+#
+# Der Grundwert ist die Kennzahl, um die der Spieler pendelt - bei
+# Tanks und DPS die Schadensleistung, bei Heilern die Heilleistung.
+#
+
+ROSTER: tuple[tuple[str, str, str, str, float], ...] = (
+
+    #
+    # Tanks
+    #
+
+    ("Bramborn", "Warrior", "Schutz", ROLE_TANK, 41000.0),
+    ("Sigmara", "Monk", "Braumeister", ROLE_TANK, 38500.0),
+
+    #
+    # Heiler
+    #
+
+    ("Elvenne", "Druid", "Wiederherstellung", ROLE_HEALER, 74000.0),
+    ("Torvald", "Paladin", "Heilig", ROLE_HEALER, 69500.0),
+    ("Miraia", "Priest", "Disziplin", ROLE_HEALER, 66000.0),
+    ("Kaldrun", "Shaman", "Wiederherstellung", ROLE_HEALER, 71500.0),
+    ("Yunwei", "Monk", "Nebelwirker", ROLE_HEALER, 63500.0),
+
+    #
+    # Schadensausteiler
+    #
+
+    ("Nachtblatt", "Druid", "Gleichgewicht", ROLE_DPS, 128000.0),
+    ("Pyrothal", "Mage", "Feuer", ROLE_DPS, 134500.0),
+    ("Grimmzahn", "Warrior", "Waffen", ROLE_DPS, 121000.0),
+    ("Silbermond", "Rogue", "Meucheln", ROLE_DPS, 126500.0),
+    ("Falkenauge", "Hunter", "Treffsicherheit", ROLE_DPS, 119500.0),
+    ("Verdammnis", "Warlock", "Gebrechen", ROLE_DPS, 131000.0),
+    ("Schattenruf", "Priest", "Schatten", ROLE_DPS, 117500.0),
+    ("Sturmklinge", "Shaman", "Elementar", ROLE_DPS, 114000.0),
+    ("Lichthammer", "Paladin", "Vergeltung", ROLE_DPS, 112500.0),
+    ("Seuchenherz", "Death Knight", "Unheilig", ROLE_DPS, 123500.0),
+    ("Windschritt", "Monk", "Windwandler", ROLE_DPS, 116000.0),
+    ("Krallenwut", "Druid", "Wilder Kampf", ROLE_DPS, 109500.0),
+    ("Arkanis", "Mage", "Arkan", ROLE_DPS, 122000.0),
+    ("Dolchtanz", "Rogue", "Kampf", ROLE_DPS, 113500.0),
+    ("Feuerbrand", "Warlock", "Zerstörung", ROLE_DPS, 118000.0),
+    ("Frostgrimm", "Death Knight", "Frost", ROLE_DPS, 110500.0),
+    ("Bestienrufer", "Hunter", "Tierherrschaft", ROLE_DPS, 107500.0),
+    ("Donnerfaust", "Shaman", "Verstärkung", ROLE_DPS, 115500.0),
+
+)
+
+
+#
+# --------------------------------------------------
+# Fahrplan aus der Spezialisierung
+# --------------------------------------------------
+#
+# Die Listen oben sind von Hand geschrieben und erzählen bestimmte
+# Fälle (Krallenwut lässt seinen Berserker liegen, Feuerbrand seinen
+# Feuerbrand fallen). Sie decken aber nur einen Teil des Raids ab -
+# ein Elementarschamane, ein Windwandler, ein Arkanmagier hatten
+# darin **keine einzige** Zeile, und in der Oberfläche war das nicht
+# von "diese Spezialisierung hat nichts zu zeigen" zu unterscheiden.
+# Genau das war die Beschwerde, mit der diese Erweiterung anfing.
+#
+# Deshalb bekommt jeder Spieler zusätzlich das, was seine
+# Spezialisierung laut analyzer/data/class_abilities.py mitbringt.
+# Zwei Regeln, damit daraus kein zweiter, widersprüchlicher Fahrplan
+# wird:
+#
+# 1. **Von Hand geschriebenes gewinnt.** Steht eine Fähigkeit oben,
+#    bleibt es bei ihrem Wert - sonst wäre der erzählte Fall weg.
+# 2. **Kein Zufall.** Jeder erzeugte Wert hängt an einer Prüfsumme
+#    über Spielername und Fähigkeit, ist also über Läufe und Rechner
+#    hinweg derselbe - dieselbe Regel wie für den Rest dieser Datei.
+#
+# Die erzeugten Zeilen tragen den **deutschen** Namen, die von Hand
+# geschriebenen den englischen. Das ist kein Versehen: ein echter
+# Bericht kommt in der Sprache des Clients an, der ihn hochgeladen
+# hat, und die Simulation zeigt damit beide Fälle. Die Zuordnung
+# passiert in analyzer/analysis/spec_reference.py über Spell-ID und
+# beide Sprachen - läuft sie falsch, sieht man es hier sofort als
+# doppelte Zeile.
+#
+
+
+def _seed(*parts: str) -> int:
+
+    return crc32("|".join(parts).encode("utf-8"))
+
+
+def _spec_of(name: str):
+
+    for player, class_name, spec, _role, _base in ROSTER:
+
+        if player == name:
+            return class_abilities.for_spec(class_name, spec)
+
+    return None
+
+
+def _known_names(player: str) -> set[str]:
+    """
+    Die Fähigkeiten, die für diesen Spieler schon von Hand
+    eingetragen sind - auf ihre englische Form gebracht, damit
+    "Shield Block" und "Schildblock" als dieselbe gelten.
+    """
+
+    names = {
+        ability
+        for entry_player, ability, _kind, _reached, _expected in UPTIMES
+        if entry_player == player
+    }
+
+    names.update(
+        ability
+        for entry_player, ability, _cd, _cat, _casts in PERSONAL_COOLDOWNS
+        if entry_player == player
+    )
+
+    names.update(
+        ability
+        for ability, entry_player, _cd, _casts in RAID_COOLDOWNS
+        if entry_player == player
+    )
+
+    names.update(
+        ability
+        for ability, entry_player, _cd, _casts in HEAL_COOLDOWNS
+        if entry_player == player
+    )
+
+    return {
+        class_abilities.normalize_name(player_abilities.canonical(name))
+        for name in names
+    }
+
+
+def _build_spec_uptimes() -> tuple[tuple[str, str, str, float, float], ...]:
+
+    rows: list[tuple[str, str, str, float, float]] = []
+
+    for player, _class_name, _spec, _role, _base in ROSTER:
+
+        abilities = _spec_of(player)
+
+        if abilities is None:
+            continue
+
+        known = _known_names(player)
+
+        for aura in abilities.auras:
+
+            if aura.optional or aura.expected_percent <= 0:
+                continue
+
+            if class_abilities.normalize_name(aura.english) in known:
+                continue
+
+            #
+            # Um den Richtwert herum, mit deutlichem Hang nach unten:
+            # eine Simulation, in der alle alles richtig machen,
+            # beweist für die Bewertung nichts.
+            #
+
+            delta = (_seed(player, aura.english) % 31) - 22
+
+            reached = max(25.0, min(99.0, aura.expected_percent + delta))
+
+            rows.append((
+                player,
+                aura.german,
+                aura.kind,
+                reached,
+                aura.expected_percent,
+            ))
+
+    return tuple(rows)
+
+
+def _casts_for(player: str, ability: str, cooldown: float) -> tuple[float, ...]:
+    """
+    Einsatzzeitpunkte eines erzeugten Cooldowns.
+
+    Der erste liegt kurz nach dem Pull, die weiteren jeweils gut eine
+    Abklingzeit später - und bei jedem vierten Spieler fällt der
+    letzte weg, damit es in der Simulation auch verschenkte Einsätze
+    zu finden gibt.
+    """
+
+    if cooldown <= 0:
+        return ()
+
+    seed = _seed(player, ability)
+
+    start = float(seed % max(4, min(int(cooldown), 25)))
+
+    step = cooldown * 1.12
+
+    times = []
+
+    at = start
+
+    while at <= PULL_SECONDS:
+
+        times.append(round(at, 1))
+
+        at += step
+
+    if times and seed % 4 == 0:
+        times.pop()
+
+    return tuple(times)
+
+
+def _build_spec_cooldowns() -> tuple[
+    tuple[str, str, float, str, tuple[float, ...]], ...
+]:
+
+    rows: list[tuple[str, str, float, str, tuple[float, ...]]] = []
+
+    for player, _class_name, _spec, _role, _base in ROSTER:
+
+        abilities = _spec_of(player)
+
+        if abilities is None:
+            continue
+
+        known = _known_names(player)
+
+        for cooldown in abilities.cooldowns:
+
+            if cooldown.optional or cooldown.cooldown <= 0:
+                continue
+
+            if class_abilities.normalize_name(cooldown.english) in known:
+                continue
+
+            #
+            # Situationsabhängige Cooldowns kommen seltener und nicht
+            # regelmäßig: ein Schildwall, der wie ein Rotationszauber
+            # alle 180 Sekunden fällt, wäre eine Erfindung.
+            #
+
+            casts = _casts_for(player, cooldown.english, cooldown.cooldown)
+
+            if cooldown.category != CD_PERSONAL:
+                casts = casts[:1]
+
+            rows.append((
+                player,
+                cooldown.german,
+                cooldown.cooldown,
+                cooldown.category,
+                casts,
+            ))
+
+    return tuple(rows)
+
+
+SPEC_UPTIMES = _build_spec_uptimes()
+
+SPEC_COOLDOWNS = _build_spec_cooldowns()
+
+
+#
+# --------------------------------------------------
 # Nachschlagehilfen
 # --------------------------------------------------
 #
@@ -580,6 +864,12 @@ def cooldowns_for(name: str) -> tuple[tuple[str, float, str, tuple[float, ...]],
         if player == name:
             rows.append((ability, cooldown, CD_HEAL, casts))
 
+    rows.extend(
+        (ability, cooldown, category, casts)
+        for player, ability, cooldown, category, casts in SPEC_COOLDOWNS
+        if player == name
+    )
+
     return tuple(rows)
 
 
@@ -590,6 +880,9 @@ def uptimes_for(name: str, kind: str) -> tuple[tuple[str, float, float], ...]:
 
     return tuple(
         (ability, reached, expected)
-        for player, ability, entry_kind, reached, expected in UPTIMES
+        for player, ability, entry_kind, reached, expected in (
+            *UPTIMES,
+            *SPEC_UPTIMES,
+        )
         if player == name and entry_kind == kind
     )

@@ -134,9 +134,28 @@ def test_the_bot_payload_carries_the_block():
 
     abilities = [entry.ability for entry in snapshot.buff_uptimes]
 
-    assert abilities == ["Shield Block"]
+    #
+    # Gemeldet ist nur der Schildblock. Die Schildbarriere gehört aber
+    # zur aktiven Minderung eines Schutzkriegers, und weil die Quelle
+    # eigene Buffs nachweislich liefert, ist ihr Fehlen eine Null und
+    # keine Datenlücke - siehe analyzer/analysis/spec_reference.py.
+    #
+
+    assert abilities == ["Schildblock", "Schildbarriere"]
 
     assert snapshot.buff_uptimes[0].kind == UPTIME_BUFF
+
+    assert snapshot.buff_uptimes[0].uptime_percent == 74.0
+
+    assert snapshot.buff_uptimes[1].uptime_percent == 0.0
+
+    #
+    # Und der Richtwert kommt aus der Spec-Tabelle, auch für die
+    # gemeldete Zeile - sonst hätten WeintTV und die Academy für
+    # denselben Effekt zwei Maßstäbe.
+    #
+
+    assert snapshot.buff_uptimes[0].expected_percent > 0.0
 
     del payload["players"][0]["buffs"]
 

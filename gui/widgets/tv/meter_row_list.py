@@ -163,6 +163,19 @@ class MeterRowList(QWidget):
 
     # --------------------------------------------------
 
+    def setPlaceholder(self, text: str):
+        """
+        Der Text, der bei leerer Liste steht.
+
+        Vergleicht vorher: `setText` prüft nicht selbst und stößt sonst
+        bei jedem Bild ein Neuzeichnen an - dieselbe Falle wie bei
+        `setStyleSheet` (siehe gui/theme/restyle.py), nur eine Ebene
+        harmloser.
+        """
+
+        if text and text != self.placeholder.text():
+            self.placeholder.setText(text)
+
     def setRows(self, rows):
 
         rows = list(rows)[: len(self._rows)]

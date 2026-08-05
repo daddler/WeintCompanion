@@ -12,7 +12,7 @@ sie zu schätzen.
 
 import pytest
 
-from analyzer.models import RaidSnapshot
+from analyzer.models import CD_PERSONAL, RaidSnapshot
 from analyzer.providers.mock import (
     BATTLE_RES_MAX,
     PULL_SECONDS,
@@ -260,8 +260,26 @@ def test_cooldowns_are_truncated_to_the_current_position():
 
         assert all(at <= 20.0 for at in usage.cast_times)
 
-        if usage.cooldown > 0:
-            assert usage.possible == int(20.0 // usage.cooldown) + 1
+        if usage.cooldown <= 0:
+            continue
+
+        possible = int(20.0 // usage.cooldown) + 1
+
+        if usage.category == CD_PERSONAL:
+            assert usage.possible == possible
+
+        else:
+
+            #
+            # Situationsabhängige Cooldowns (Schildwall, Finte, Aura
+            # der Hingabe) tragen bewusst keine Obergrenze: ein
+            # ungenutzter Schildwall ist kein verschenkter Einsatz.
+            # Übrig bleibt höchstens, was tatsächlich gewirkt wurde -
+            # eine Quote unter 100 % kann daraus nicht entstehen.
+            # Siehe analyzer/analysis/spec_reference.py.
+            #
+
+            assert usage.possible in (0, usage.uses)
 
 
 def test_live_cooldown_lists_are_derived_from_the_cast_times():
@@ -275,7 +293,13 @@ def test_live_cooldown_lists_are_derived_from_the_cast_times():
 
     #
     # "Stampeding Roar" wird in der Simulation bei Sekunde 26 gewirkt
-    # und hat 120 Sekunden Abklingzeit.
+    # und hat 120 Sekunden Abklingzeit. In der Anzeige steht die
+    # Fähigkeit unter ihrem deutschen Namen - erkannte Fähigkeiten
+    # werden vereinheitlicht, egal in welcher Sprache die Quelle sie
+    # liefert (siehe analyzer/analysis/spec_reference.py). Gesucht
+    # wird ausdrücklich Krallenwuts Einsatz: seit die Simulation jeder
+    # Spezialisierung ihre Fähigkeiten gibt, hat auch der zweite
+    # Druide im Raid diesen Cooldown.
     #
 
     snapshot = snapshot_at(timeline, 40.0)
@@ -283,7 +307,8 @@ def test_live_cooldown_lists_are_derived_from_the_cast_times():
     roar = next(
         state
         for state in snapshot.raid_cooldowns
-        if state.name == "Stampeding Roar"
+        if state.name == "Stampfendes Gebrüll"
+        and state.actor_name == "Krallenwut"
     )
 
     assert roar.ready is False
@@ -294,7 +319,8 @@ def test_live_cooldown_lists_are_derived_from_the_cast_times():
     assert next(
         state
         for state in before.raid_cooldowns
-        if state.name == "Stampeding Roar"
+        if state.name == "Stampfendes Gebrüll"
+        and state.actor_name == "Krallenwut"
     ).ready is True
 
 

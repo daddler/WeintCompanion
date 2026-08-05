@@ -34,9 +34,13 @@ from PySide6.QtWidgets import (
 )
 
 from analyzer.analysis.movement import format_meters
+from analyzer.analysis.spec_reference import cooldown_hint, reference_hint
 from analyzer.models import (
     MECHANIC_SOURCE_LOCAL,
     SUPPORT_INTERRUPT,
+    UPTIME_BUFF,
+    UPTIME_DOT,
+    UPTIME_HOT,
     RaidSnapshot,
 )
 
@@ -1629,13 +1633,57 @@ class WeintTvPage(QWidget):
             for name, ability in breakdown
         )
 
+    def _focused_actor(self, snapshot: RaidSnapshot):
+        """
+        Der Spieler, auf den der Filter gerade zeigt - oder None,
+        solange der ganze Raid gemeint ist.
+
+        Nur für ihn lässt sich sagen, was zu erwarten wäre: eine
+        Aufzählung über 25 Spezialisierungen wäre kein Hinweis mehr,
+        sondern eine Wand.
+        """
+
+        if self._filter == ALL_PLAYERS:
+            return None
+
+        return snapshot.actor_of(self._filter)
+
+    def _uptime_placeholder(
+        self,
+        snapshot: RaidSnapshot,
+        kind: str,
+        label: str,
+    ) -> str:
+
+        hint = reference_hint(self._focused_actor(snapshot), kind)
+
+        if not hint:
+            return f"Keine Angaben zu {label}-Uptimes."
+
+        return (
+            f"Keine Angaben zu {label}-Uptimes. Erwartet für diese "
+            f"Spezialisierung: {hint}."
+        )
+
     def _apply_uptimes(self, snapshot: RaidSnapshot):
 
-        for widget, rows in (
-            (self.dot_uptimes, snapshot.dot_uptimes),
-            (self.hot_uptimes, snapshot.hot_uptimes),
-            (self.buff_uptimes, snapshot.buff_uptimes),
+        for widget, rows, kind, label in (
+            (self.dot_uptimes, snapshot.dot_uptimes, UPTIME_DOT, "DoT"),
+            (self.hot_uptimes, snapshot.hot_uptimes, UPTIME_HOT, "HoT"),
+            (self.buff_uptimes, snapshot.buff_uptimes, UPTIME_BUFF, "Buff"),
         ):
+
+            #
+            # Der Platzhalter nennt die Fähigkeiten der gewählten
+            # Spezialisierung, statt nur "keine Angaben" zu sagen.
+            # "Meine Blutung fehlt" und "über meine Blutung ist nichts
+            # bekannt" sahen vorher gleich aus - und das war der
+            # eigentliche Mangel dieser Karten.
+            #
+
+            widget.setPlaceholder(
+                self._uptime_placeholder(snapshot, kind, label)
+            )
 
             widget.setRows(
                 MeterRowData(
@@ -1645,6 +1693,15 @@ class WeintTvPage(QWidget):
                         + (
                             f" · {entry.applications}× aufgelegt"
                             if entry.applications
+                            #
+                            # Eine Null ist hier keine Lücke, sondern
+                            # ein Befund: die Quelle liefert diese Art
+                            # von Wirkungsdauern, für diese Fähigkeit
+                            # aber keine (siehe
+                            # analyzer/analysis/spec_reference.py).
+                            #
+                            else " · nie aufgelegt"
+                            if entry.uptime_percent <= 0
                             else ""
                         )
                         + (
@@ -1747,6 +1804,17 @@ class WeintTvPage(QWidget):
         )
 
     def _apply_cooldown_usage(self, snapshot: RaidSnapshot):
+
+        hint = cooldown_hint(self._focused_actor(snapshot))
+
+        self.cooldown_table.setPlaceholder(
+            "Keine Angaben zur Cooldown-Nutzung."
+            if not hint
+            else (
+                "Keine Angaben zur Cooldown-Nutzung. Erwartet für "
+                f"diese Spezialisierung: {hint}."
+            )
+        )
 
         rows = sorted(
             (

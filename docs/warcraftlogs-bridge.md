@@ -460,11 +460,29 @@ Feld `abilities` je Spieler.
 
 | Feld | Typ | Bedeutung |
 |------|-----|-----------|
-| `aura` | String | Name der Fähigkeit, Pflicht |
+| `aura` | String | Name der Fähigkeit, Pflicht (entfällt, wenn `spell_id` steht) |
+| `spell_id` | Int | Spell-ID der Fähigkeit (optional, aber **empfohlen**) |
 | `uptime_percent` | Float | 0–100 |
 | `applications` | Int | Zahl der Anwendungen |
 | `target` | String | Ziel (optional) |
 | `expected_percent` | Float | Richtwert, ab dem die Uptime als gut gilt (optional) |
+
+`spell_id` ist die einzige Angabe an einer Fähigkeit, die keine
+Sprache hat, und deshalb der sicherste Weg: die Companion erkennt eine
+Zeile seit 1.6.0 über **Spell-ID, englischen oder deutschen Namen** -
+einer genügt (`analyzer/data/class_abilities.py`). Gelesen werden
+`spell_id`, `guid`, `ability_id` und `abilityGameID`, damit ein
+durchgereichtes WarcraftLogs-Feld nicht extra umbenannt werden muss.
+Wird die ID mitgeschickt, ist der Anzeigename beliebig; erkannt wird
+die Fähigkeit trotzdem, und in der Oberfläche steht ihr deutscher
+Name.
+
+Die Einordnung in DoT/HoT/Buff korrigiert die Companion bei bekannten
+Fähigkeiten selbst: ein HoT, der in `buffs[]` steht, landet trotzdem
+in der HoT-Karte. Das ist kein Freibrief für falsche Einsortierung -
+für unbekannte Fähigkeiten bleibt die des Bots stehen -, sondern
+verhindert, dass eine ganze Karte leer aussieht, obwohl die Zahl
+geliefert wurde.
 
 Quelle: `table(dataType: Debuffs, hostilityType: Enemies)` für DoTs,
 `table(dataType: Buffs)` für HoTs.
@@ -487,10 +505,17 @@ und Ziel derselbe Spieler ist.
 
 | Feld | Typ | Bedeutung |
 |------|-----|-----------|
-| `name` | String | Fähigkeit, Pflicht |
+| `name` | String | Fähigkeit, Pflicht (entfällt, wenn `spell_id` steht) |
+| `spell_id` | Int | Spell-ID der Fähigkeit (optional, aber **empfohlen**) |
 | `casts` | Float[] | Zeitpunkte in Sekunden seit Kampfbeginn |
 | `cooldown` | Float | Abklingzeit in Sekunden |
 | `category` | String | `raid`, `heal`, `personal` oder `defensive` (optional) |
+
+Fehlen `cooldown` oder `category`, ergänzt die Companion sie seit
+1.6.0 aus der Spec-Tabelle. Eine **Obergrenze** ("X von Y möglichen
+Einsätzen") entsteht dabei nur für `personal`: ein ungenutzter
+Schildwall ist kein verschenkter Einsatz, sondern ein Kampf, in dem er
+nicht gebraucht wurde.
 
 **Möglich-Zahl und Burst-Ausrichtung rechnet die App selbst** aus
 Kampfdauer, Abklingzeit und den Heldentum-Fenstern. Der Bot liefert

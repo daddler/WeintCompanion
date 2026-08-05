@@ -329,6 +329,14 @@ class DataTable(QWidget):
 
     # --------------------------------------------------
 
+    def setPlaceholder(self, text: str):
+        """
+        Wie bei MeterRowList: nur setzen, wenn er sich geändert hat.
+        """
+
+        if text and text != self.placeholder.text():
+            self.placeholder.setText(text)
+
     def setRows(self, rows):
 
         rows = tuple(rows)[: len(self._rows)]

@@ -793,8 +793,15 @@ def test_deep_analysis_blocks_are_mapped():
     assert activity.casts == 300
     assert round(activity.apm) == 90
 
-    assert snapshot.uptimes_of("Pyrothal")[0].ability == "Ignite"
-    assert snapshot.uptimes_of("Elvenne", "hot")[0].ability == "Lifebloom"
+    #
+    # Erkannte Fähigkeiten stehen unter ihrem deutschen Namen, egal in
+    # welcher Sprache der Bericht sie geliefert hat - sonst stünde in
+    # derselben Karte "Ignite" neben einer ergänzten Referenzzeile
+    # "Lebende Bombe" (siehe analyzer/analysis/spec_reference.py).
+    #
+
+    assert snapshot.uptimes_of("Pyrothal")[0].ability == "Entzünden"
+    assert snapshot.uptimes_of("Elvenne", "hot")[0].ability == "Blühendes Leben"
 
     movement = snapshot.movement_of("Pyrothal")
 
@@ -837,7 +844,7 @@ def test_cooldown_usage_counts_possible_uses_and_burst_alignment():
 
     usage = snapshot.cooldowns_of("Pyrothal")[0]
 
-    assert usage.ability == "Combustion"
+    assert usage.ability == "Einäschern"
     assert usage.uses == 2
 
     #
