@@ -4,9 +4,13 @@ from analyzer.academy.lessons.classes._common import (
     CATEGORY_COOLDOWNS,
     CATEGORY_MECHANICS,
     CATEGORY_ROTATION,
+    CATEGORY_SURVIVAL,
     Lesson,
     cooldown_check,
+    defensive_check,
+    dispel_check,
     hot_uptime_check,
+    interrupt_check,
     uptime_check,
 )
 
@@ -66,6 +70,58 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Wiederherstellung",
             checks=(cooldown_check("Healing Tide Totem"),),
         ),
+        Lesson(
+            lesson_id="shaman-resto.cooldowns.spirit_link",
+            title="Totem der Geisterverbindung an die Spitze legen",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Das Totem verteilt Leben um und mindert Schaden - es "
+                "rettet dort, wo Heilung zu langsam wäre, aber nur "
+                "innerhalb seines Radius."
+            ),
+            steps=(
+                "Den Zeitpunkt mit der Raidleitung vereinbaren.",
+                "Das Totem dorthin stellen, wo der Raid steht.",
+                "Bei jeder Verfügbarkeit erneut einplanen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Wiederherstellung",
+            checks=(cooldown_check("Spirit Link Totem"),),
+        ),
+        Lesson(
+            lesson_id="shaman-resto.mechanics.purify",
+            title="Geist reinigen fest übernehmen",
+            category=CATEGORY_MECHANICS,
+            summary=(
+                "Ein entfernter Effekt spart mehr Heilung, als jede "
+                "Heilung ihn ausgleichen könnte."
+            ),
+            steps=(
+                "Die entfernbaren Effekte des Bosses auflisten.",
+                "Klären, wer welchen entfernt.",
+                "Die Entzauberung auf eine erreichbare Taste legen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Wiederherstellung",
+            checks=(dispel_check(),),
+        ),
+        Lesson(
+            lesson_id="shaman-resto.rotation.healing_rain",
+            title="Heilenden Regen dorthin legen, wo gestanden wird",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Der Regen ist die günstigste Flächenheilung der "
+                "Spezialisierung - und die am häufigsten falsch "
+                "platzierte."
+            ),
+            steps=(
+                "Vor der Mechanik wissen, wo der Raid stehen wird.",
+                "Den Regen dorthin legen, nicht dorthin, wo er steht.",
+                "Nach jedem Positionswechsel neu setzen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Wiederherstellung",
+        ),
     ),
 
     "Elementar": (
@@ -102,6 +158,42 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             class_name=CLASS_NAME,
             spec="Elementar",
             checks=(cooldown_check("Elemental Mastery"),),
+        ),
+        Lesson(
+            lesson_id="shaman-elemental.rotation.lava_burst",
+            title="Lavaeruption nie auf der Abklingzeit stehen lassen",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Die Lavaeruption trifft garantiert kritisch und ist "
+                "damit der stärkste Zauber der Spezialisierung. Jede "
+                "Sekunde, die sie bereit steht, ist verlorener "
+                "Schaden."
+            ),
+            steps=(
+                "Die Abklingzeit deutlich anzeigen lassen.",
+                "Sie sofort bei Verfügbarkeit setzen.",
+                "Vorher prüfen, ob der Flammenschock noch läuft.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Elementar",
+        ),
+        Lesson(
+            lesson_id="shaman-elemental.cooldowns.fire_elemental",
+            title="Feuerelementar früh und geplant rufen",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Das Elementar läuft mehrere Minuten und macht "
+                "unabhängig von der eigenen Rotation Schaden - "
+                "aufgespart bringt es gar nichts."
+            ),
+            steps=(
+                "Den ersten Ruf an den Kampfbeginn koppeln.",
+                "Den zweiten auf das Heldentum planen.",
+                "Nicht kurz vor einem Phasenwechsel rufen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Elementar",
+            checks=(cooldown_check("Fire Elemental Totem"),),
         ),
         Lesson(
             lesson_id="shaman-elemental.rotation.dummy_practice",
@@ -159,6 +251,41 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             checks=(cooldown_check("Feral Spirit"),),
         ),
         Lesson(
+            lesson_id="shaman-enhancement.rotation.unleash",
+            title="Elemente entfesseln in den Ablauf einbauen",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Entfesseln verstärkt den nächsten Zauber und steht "
+                "fast durchgehend bereit - es fällt trotzdem als "
+                "Erstes aus der Rotation."
+            ),
+            steps=(
+                "Die Abklingzeit deutlich anzeigen lassen.",
+                "Direkt vor dem verstärkten Zauber einsetzen.",
+                "Nach Bewegungsphasen zuerst nachholen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Verstärkung",
+        ),
+        Lesson(
+            lesson_id="shaman-enhancement.cooldowns.fire_elemental",
+            title="Feuerelementar auch als Verstärker rufen",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Das Elementar gehört auch beim Verstärker zum "
+                "Schaden - vergessen wird es, weil es nicht in der "
+                "Prioritätenliste steht."
+            ),
+            steps=(
+                "Den ersten Ruf an den Kampfbeginn koppeln.",
+                "Danach bei jeder Verfügbarkeit erneut.",
+                "Mit den eigenen Verstärkungen bündeln.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Verstärkung",
+            checks=(cooldown_check("Fire Elemental Totem"),),
+        ),
+        Lesson(
             lesson_id="shaman-enhancement.rotation.dummy_practice",
             title="Prioritätenliste an der Trainingspuppe üben",
             category=CATEGORY_ROTATION,
@@ -194,6 +321,58 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 "Auf Reichweite achten - Totems haben Radius.",
             ),
             class_name=CLASS_NAME,
+        ),
+        Lesson(
+            lesson_id="shaman.mechanics.wind_shear",
+            title="Windstoß fest zuteilen",
+            category=CATEGORY_MECHANICS,
+            summary=(
+                "Der Windstoß hat die kürzeste Abklingzeit aller "
+                "Unterbrechungen im Spiel. Der Schamane sollte damit "
+                "in jeder Unterbrecherreihenfolge ganz vorne stehen."
+            ),
+            steps=(
+                "Vor dem Pull eine feste Unterbrecherreihenfolge "
+                "vereinbaren.",
+                "Den Windstoß auf eine gut erreichbare Taste legen.",
+                "Nach dem Pull prüfen, ob eine Unterbrechung fehlte.",
+            ),
+            class_name=CLASS_NAME,
+            checks=(interrupt_check(),),
+        ),
+        Lesson(
+            lesson_id="shaman.cooldowns.heroism",
+            title="Heldentum absprechen statt spontan zünden",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Das Heldentum ist der einzige Cooldown, an dem sich "
+                "der halbe Raid ausrichtet. Spontan gezündet trifft er "
+                "genau niemandes Plan."
+            ),
+            steps=(
+                "Vor dem Pull den Zeitpunkt mit der Raidleitung "
+                "festlegen.",
+                "Ihn im Kampf laut ansagen, bevor er kommt.",
+                "Bei mehreren Schamanen die Reihenfolge klären.",
+            ),
+            class_name=CLASS_NAME,
+        ),
+        Lesson(
+            lesson_id="shaman.survival.astral_shift",
+            title="Astrale Verschiebung einplanen",
+            category=CATEGORY_SURVIVAL,
+            summary=(
+                "Die persönliche Minderung des Schamanen steht "
+                "regelmäßig bereit und wird fast nie benutzt."
+            ),
+            steps=(
+                "Die wiederkehrenden Treffer auf den eigenen "
+                "Charakter benennen.",
+                "Die Minderung fest darauf legen.",
+                "Nach dem Pull prüfen, ob sie genutzt wurde.",
+            ),
+            class_name=CLASS_NAME,
+            checks=(defensive_check(),),
         ),
     ),
 

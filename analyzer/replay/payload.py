@@ -43,6 +43,7 @@ from analyzer.providers.warcraftlogs_payload import (
     build_uptimes,
     class_name,
     role_name,
+    spec_name,
     snapshot_from_payload,
 )
 from analyzer.replay.models import (
@@ -66,12 +67,27 @@ def _series(value) -> tuple[float, ...]:
 
 
 def _actor(entry: dict) -> Actor:
+    """
+    Dieselbe Identität wie im Live-Weg - einschließlich der
+    Übersetzung der Spezialisierung und der daraus abgeleiteten Rolle.
+    Liefe das hier anders, wäre derselbe Spieler in der Wiedergabe ein
+    anderer als im Live-Bild, und die Academy würde ihn anders
+    bewerten.
+    """
+
+    actor_class = class_name(_text(entry.get("class")))
+
+    spec = spec_name(actor_class, _text(entry.get("spec")))
 
     return Actor(
         name=_text(entry.get("name")),
-        class_name=class_name(_text(entry.get("class"))),
-        spec=_text(entry.get("spec")),
-        role=role_name(_text(entry.get("role"))),
+        class_name=actor_class,
+        spec=spec,
+        role=role_name(
+            _text(entry.get("role")),
+            actor_class=actor_class,
+            spec=spec,
+        ),
     )
 
 
@@ -288,6 +304,10 @@ def timeline_from_payload(
         hot_uptimes=(
             build_uptimes(players, "hots", "hot")
             or aggregate.hot_uptimes
+        ),
+        buff_uptimes=(
+            build_uptimes(players, "buffs", "buff")
+            or aggregate.buff_uptimes
         ),
         aggregate=aggregate,
     )

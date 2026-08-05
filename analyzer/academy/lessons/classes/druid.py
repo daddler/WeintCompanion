@@ -2,11 +2,14 @@
 
 from analyzer.academy.lessons.classes._common import (
     CATEGORY_COOLDOWNS,
+    CATEGORY_MECHANICS,
     CATEGORY_MOVEMENT,
     CATEGORY_ROTATION,
     CATEGORY_SURVIVAL,
     Lesson,
+    buff_uptime_check,
     cooldown_check,
+    dispel_check,
     hot_uptime_check,
     uptime_check,
 )
@@ -65,6 +68,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 "Bewegungsphasen des Kampfes notieren.",
                 "Den Eclipse-Wechsel gedanklich darauf legen.",
                 "Während der Bewegung nur Sofortzauber wirken.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Gleichgewicht",
+        ),
+        Lesson(
+            lesson_id="druid-balance.mechanics.adds",
+            title="Beide Dauereffekte auf die Adds verteilen",
+            category=CATEGORY_MECHANICS,
+            summary=(
+                "Der Gleichgewichtsdruide ist eine der stärksten "
+                "Antworten auf mehrere Ziele - vorausgesetzt, die "
+                "Effekte liegen auch dort."
+            ),
+            steps=(
+                "Beim Erscheinen der Adds zuerst die Effekte "
+                "verteilen.",
+                "Erst danach zum Hauptziel zurückkehren.",
+                "Die Zielgesundheit im Blick behalten, damit nichts "
+                "verpufft.",
             ),
             class_name=CLASS_NAME,
             spec="Gleichgewicht",
@@ -142,6 +164,58 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Wiederherstellung",
             checks=(cooldown_check("Tranquility"),),
         ),
+        Lesson(
+            lesson_id="druid-resto.cooldowns.ironbark",
+            title="Eisenrinde auf den Tank legen",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Eisenrinde ist eine Minderung, die man einem anderen "
+                "gibt - und die einzige des Wiederherstellungsdruiden. "
+                "Ungenutzt ist sie in jedem Kampf mehrfach verschenkt."
+            ),
+            steps=(
+                "Mit den Tanks feste Zeitpunkte vereinbaren.",
+                "Sie vor dem angesagten Treffer setzen, nicht danach.",
+                "Bei jeder Verfügbarkeit erneut einplanen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Wiederherstellung",
+            checks=(cooldown_check("Ironbark"),),
+        ),
+        Lesson(
+            lesson_id="druid-resto.mechanics.dispel",
+            title="Effekte rechtzeitig entfernen",
+            category=CATEGORY_MECHANICS,
+            summary=(
+                "Ein entfernter Effekt spart mehr Heilung, als jede "
+                "Heilung ihn ausgleichen könnte."
+            ),
+            steps=(
+                "Die entfernbaren Effekte des Bosses auflisten.",
+                "Klären, wer welchen entfernt.",
+                "Die Entzauberung auf eine erreichbare Taste legen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Wiederherstellung",
+            checks=(dispel_check(),),
+        ),
+        Lesson(
+            lesson_id="druid-resto.rotation.mana",
+            title="Verjüngung nicht blind über den Raid streuen",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Verjüngung ist die teuerste Gewohnheit der "
+                "Spezialisierung: auf unbeschädigte Ziele gelegt "
+                "kostet sie Mana und heilt nichts."
+            ),
+            steps=(
+                "Vor der Spitze verteilen, nicht dauerhaft überall.",
+                "Ziele bevorzugen, die gleich Schaden bekommen.",
+                "Den Manaverlauf nach dem Pull ansehen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Wiederherstellung",
+        ),
     ),
 
     "Wilder Kampf": (
@@ -183,6 +257,43 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Wilder Kampf",
         ),
         Lesson(
+            lesson_id="druid-feral.rotation.savage_roar",
+            title="Wildes Brüllen ohne Lücke halten",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Wildes Brüllen verstärkt jeden Angriff und jede "
+                "Blutung. Es abfallen zu lassen kostet mehr als jeder "
+                "einzelne verpasste Finisher."
+            ),
+            steps=(
+                "Direkt zu Kampfbeginn setzen.",
+                "Vor Ablauf verlängern, notfalls mit wenigen "
+                "Combopunkten.",
+                "Vor Phasenwechseln bewusst auffrischen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Wilder Kampf",
+            checks=(buff_uptime_check("Savage Roar", 90.0),),
+        ),
+        Lesson(
+            lesson_id="druid-feral.cooldowns.tigers_fury",
+            title="Raserei des Tigers bei jeder Verfügbarkeit",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Die Raserei hat eine sehr kurze Abklingzeit und gibt "
+                "zusätzlich Energie - jeder ausgelassene Einsatz ist "
+                "doppelt verloren."
+            ),
+            steps=(
+                "Vor dem Zünden Energie tief genug ausgeben.",
+                "Bei jeder Verfügbarkeit sofort nutzen.",
+                "Im Log die Zahl der Einsätze prüfen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Wilder Kampf",
+            checks=(cooldown_check("Tiger's Fury"),),
+        ),
+        Lesson(
             lesson_id="druid-feral.rotation.dummy_practice",
             title="Prioritätenliste an der Trainingspuppe üben",
             category=CATEGORY_ROTATION,
@@ -219,6 +330,99 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             ),
             class_name=CLASS_NAME,
             spec="Wächter",
+            checks=(buff_uptime_check("Savage Defense", 55.0),),
+        ),
+        Lesson(
+            lesson_id="druid-guardian.rotation.rage",
+            title="Zorn in Wilde Verteidigung umsetzen",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Der Wächter erzeugt Zorn dadurch, dass er geschlagen "
+                "wird. Wer ihn nicht sofort in Minderung umsetzt, "
+                "verliert ihn am Maximum - und mindert dann gar "
+                "nichts."
+            ),
+            steps=(
+                "Zorn nie über das Maximum laufen lassen.",
+                "Die Minderung vor dem Bossangriff setzen, nicht "
+                "danach.",
+                "Die Erzeuger auf Abklingzeit halten.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Wächter",
+        ),
+        Lesson(
+            lesson_id="druid-guardian.cooldowns.survival_instincts",
+            title="Überlebensinstinkte und Baumrinde trennen",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Zwei Minderungen gleichzeitig zu zünden deckt ein "
+                "Fenster ab, nacheinander zwei."
+            ),
+            steps=(
+                "Beide je einer festen Bossmechanik zuordnen.",
+                "Nie gemeinsam auslösen.",
+                "Im Log auf Überschneidungen prüfen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Wächter",
+            checks=(cooldown_check("Survival Instincts"),),
+        ),
+        Lesson(
+            lesson_id="druid-guardian.mechanics.taunt",
+            title="Tankwechsel und Adds absprechen",
+            category=CATEGORY_MECHANICS,
+            summary=(
+                "Der Wächter sammelt Gegner schnell ein - der Wechsel "
+                "entscheidet sich trotzdem in zwei Sekunden und gehört "
+                "vorher besprochen."
+            ),
+            steps=(
+                "Den Auslöser des Wechsels benennen: Stapel, Zeit oder "
+                "Zauber.",
+                "Vor dem Spott bereits in Reichweite stehen.",
+                "Nach dem Spott sofort die aktive Minderung setzen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Wächter",
+        ),
+    ),
+
+    "": (
+        Lesson(
+            lesson_id="druid.survival.barkskin",
+            title="Baumrinde regelmäßig einsetzen",
+            category=CATEGORY_SURVIVAL,
+            summary=(
+                "Baumrinde hat eine kurze Abklingzeit, kostet nichts "
+                "und unterbricht keine Zauber. Es gibt praktisch "
+                "keinen Grund, sie nicht zu benutzen."
+            ),
+            steps=(
+                "Die wiederkehrenden Treffer auf den eigenen Charakter "
+                "benennen.",
+                "Baumrinde fest darauf legen.",
+                "Im Log prüfen, wie viele Einsätze möglich gewesen "
+                "wären.",
+            ),
+            class_name=CLASS_NAME,
+            checks=(cooldown_check("Barkskin"),),
+        ),
+        Lesson(
+            lesson_id="druid.mechanics.symbiosis",
+            title="Symbiose vor dem Pull setzen",
+            category=CATEGORY_MECHANICS,
+            summary=(
+                "Die Symbiose verschenkt eine Fähigkeit an einen "
+                "Mitspieler und bringt eine zurück. Vergessen wird sie "
+                "fast immer - sie hält einen Tod lang."
+            ),
+            steps=(
+                "Vor dem Pull ein festes Ziel vereinbaren.",
+                "Nach jedem Tod und jedem Wipe neu setzen.",
+                "Die erhaltene Fähigkeit auf eine Taste legen.",
+            ),
+            class_name=CLASS_NAME,
         ),
     ),
 

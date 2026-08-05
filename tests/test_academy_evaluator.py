@@ -137,16 +137,70 @@ def test_tanks_are_compared_with_tanks_not_with_damage_dealers():
     seine Aufgabe erfüllt.
     """
 
-    profile = build_profile(_snapshot(), "Panzer")
+    partner = _actor(
+        "Zweitpanzer",
+        role=ROLE_TANK,
+        class_name="Paladin",
+        spec="Schutz",
+    )
+
+    snapshot = _snapshot(
+        top_damage=_snapshot().top_damage + (
+            MetricEntry(actor=partner, value=20_000.0),
+        ),
+    )
+
+    profile = build_profile(snapshot, "Panzer")
 
     assert profile.rating(CATEGORY_OUTPUT).stars == MAX_STARS
+
+    #
+    # Und der schwächere Tank eben nicht - verglichen wird innerhalb
+    # der Rolle, nicht mit den Schadensausteilern.
+    #
+
+    assert build_profile(snapshot, "Zweitpanzer").rating(
+        CATEGORY_OUTPUT
+    ).stars < MAX_STARS
 
 
 def test_healers_are_rated_against_the_healing_ranking():
 
-    profile = build_profile(_snapshot(), "Heilerin")
+    partner = _actor(
+        "Zweitheiler",
+        role=ROLE_HEALER,
+        class_name="Druid",
+        spec="Wiederherstellung",
+    )
+
+    snapshot = _snapshot(
+        top_healing=_snapshot().top_healing + (
+            MetricEntry(actor=partner, value=30_000.0),
+        ),
+    )
+
+    profile = build_profile(snapshot, "Heilerin")
 
     assert profile.rating(CATEGORY_OUTPUT).stars == MAX_STARS
+
+
+def test_a_lone_tank_or_healer_is_not_rated_against_himself():
+    """
+    Ist man der einzige Spieler seiner Rolle, wäre der Beste der
+    Vergleichsgruppe man selbst - das Verhältnis immer 1,0 und die
+    Bewertung immer fünf Sterne, egal wie der Kampf lief. Eine
+    geschenkte Bestnote hilft niemandem; "keine Daten" ist die
+    ehrliche Antwort.
+    """
+
+    snapshot = _snapshot()
+
+    for name in ("Panzer", "Heilerin"):
+
+        rating = build_profile(snapshot, name).rating(CATEGORY_OUTPUT)
+
+        assert rating.has_data is False, name
+        assert rating.detail
 
 
 def test_mechanic_errors_lower_the_matching_category_only():

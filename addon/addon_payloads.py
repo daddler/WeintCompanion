@@ -140,9 +140,9 @@ def build_weinttv_report(
         ],
 
         #
-        # DoT und HoT landen in einer Liste, unterschieden über "kind" -
-        # die Ingame-Seite zeigt beides in derselben Tabelle, weil dort
-        # kein Platz für zwei ist.
+        # DoT, HoT und eigene Buffs landen in einer Liste,
+        # unterschieden über "kind" - die Ingame-Seite zeigt alles in
+        # derselben Tabelle, weil dort kein Platz für drei ist.
         #
         "uptimes": [
             {
@@ -154,7 +154,11 @@ def build_weinttv_report(
                 "applications": entry.applications,
                 "target": entry.target,
             }
-            for entry in (*snapshot.dot_uptimes, *snapshot.hot_uptimes)
+            for entry in (
+                *snapshot.dot_uptimes,
+                *snapshot.hot_uptimes,
+                *snapshot.buff_uptimes,
+            )
         ],
 
         "activity": [

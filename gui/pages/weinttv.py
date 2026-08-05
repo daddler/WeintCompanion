@@ -735,6 +735,29 @@ class WeintTvPage(QWidget):
 
         uptimes.addWidget(hot_card, 1)
 
+        #
+        # Eigene Buffs - für die Tanks die wichtigste Zeile der ganzen
+        # Seite: die aktive Schadensminderung ist ihr Beitrag zum
+        # Überleben, und sie ist weder ein DoT noch ein HoT. Ohne
+        # eigene Karte wäre sie entweder unsichtbar oder stünde bei
+        # den Heileffekten.
+        #
+
+        buff_card = SectionCard(
+            Resources.companion(),
+            "Eigene Buffs",
+            "Aktive Schadensminderung und Selbstbuffs.",
+        )
+
+        self.buff_uptimes = MeterRowList(
+            capacity=12,
+            placeholder="Keine Angaben zu eigenen Buffs.",
+        )
+
+        buff_card.addWidget(self.buff_uptimes)
+
+        uptimes.addWidget(buff_card, 1)
+
         deep.addLayout(uptimes)
 
         #
@@ -1611,6 +1634,7 @@ class WeintTvPage(QWidget):
         for widget, rows in (
             (self.dot_uptimes, snapshot.dot_uptimes),
             (self.hot_uptimes, snapshot.hot_uptimes),
+            (self.buff_uptimes, snapshot.buff_uptimes),
         ):
 
             widget.setRows(

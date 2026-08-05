@@ -165,6 +165,7 @@ def snapshot_at(
         activity=_activity_at(timeline, at),
         dot_uptimes=_uptimes_at(timeline.dot_uptimes, timeline, at),
         hot_uptimes=_uptimes_at(timeline.hot_uptimes, timeline, at),
+        buff_uptimes=_uptimes_at(timeline.buff_uptimes, timeline, at),
         movement=_movement_at(timeline, at),
         damage_taken=_damage_taken_at(timeline, at, finished),
         cooldown_usage=cooldown_usage,

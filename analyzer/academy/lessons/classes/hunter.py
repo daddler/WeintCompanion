@@ -2,10 +2,13 @@
 
 from analyzer.academy.lessons.classes._common import (
     CATEGORY_COOLDOWNS,
+    CATEGORY_MECHANICS,
     CATEGORY_MOVEMENT,
     CATEGORY_ROTATION,
+    CATEGORY_SURVIVAL,
     Lesson,
     cooldown_check,
+    dispel_check,
     uptime_check,
 )
 
@@ -66,6 +69,25 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             checks=(cooldown_check("Rapid Fire", 90.0),),
         ),
         Lesson(
+            lesson_id="hunter-marksmanship.mechanics.tranquilizing_shot",
+            title="Beruhigenden Schuss übernehmen",
+            category=CATEGORY_MECHANICS,
+            summary=(
+                "Der Jäger entfernt Wut- und Magieeffekte von Gegnern. "
+                "In mehreren Kämpfen ist das die eigentliche Mechanik - "
+                "und sie wird vergessen, weil sie kein Heilerzauber "
+                "ist."
+            ),
+            steps=(
+                "Vor dem Pull klären, welche Effekte zu entfernen sind.",
+                "Den Schuss auf eine erreichbare Taste legen.",
+                "Auf die Ansage reagieren, nicht auf den Schaden.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Treffsicherheit",
+            checks=(dispel_check(),),
+        ),
+        Lesson(
             lesson_id="hunter-marksmanship.rotation.dummy_practice",
             title="Prioritätenliste an der Trainingspuppe üben",
             category=CATEGORY_ROTATION,
@@ -121,6 +143,24 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Tierherrschaft",
         ),
         Lesson(
+            lesson_id="hunter-beastmastery.cooldowns.stampede",
+            title="Stampede mit den Verstärkungen bündeln",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Die Stampede übernimmt die Verstärkungen im Moment "
+                "des Rufens - allein gezündet ist sie ein Bruchteil "
+                "wert."
+            ),
+            steps=(
+                "Erst Verstärkungen und Trank, dann die Stampede.",
+                "Auf das Heldentum legen, wenn es dorthin passt.",
+                "Nicht kurz vor einem Zielwechsel rufen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Tierherrschaft",
+            checks=(cooldown_check("Stampede"),),
+        ),
+        Lesson(
             lesson_id="hunter-beastmastery.rotation.dummy_practice",
             title="Prioritätenliste an der Trainingspuppe üben",
             category=CATEGORY_ROTATION,
@@ -159,6 +199,42 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Überleben",
         ),
         Lesson(
+            lesson_id="hunter-survival.rotation.serpent_sting",
+            title="Schlangengift durchgehend halten",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Beim Überlebensjäger verstärkt das Gift zusätzlich "
+                "den Explosivschuss - ohne es fehlt nicht nur der "
+                "eigene Schaden, sondern auch der der Hauptfähigkeit."
+            ),
+            steps=(
+                "Direkt beim Pull auftragen.",
+                "Vor Ablauf erneuern.",
+                "Beim Zielwechsel zuerst setzen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Überleben",
+            checks=(uptime_check("Serpent Sting", 92.0),),
+        ),
+        Lesson(
+            lesson_id="hunter-survival.cooldowns.black_arrow",
+            title="Schwarzen Pfeil auf Abklingzeit halten",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Der Schwarze Pfeil erzeugt die Gelegenheiten für den "
+                "Explosivschuss. Steht er ungenutzt, versiegt die "
+                "halbe Rotation."
+            ),
+            steps=(
+                "Bei jeder Verfügbarkeit sofort setzen.",
+                "Nicht auf sterbende Ziele wirken.",
+                "Nach Phasenwechseln zuerst nachholen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Überleben",
+            checks=(cooldown_check("Black Arrow"),),
+        ),
+        Lesson(
             lesson_id="hunter-survival.rotation.dummy_practice",
             title="Prioritätenliste an der Trainingspuppe üben",
             category=CATEGORY_ROTATION,
@@ -195,6 +271,38 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 "Die Aktivzeit im Log gegenprüfen.",
             ),
             class_name=CLASS_NAME,
+        ),
+        Lesson(
+            lesson_id="hunter.mechanics.misdirection",
+            title="Ablenkung beim Pull abgeben",
+            category=CATEGORY_MECHANICS,
+            summary=(
+                "Die Ablenkung schenkt dem Tank die gesamte "
+                "Bedrohung der nächsten Angriffe - sie kostet den "
+                "Jäger nichts und wird trotzdem selten benutzt."
+            ),
+            steps=(
+                "Ein festes Ziel mit den Tanks vereinbaren.",
+                "Direkt vor dem Pull abgeben.",
+                "Bei jedem Add-Ansturm erneut.",
+            ),
+            class_name=CLASS_NAME,
+        ),
+        Lesson(
+            lesson_id="hunter.survival.deterrence",
+            title="Abschreckung als geplante Antwort",
+            category=CATEGORY_SURVIVAL,
+            summary=(
+                "Die Abschreckung hebt ganze Mechaniken auf. Als "
+                "Notausgang benutzt kommt sie fast immer zu spät."
+            ),
+            steps=(
+                "Die Mechaniken benennen, die sie aufhebt.",
+                "Die Abschreckung fest darauf legen.",
+                "Nach dem Pull prüfen, ob sie genutzt wurde.",
+            ),
+            class_name=CLASS_NAME,
+            checks=(cooldown_check("Deterrence"),),
         ),
     ),
 

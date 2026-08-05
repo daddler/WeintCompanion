@@ -26,7 +26,7 @@ from datetime import datetime
 from analyzer.analysis import damage as damage_analysis
 from analyzer.analysis.movement import build_movement
 from analyzer.analysis.ranking import build_ranking
-from analyzer.data import encounters
+from analyzer.data import encounters, specs
 from analyzer.models import (
     CD_HEAL,
     CD_PERSONAL,
@@ -37,6 +37,7 @@ from analyzer.models import (
     ROLE_TANK,
     SUPPORT_DISPEL,
     SUPPORT_INTERRUPT,
+    UPTIME_BUFF,
     UPTIME_DOT,
     UPTIME_HOT,
     ActivityEntry,
@@ -234,22 +235,57 @@ def class_name(value) -> str:
     return CLASS_NAMES.get(text.lower(), text)
 
 
-def role_name(value, damage: float = 0.0, healing: float = 0.0) -> str:
+def spec_name(class_value, spec_value) -> str:
+    """
+    Spezialisierung in der Schreibweise, die der Rest der Anwendung
+    benutzt (deutsch).
+
+    WarcraftLogs liefert sie englisch ("Retribution"), der
+    Lektionskatalog und die Simulation führen sie deutsch
+    ("Vergeltung"). Ohne diese Übersetzung traf im Echtbetrieb kein
+    einziger Katalogschlüssel zu, und zwar lautlos: jeder Spieler
+    bekam nur Rollen- und Allgemeinlektionen, ohne dass irgendwo etwas
+    fehlgeschlagen wäre.
+    """
+
+    return specs.normalize_spec(class_name(class_value), _text(spec_value))
+
+
+def role_name(
+    value,
+    damage: float = 0.0,
+    healing: float = 0.0,
+    *,
+    actor_class: str = "",
+    spec: str = "",
+) -> str:
     """
     Rolle eines Spielers.
 
-    Der Bot soll die Rolle mitliefern, weil nur er die Rangliste
-    kennt, aus der sie stammt. Fehlt sie, wird sie ersatzweise aus
-    den Werten abgeleitet: wer mehr geheilt als geschadet hat, ist
-    ein Heiler. Tanks lassen sich so nicht erkennen - sie werden
-    dann als Schadensausteiler geführt, was in der Bewertung mildere
-    Folgen hat als eine falsche Tank-Einstufung.
+    Drei Wege, in dieser Reihenfolge:
+
+    1. **Die Angabe des Bots.** Nur er kennt die Rangliste, aus der
+       sie stammt.
+    2. **Die Spezialisierung.** "Protection", "Blood", "Guardian" und
+       "Brewmaster" sind eine sichere Aussage - dafür gibt es
+       analyzer.data.specs.
+    3. **Schaden gegen Heilung.** Der alte Notweg, der Tanks
+       grundsätzlich nicht erkennen konnte und sie als
+       Schadensausteiler führte. Genau das ist der Fall, den Schritt 2
+       jetzt abfängt: ein als Schadensausteiler geführter Tank wird
+       gegen die Schadensrangliste gemessen und bekommt dauerhaft
+       einen Stern, obwohl er seine Aufgabe erfüllt.
     """
 
     role = ROLE_NAMES.get(_text(value).lower())
 
     if role is not None:
         return role
+
+    from_spec = specs.role_for_spec(actor_class, spec)
+
+    if from_spec:
+        return from_spec
 
     if healing > damage:
         return ROLE_HEALER
@@ -263,11 +299,21 @@ def build_actor(entry: dict) -> Actor:
 
     healing = _number(entry.get("healing_total"))
 
+    actor_class = class_name(entry.get("class"))
+
+    spec = spec_name(entry.get("class"), entry.get("spec"))
+
     return Actor(
         name=_text(entry.get("name")),
-        class_name=class_name(entry.get("class")),
-        spec=_text(entry.get("spec")),
-        role=role_name(entry.get("role"), damage, healing),
+        class_name=actor_class,
+        spec=spec,
+        role=role_name(
+            entry.get("role"),
+            damage,
+            healing,
+            actor_class=actor_class,
+            spec=spec,
+        ),
     )
 
 
@@ -596,7 +642,8 @@ def build_uptimes(
     kind: str,
 ) -> tuple[UptimeEntry, ...]:
     """
-    Wirkungsdauern aus `players[].dots` bzw. `players[].hots`.
+    Wirkungsdauern aus `players[].dots`, `players[].hots` bzw.
+    `players[].buffs`.
 
     Absteigend nach Uptime sortiert, damit die Oberfläche nicht
     sortieren muss.
@@ -1191,6 +1238,7 @@ def snapshot_from_payload(
         activity=build_activity(players, duration),
         dot_uptimes=build_uptimes(players, "dots", UPTIME_DOT),
         hot_uptimes=build_uptimes(players, "hots", UPTIME_HOT),
+        buff_uptimes=build_uptimes(players, "buffs", UPTIME_BUFF),
         movement=build_movement_rows(players, duration, damage_taken),
         damage_taken=damage_taken,
         cooldown_usage=build_cooldown_usage(

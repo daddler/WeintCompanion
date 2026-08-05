@@ -23,12 +23,20 @@ machen:
    Prüfung live, im Archiv und während der Wiedergabe völlig
    gleich - und die Academy bewertet automatisch den Stand der
    gerade gezeigten Sekunde, ohne davon zu wissen.
+3. **Fähigkeiten werden sprachunabhängig verglichen.** Der Katalog
+   schreibt englisch, ein deutscher Bericht liefert deutsch; ohne
+   analyzer.data.player_abilities wäre jedes Kriterium, das eine
+   Fähigkeit nennt, in einem deutschen Log dauerhaft "keine Daten" -
+   und zwar ununterscheidbar davon, dass die Quelle den Block gar
+   nicht liefert.
 """
 
 from __future__ import annotations
 
 from analyzer.analysis.damage import has_usable_classification
+from analyzer.data import player_abilities
 from analyzer.models import (
+    UPTIME_BUFF,
     UPTIME_DOT,
     UPTIME_HOT,
     Actor,
@@ -95,7 +103,7 @@ def _uptime(snapshot, actor, check, kind):
         rows = tuple(
             entry
             for entry in rows
-            if entry.ability.lower() == check.subject.lower()
+            if player_abilities.matches(check.subject, entry.ability)
         )
 
     if not rows:
@@ -114,6 +122,18 @@ def _hot_uptime(snapshot, actor, check):
     return _uptime(snapshot, actor, check, UPTIME_HOT)
 
 
+def _buff_uptime(snapshot, actor, check):
+    """
+    Eigene Buffs - für Tanks die aktive Schadensminderung.
+
+    Eine eigene Kennzahl und kein Sonderfall der HoT-Uptime: ein
+    Schildblock liegt auf einem selbst und nicht auf dem Raid, und die
+    Rotationsbewertung eines Tanks hängt genau daran.
+    """
+
+    return _uptime(snapshot, actor, check, UPTIME_BUFF)
+
+
 def _cooldowns(snapshot, actor, check):
     """
     Die eigenen Cooldowns, optional auf eine Fähigkeit eingeschränkt.
@@ -126,7 +146,7 @@ def _cooldowns(snapshot, actor, check):
         rows = tuple(
             usage
             for usage in rows
-            if usage.ability.lower() == check.subject.lower()
+            if player_abilities.matches(check.subject, usage.ability)
         )
 
     return rows
@@ -348,6 +368,7 @@ METRIC_RESOLVERS = {
 
     "dot_uptime": _dot_uptime,
     "hot_uptime": _hot_uptime,
+    "buff_uptime": _buff_uptime,
 
     "cooldown_usage": _cooldown_usage,
     "cooldown_alignment": _cooldown_alignment,

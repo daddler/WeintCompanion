@@ -188,6 +188,8 @@ class FightTimeline:
 
     hot_uptimes: tuple[UptimeEntry, ...] = ()
 
+    buff_uptimes: tuple[UptimeEntry, ...] = ()
+
     aggregate: RaidSnapshot = field(default_factory=RaidSnapshot)
 
     # --------------------------------------------------

@@ -456,7 +456,7 @@ die nur die Lücken der Tabelle abbildet.
 Quelle: `table(dataType: DamageTaken, hostilityType: Friendlies)`,
 Feld `abilities` je Spieler.
 
-#### `dots[]` / `hots[]`
+#### `dots[]` / `hots[]` / `buffs[]`
 
 | Feld | Typ | Bedeutung |
 |------|-----|-----------|
@@ -468,6 +468,20 @@ Feld `abilities` je Spieler.
 
 Quelle: `table(dataType: Debuffs, hostilityType: Enemies)` für DoTs,
 `table(dataType: Buffs)` für HoTs.
+
+`buffs[]` sind Effekte auf dem Spieler **selbst**: die aktive
+Schadensminderung eines Tanks (Schildblock, Mischen, Schild des
+Rechtschaffenen, Knochenschild) und die Selbstbuffs, die zur Rotation
+gehören (Schnetzeln, Wildes Brüllen, Inquisition). Dieselbe Form wie
+`hots[]`, aber ausdrücklich eine eigene Liste - ein Schildblock liegt
+nicht auf dem Raid, und in `hots[]` geschrieben würde er nur bei
+Heilern ausgewertet. Für Tanks ist das die einzige Kennzahl, die ihre
+eigentliche Aufgabe misst: ohne sie werden sie in „Rotation" allein an
+ihrer Aktivzeit gemessen, also an der einen Zahl, die über einen Tank
+am wenigsten aussagt.
+
+Quelle: `table(dataType: Buffs)`, gefiltert auf Effekte, deren Quelle
+und Ziel derselbe Spieler ist.
 
 #### `cooldowns[]`
 

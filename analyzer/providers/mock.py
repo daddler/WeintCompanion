@@ -35,6 +35,7 @@ from analyzer.models import (
     ROLE_TANK,
     SUPPORT_DISPEL,
     SUPPORT_INTERRUPT,
+    UPTIME_BUFF,
     UPTIME_DOT,
     UPTIME_HOT,
     ActivityEntry,
@@ -471,6 +472,7 @@ class MockRaidDataProvider(RaidDataProvider):
             damage_taken_totals=final.damage_taken,
             dot_uptimes=final.dot_uptimes,
             hot_uptimes=final.hot_uptimes,
+            buff_uptimes=final.buff_uptimes,
             aggregate=self._after_snapshot(pull_number),
         )
 
@@ -595,6 +597,7 @@ class MockRaidDataProvider(RaidDataProvider):
             activity=self._activity(seconds),
             dot_uptimes=self._uptimes(seconds, UPTIME_DOT),
             hot_uptimes=self._uptimes(seconds, UPTIME_HOT),
+            buff_uptimes=self._uptimes(seconds, UPTIME_BUFF),
             movement=self._movement(seconds, damage_taken),
             damage_taken=damage_taken,
             cooldown_usage=self._cooldown_usage(seconds, windows),

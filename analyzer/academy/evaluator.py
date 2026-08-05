@@ -43,6 +43,7 @@ from analyzer.models import (
     MECHANIC_MOVEMENT,
     MECHANIC_OTHER,
     MECHANIC_POSITIONING,
+    UPTIME_BUFF,
     UPTIME_DOT,
     UPTIME_HOT,
     Actor,
@@ -416,6 +417,44 @@ def _no_data(category: str, reason: str) -> SkillRating:
 #
 
 
+def _uptime_parts(actor: Actor) -> tuple[tuple[str, str, int], ...]:
+    """
+    Welche Wirkungsdauern die Rotation eines Spielers ausmachen -
+    `(Art, Beschriftung, Gewicht)`, in der Reihenfolge der Anzeige.
+
+    Der Punkt, an dem die Bewertung für Tanks vorher schlicht falsch
+    war: gemessen wurden DoT-Uptimes, die ein Tank nicht hat. Übrig
+    blieb die Aktivzeit - also die eine Zahl, die über einen Tank am
+    wenigsten aussagt, denn er drückt durchgehend Knöpfe, ohne dass
+    das über seine Aufgabe etwas verriete. Was seine Rotation
+    tatsächlich ausmacht, ist die aktive Schadensminderung
+    (Schildblock, Mischen, Schild des Rechtschaffenen) - und die steht
+    jetzt in `buff_uptimes`.
+
+    Sie zählt hier und **nicht** bei "Überleben": dort geht es um das
+    Ergebnis (vermeidbarer Schaden, Tode), hier um die Frage "habe ich
+    meine Knöpfe richtig gedrückt". Beides zu bewerten hieße, denselben
+    Vorfall zweimal anzulasten - genau der Fehler, wegen dem die Tode
+    seinerzeit aus den Mechaniken herausgezogen wurden.
+    """
+
+    if actor.is_tank:
+
+        return ((UPTIME_BUFF, "Aktive Minderung", 2),)
+
+    if actor.is_healer:
+
+        return (
+            (UPTIME_HOT, "HoT-Uptime", 1),
+            (UPTIME_BUFF, "Eigene Buffs", 1),
+        )
+
+    return (
+        (UPTIME_DOT, "DoT-Uptime", 1),
+        (UPTIME_BUFF, "Selbstbuffs", 1),
+    )
+
+
 def _rate_rotation(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
     """
     Ob die Knöpfe richtig gedrückt wurden.
@@ -424,18 +463,24 @@ def _rate_rotation(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
     bei löchriger Aktivzeit heißt gute Ausrüstung, nicht gutes Spiel.
     Der Rang steht jetzt in der eigenen Kategorie "Leistung".
 
-    Zwei Bestandteile: Aktivzeit (wie durchgehend gespielt wurde) und
-    die mittlere Wirkungsdauer der eigenen Effekte (ob das Gespielte
-    auch oben gehalten wurde). Fehlt eines, zählt das andere allein.
+    Bestandteile: Aktivzeit (wie durchgehend gespielt wurde) und die
+    Wirkungsdauern, die zur Rolle gehören (siehe `_uptime_parts`).
+    Fehlt eines, zählt das andere allein - `_combine` lässt Teile ohne
+    Daten heraus, statt die Wertung mit ihnen nach unten zu ziehen.
     """
 
     activity = snapshot.activity_of(actor.name)
 
-    kind = UPTIME_HOT if actor.is_healer else UPTIME_DOT
+    groups = [
+        (label, weight, rows)
+        for label, weight, rows in (
+            (label, weight, snapshot.uptimes_of(actor.name, kind))
+            for kind, label, weight in _uptime_parts(actor)
+        )
+        if rows
+    ]
 
-    uptimes = snapshot.uptimes_of(actor.name, kind)
-
-    if activity is None and not uptimes:
+    if activity is None and not groups:
 
         return _no_data(
             CATEGORY_ROTATION,
@@ -456,7 +501,7 @@ def _rate_rotation(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
             f"{activity.apm:.0f} Aktionen/min"
         )
 
-    if uptimes:
+    for label, weight, uptimes in groups:
 
         reached = sum(entry.uptime_percent for entry in uptimes) / len(uptimes)
 
@@ -480,10 +525,8 @@ def _rate_rotation(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
 
         parts.append((
             _stars_from_share(min(1.0, reached / target) if target else 0.0),
-            1,
+            weight,
         ))
-
-        label = "HoT-Uptime" if actor.is_healer else "DoT-Uptime"
 
         details.append(f"{label} {reached:.0f} % (Ziel {target:.0f} %)")
 
@@ -522,6 +565,27 @@ def _rate_output(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
         return _no_data(
             CATEGORY_OUTPUT,
             f"Noch keine {metric}sdaten für diesen Kampf.",
+        )
+
+    #
+    # Ohne einen zweiten Spieler derselben Rolle gibt es nichts zu
+    # vergleichen: der Beste der Gruppe wäre man selbst, das
+    # Verhältnis immer 1,0 und die Bewertung immer fünf Sterne - egal
+    # wie der Kampf lief. Das trifft in kleinen Gruppen regelmäßig
+    # den einzigen Tank und den einzigen Heiler, also genau die
+    # beiden, denen eine geschenkte Bestnote am wenigsten hilft.
+    # Dieselbe Vorsichtsmaßnahme wie bei "Überleben".
+    #
+
+    if len(rows) < 2:
+
+        return _no_data(
+            CATEGORY_OUTPUT,
+            (
+                f"Kein zweiter Spieler dieser Rolle im Kampf - ohne "
+                f"Vergleichsgruppe ist der Platz in der "
+                f"{metric}srangliste keine Aussage."
+            ),
         )
 
     best = rows[0].value
@@ -696,10 +760,24 @@ def _rate_movement(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
 
     if entry is not None:
 
-        average = _role_average(
-            snapshot,
-            actor,
-            {row.actor_name: row.meters for row in snapshot.movement},
+        meters = {row.actor_name: row.meters for row in snapshot.movement}
+
+        #
+        # Nur vergleichen, wenn es jemanden zum Vergleichen gibt: ist
+        # man der einzige Spieler seiner Rolle mit Laufweg, wäre der
+        # "Rollenschnitt" der eigene Wert und das Verhältnis immer
+        # genau 1,0. Dieselbe Falle wie bei "Überleben" und
+        # "Leistung".
+        #
+
+        average = (
+            _role_average(snapshot, actor, meters)
+            if any(
+                name in meters
+                for name in _role_peers(snapshot, actor)
+                if name != actor.name
+            )
+            else None
         )
 
         if average and average > 0:

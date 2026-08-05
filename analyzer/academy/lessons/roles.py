@@ -18,6 +18,7 @@ from analyzer.academy.models import (
     CATEGORY_COOLDOWNS,
     CATEGORY_MECHANICS,
     CATEGORY_MOVEMENT,
+    CATEGORY_OUTPUT,
     CATEGORY_ROTATION,
     CATEGORY_SURVIVAL,
     CHECK_AT_LEAST,
@@ -121,6 +122,81 @@ ROLE_LESSONS: dict[str, tuple[Lesson, ...]] = {
             roles=(ROLE_TANK,),
         ),
 
+        #
+        # Die drei Bereiche, die für Tanks vorher nur allgemeine
+        # Ratschläge hatten. Gerade "Rotation" ist beim Tank eine
+        # andere Frage als bei allen anderen: es geht nicht um
+        # Schaden, sondern um die Abdeckung der aktiven Minderung -
+        # genau das, was die Auswertung inzwischen auch misst.
+        #
+
+        Lesson(
+            lesson_id="role-tank.rotation.mitigation",
+            title="Die aktive Minderung ist die Rotation",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Beim Tank entscheidet nicht die Reihenfolge der "
+                "Schadenszauber, sondern die Abdeckung der kurzen, "
+                "ständig verfügbaren Minderung. Sie ist die einzige "
+                "Fähigkeit, die über den ganzen Kampf wirkt."
+            ),
+            steps=(
+                "Die eigene aktive Minderung und ihre Laufzeit "
+                "bestimmen.",
+                "Die Ressource dafür reservieren, nicht für Schaden "
+                "ausgeben.",
+                "Die Abdeckung im Log nachsehen, statt sie zu schätzen.",
+            ),
+            roles=(ROLE_TANK,),
+        ),
+
+        Lesson(
+            lesson_id="role-tank.cooldowns.spread",
+            title="Große Minderungen über den Kampf verteilen",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Ein Tank hat mehr große Minderungen, als ein Kampf "
+                "gefährliche Momente hat. Wer sie trotzdem aufspart, "
+                "beendet den Pull mit bereiten Cooldowns und einem "
+                "toten Raid."
+            ),
+            steps=(
+                "Die gefährlichen Momente des Kampfes durchnummerieren.",
+                "Jedem genau eine Minderung zuordnen.",
+                "Nach dem Pull prüfen, welche ungenutzt blieb.",
+            ),
+            roles=(ROLE_TANK,),
+            checks=(
+                LessonCheck(
+                    metric="cooldown_usage",
+                    comparison=CHECK_AT_LEAST,
+                    target=75.0,
+                    unit="%",
+                    label="Genutzte Cooldown-Einsätze",
+                ),
+            ),
+        ),
+
+        Lesson(
+            lesson_id="role-tank.output.threat",
+            title="Schaden machen, ohne das Überleben aufzugeben",
+            category=CATEGORY_OUTPUT,
+            summary=(
+                "Der Tankschaden ist echter Raidschaden - aber jede "
+                "Ressource, die dorthin geht, fehlt der Minderung. "
+                "Gemessen wird der Tank deshalb an den anderen Tanks "
+                "und nie an den Schadensausteilern."
+            ),
+            steps=(
+                "Erst die Minderung sicherstellen, dann Schaden.",
+                "Überschüssige Ressourcen konsequent in Schaden "
+                "stecken.",
+                "Den eigenen Wert mit dem Mittank vergleichen, nicht "
+                "mit dem Ranking.",
+            ),
+            roles=(ROLE_TANK,),
+        ),
+
     ),
 
     #
@@ -208,6 +284,80 @@ ROLE_LESSONS: dict[str, tuple[Lesson, ...]] = {
             roles=(ROLE_HEALER,),
         ),
 
+        Lesson(
+            lesson_id="role-healer.movement.range",
+            title="Heilreichweite vor Ausweichweg",
+            category=CATEGORY_MOVEMENT,
+            summary=(
+                "Ein Heiler, der jeder Mechanik großzügig ausweicht, "
+                "steht am Ende außerhalb der Reichweite - und der "
+                "Raid stirbt an fehlender Heilung statt am Feuer."
+            ),
+            steps=(
+                "Die kürzeste Strecke aus der Gefahr wählen, nicht die "
+                "sicherste.",
+                "Nach der Mechanik sofort zurück in die Mitte.",
+                "Beim Laufen die Sofortzauber weiterspielen.",
+            ),
+            roles=(ROLE_HEALER,),
+            checks=(
+                LessonCheck(
+                    metric="movement_ratio",
+                    comparison=CHECK_AT_MOST,
+                    target=140.0,
+                    unit="%",
+                    label="Laufweg gegenüber dem Raidschnitt",
+                ),
+            ),
+        ),
+
+        Lesson(
+            lesson_id="role-healer.survival.stay_alive",
+            title="Zuerst selbst am Leben bleiben",
+            category=CATEGORY_SURVIVAL,
+            summary=(
+                "Ein toter Heiler heilt nicht - und sein Ausfall "
+                "kostet den Raid mehr als jede vermeidbare Sekunde "
+                "Heilung, die er durch Risiko gewonnen hätte."
+            ),
+            steps=(
+                "Die eigenen Minderungen kennen und zuteilen.",
+                "Bei angesagten Treffern zuerst sich selbst versorgen.",
+                "Im Log die eigenen vermeidbaren Treffer ansehen.",
+            ),
+            roles=(ROLE_HEALER,),
+            checks=(
+                LessonCheck(
+                    metric="deaths",
+                    comparison=CHECK_AT_MOST,
+                    target=0.0,
+                    unit="×",
+                    label="Eigene Tode",
+                ),
+            ),
+        ),
+
+        Lesson(
+            lesson_id="role-healer.output.effective",
+            title="Nicht auf die Heilmenge schielen",
+            category=CATEGORY_OUTPUT,
+            summary=(
+                "Die geheilte Menge sagt allein wenig: wer schnell "
+                "auf ein volles Ziel heilt, steht oben und hat nichts "
+                "bewirkt. Verglichen wird deshalb innerhalb der "
+                "Heilergruppe, und die Zahl ist nur ein Hinweis."
+            ),
+            steps=(
+                "Vor dem Zauber prüfen, ob das Ziel die Heilung "
+                "überhaupt braucht.",
+                "Die eigenen Aufgaben im Kampf mit den Heilern "
+                "aufteilen.",
+                "Den eigenen Wert im Verlauf über mehrere Pulls "
+                "vergleichen, nicht in einem.",
+            ),
+            roles=(ROLE_HEALER,),
+        ),
+
     ),
 
     #
@@ -285,6 +435,89 @@ ROLE_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 "Nach dem Pull prüfen, ob sie genutzt wurden.",
             ),
             roles=(ROLE_DPS,),
+        ),
+
+        Lesson(
+            lesson_id="role-dps.movement.avoidable",
+            title="Vermeidbare Treffer sind teurer als jede Pause",
+            category=CATEGORY_MOVEMENT,
+            summary=(
+                "Ein vermeidbarer Treffer kostet Heilung, oft ein "
+                "Leben und immer mehr Schaden, als die zwei Sekunden "
+                "Zaubern eingebracht hätten, für die man stehen "
+                "geblieben ist."
+            ),
+            steps=(
+                "Die Bodenflächen des Kampfes vor dem Pull benennen.",
+                "Bei der Ansage laufen, nicht beim Schaden.",
+                "Nach dem Pull die eigenen vermeidbaren Treffer "
+                "ansehen.",
+            ),
+            roles=(ROLE_DPS,),
+            checks=(
+                LessonCheck(
+                    metric="avoidable_hits",
+                    comparison=CHECK_AT_MOST,
+                    target=0.0,
+                    unit="×",
+                    label="Vermeidbare Treffer",
+                ),
+            ),
+        ),
+
+        Lesson(
+            lesson_id="role-dps.survival.personals",
+            title="Die eigenen Minderungen fest zuteilen",
+            category=CATEGORY_SURVIVAL,
+            summary=(
+                "Jede Spezialisierung hat mindestens eine persönliche "
+                "Minderung. Für den Notfall aufgespart wird sie fast "
+                "nie benutzt - zugeteilt wirkt sie in jedem Pull."
+            ),
+            steps=(
+                "Die eigenen Minderungen mit Dauer und Abklingzeit "
+                "auflisten.",
+                "Jeder eine feste Bossmechanik zuordnen.",
+                "Nach dem Pull prüfen, ob sie genutzt wurden.",
+            ),
+            roles=(ROLE_DPS,),
+            checks=(
+                LessonCheck(
+                    metric="mechanic_count",
+                    comparison=CHECK_AT_MOST,
+                    target=0.0,
+                    subject=MECHANIC_DEFENSIVE,
+                    unit="×",
+                    label="Ungenutzte Defensivfenster",
+                ),
+            ),
+        ),
+
+        Lesson(
+            lesson_id="role-dps.output.consistency",
+            title="Gleichmäßig statt in Spitzen",
+            category=CATEGORY_OUTPUT,
+            summary=(
+                "Der Platz im Ranking entsteht nicht in den "
+                "Cooldown-Fenstern, sondern in den Minuten dazwischen. "
+                "Wer dort Lücken lässt, holt sie mit keiner "
+                "Verstärkung wieder auf."
+            ),
+            steps=(
+                "Die eigene Aktivzeit im Log ansehen, nicht den Rang.",
+                "Die längste Pause suchen und ihre Ursache benennen.",
+                "Für genau diese Ursache eine Lösung festlegen.",
+            ),
+            roles=(ROLE_DPS,),
+            checks=(
+                LessonCheck(
+                    metric="active_percent",
+                    comparison=CHECK_AT_LEAST,
+                    target=90.0,
+                    unit="%",
+                    label="Aktivzeit",
+                ),
+            ),
         ),
 
     ),

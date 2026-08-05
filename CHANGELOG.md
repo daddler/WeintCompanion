@@ -1,6 +1,69 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.6.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.5.0.
+
+## 1.5.0
+
+WeintTV und die WeintAcademy für Tanks, Heiler und Schadensausteiler
+gleichermaßen.
+
+Drei Fehler, die alle dasselbe Symptom hatten - es passierte nichts,
+und niemand konnte sehen, dass etwas fehlte.
+
+**Der Lektionskatalog kam im Echtbetrieb nie an.** Katalog und
+Simulation führen die Spezialisierungen deutsch ("Vergeltung",
+"Braumeister"), WarcraftLogs liefert sie englisch ("Retribution",
+"Brewmaster"). Beim Nachschlagen traf deshalb kein einziger Schlüssel
+zu: jeder Spieler bekam nur Rollen- und Allgemeinlektionen, ohne
+Fehler und ohne Warnung, und in der Oberfläche war das nicht davon zu
+unterscheiden, dass für seine Spezialisierung nichts hinterlegt ist.
+`analyzer/data/specs.py` führt jetzt alle vierunddreißig
+Spezialisierungen in beiden Sprachen samt Rolle.
+
+**Tanks wurden gar nicht als Tanks erkannt**, wenn der Bot die Rolle
+nicht mitschickte: geraten wurde aus Schaden gegen Heilung, und dabei
+kann ein Tank nur als Schadensausteiler herauskommen. Er wird dann
+gegen die Schadensrangliste der Schadensausteiler gemessen und bekommt
+dauerhaft einen Stern, obwohl er seine Aufgabe erfüllt. Aus
+"Protection", "Blood", "Guardian" oder "Brewmaster" folgt die Rolle
+jetzt unmittelbar.
+
+**Prüfkriterien, die eine Fähigkeit nennen, blieben in deutschen
+Berichten dauerhaft "keine Daten".** WarcraftLogs gibt Fähigkeiten in
+der Sprache des Clients zurück, der den Bericht hochgeladen hat -
+derselbe Fehler, an dem auf der Bot-Seite schon einmal sämtliche
+Cooldown-Listen gescheitert sind. `analyzer/data/player_abilities.py`
+gleicht beide Sprachen ab.
+
+Dazu die Lücke, die die Tankbewertung inhaltlich unbrauchbar machte:
+der Snapshot kannte nur DoTs und HoTs. Die aktive Schadensminderung
+eines Tanks - Schildblock, Mischen, Schild des Rechtschaffenen,
+Knochenschild - ist weder das eine noch das andere, sie liegt auf ihm
+selbst. In "Rotation" blieb deshalb allein die Aktivzeit übrig, also
+ausgerechnet die Zahl, die über einen Tank am wenigsten aussagt. Es
+gibt jetzt eigene Buff-Uptimes: in WeintTV als eigene Karte, in der
+Academy als Rotationsbewertung der Tanks und als prüfbares Kriterium
+der Lektionen. Wie alle Felder der Tiefenauswertung ist der Block
+optional - fehlt er, steht dort "keine Daten" und keine schlechte
+Note.
+
+Zwei weitere Bewertungen waren zu freundlich: wer der einzige Spieler
+seiner Rolle im Kampf war, wurde beim Platz in der Rangliste und beim
+Laufweg mit sich selbst verglichen und bekam zwangsläufig die volle
+Wertung. Das trifft regelmäßig den einzigen Tank und den einzigen
+Heiler - also genau die beiden, denen eine geschenkte Bestnote am
+wenigsten hilft. Ohne Vergleichsgruppe gibt es dort jetzt "keine
+Daten".
+
+Der Lektionskatalog ist von 165 auf 266 Lektionen gewachsen. Jede der
+vierunddreißig Spezialisierungen hat jetzt eigene Inhalte zu Rotation
+und Cooldowns, jede Klasse ihre Nutzfähigkeiten (Unterbrechung,
+Seelenstein, Symbiose, Handzauber), und die fünf Tank- und sechs
+Heiler-Spezialisierungen sind aus ihrem Zustand von ein bis zwei
+Lektionen heraus. Auf der Rollenebene sind die Bereiche
+dazugekommen, die vorher auf die allgemeinen Ratschläge fielen -
+Überleben, Laufwege und Leistung für Heiler und Schadensausteiler,
+Rotation, Cooldowns und Leistung für Tanks.
 
 ## 1.4.6
 

@@ -80,7 +80,7 @@ CATEGORY_LABELS: dict[str, str] = {
 
 CATEGORY_HINTS: dict[str, str] = {
 
-    CATEGORY_ROTATION: "Aktivzeit und Wirkungsdauern",
+    CATEGORY_ROTATION: "Aktivzeit, Wirkungsdauern, aktive Minderung",
     CATEGORY_MOVEMENT: "Vermeidbare Treffer und Laufwege",
     CATEGORY_COOLDOWNS: "Genutzte Einsätze und ihr Zeitpunkt",
     CATEGORY_MECHANICS: "Unterbrechungen und Bossmechaniken",

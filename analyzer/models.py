@@ -796,6 +796,19 @@ class RaidSnapshot:
 
     hot_uptimes: tuple[UptimeEntry, ...] = ()
 
+    #
+    # Eigene Buffs - und damit die einzige Kennzahl, die den
+    # Tankbeitrag überhaupt messbar macht: die aktive
+    # Schadensminderung (Schildblock, Mischen, Schild des
+    # Rechtschaffenen, Knochenschild) ist weder ein DoT noch ein HoT.
+    # Ohne eine eigene Liste landete sie entweder bei den HoTs, wo sie
+    # nur für Heiler ausgewertet wird, oder gar nicht - und ein Tank
+    # wurde in "Rotation" allein an seiner Aktivzeit gemessen, also an
+    # der einen Zahl, die über seine eigentliche Aufgabe nichts sagt.
+    #
+
+    buff_uptimes: tuple[UptimeEntry, ...] = ()
+
     movement: tuple[MovementEntry, ...] = ()
 
     damage_taken: tuple[DamageTakenEntry, ...] = ()
@@ -868,6 +881,7 @@ class RaidSnapshot:
             self.activity
             or self.dot_uptimes
             or self.hot_uptimes
+            or self.buff_uptimes
             or self.movement
             or self.damage_taken
             or self.cooldown_usage
@@ -917,11 +931,10 @@ class RaidSnapshot:
         kind: str = UPTIME_DOT,
     ) -> tuple[UptimeEntry, ...]:
 
-        rows = (
-            self.hot_uptimes
-            if kind == UPTIME_HOT
-            else self.dot_uptimes
-        )
+        rows = {
+            UPTIME_HOT: self.hot_uptimes,
+            UPTIME_BUFF: self.buff_uptimes,
+        }.get(kind, self.dot_uptimes)
 
         return tuple(
             entry

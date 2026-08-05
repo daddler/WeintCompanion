@@ -6,8 +6,12 @@ from analyzer.academy.lessons.classes._common import (
     CATEGORY_ROTATION,
     CATEGORY_SURVIVAL,
     Lesson,
+    buff_uptime_check,
     cooldown_check,
+    defensive_check,
+    dispel_check,
     hot_uptime_check,
+    interrupt_check,
 )
 
 CLASS_NAME = "Monk"
@@ -48,6 +52,60 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Braumeister",
             checks=(cooldown_check("Guard"),),
         ),
+        Lesson(
+            lesson_id="monk-brewmaster.rotation.shuffle",
+            title="Mischen ohne Lücke halten",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Mischen erhöht den Anteil des Schadens, der in die "
+                "Benommenheit wandert. Ohne Mischen trifft der Boss "
+                "sofort statt über Zeit - das ist der Unterschied "
+                "zwischen zwei Sekunden Reaktionszeit und keiner."
+            ),
+            steps=(
+                "Mischen als oberste Priorität der Rotation behandeln.",
+                "Chi dafür reservieren, nicht für Schaden ausgeben.",
+                "Die Abdeckung im Log prüfen, nicht nach Gefühl gehen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Braumeister",
+            checks=(buff_uptime_check("Shuffle", 90.0),),
+        ),
+        Lesson(
+            lesson_id="monk-brewmaster.cooldowns.fortifying_brew",
+            title="Stärkendes Gebräu und Zen-Meditation trennen",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Das Gebräu wirkt gegen alles, die Meditation gegen "
+                "Magie. Gleichzeitig gezündet decken sie ein Fenster "
+                "ab, nacheinander zwei."
+            ),
+            steps=(
+                "Beide je einer festen Bossmechanik zuordnen.",
+                "Die Meditation nur dort, wo nicht geschlagen wird.",
+                "Im Log auf Überschneidungen prüfen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Braumeister",
+            checks=(cooldown_check("Fortifying Brew"),),
+        ),
+        Lesson(
+            lesson_id="monk-brewmaster.mechanics.taunt",
+            title="Tankwechsel mit dem Mittank abstimmen",
+            category=CATEGORY_MECHANICS,
+            summary=(
+                "Der Braumeister nimmt Schaden verzögert - genau "
+                "deshalb ist der falsche Wechselzeitpunkt bei ihm "
+                "besonders gefährlich: die Benommenheit läuft weiter."
+            ),
+            steps=(
+                "Vor dem Wechsel die Benommenheit abbauen.",
+                "Den Auslöser des Wechsels vorher benennen.",
+                "Nach dem Spott Mischen sofort wieder aufbauen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Braumeister",
+        ),
     ),
 
     "Nebelwirker": (
@@ -85,6 +143,57 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             spec="Nebelwirker",
             checks=(cooldown_check("Revival"),),
         ),
+        Lesson(
+            lesson_id="monk-mistweaver.rotation.mana",
+            title="Manatee bewusst einplanen",
+            category=CATEGORY_ROTATION,
+            summary=(
+                "Der Nebelwirker sammelt seine Manarückgewinnung "
+                "selbst an. Wer sie nie trinkt, heilt die zweite "
+                "Kampfhälfte mit halber Kraft."
+            ),
+            steps=(
+                "Die Stapel im Blick behalten, nicht erst das Mana.",
+                "Feste ruhige Momente zum Trinken einplanen.",
+                "Nicht in der Schadensspitze trinken.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Nebelwirker",
+        ),
+        Lesson(
+            lesson_id="monk-mistweaver.cooldowns.life_cocoon",
+            title="Lebenskokon vor dem Treffer setzen",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Der Kokon ist ein Schild und keine Heilung - nach dem "
+                "Treffer gesetzt rettet er niemanden mehr."
+            ),
+            steps=(
+                "Mit der Raidleitung ein festes Ziel vereinbaren.",
+                "Ihn vor der angesagten Mechanik setzen.",
+                "Bei jeder Verfügbarkeit erneut einplanen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Nebelwirker",
+            checks=(cooldown_check("Life Cocoon"),),
+        ),
+        Lesson(
+            lesson_id="monk-mistweaver.mechanics.detox",
+            title="Entgiften fest übernehmen",
+            category=CATEGORY_MECHANICS,
+            summary=(
+                "Ein entfernter Effekt spart mehr Heilung, als jede "
+                "Heilung ihn ausgleichen könnte."
+            ),
+            steps=(
+                "Die entfernbaren Effekte des Bosses auflisten.",
+                "Klären, wer welchen entfernt.",
+                "Das Entgiften auf eine erreichbare Taste legen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Nebelwirker",
+            checks=(dispel_check(),),
+        ),
     ),
 
     "Windwandler": (
@@ -103,6 +212,43 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             ),
             class_name=CLASS_NAME,
             spec="Windwandler",
+        ),
+        Lesson(
+            lesson_id="monk-windwalker.cooldowns.tigereye_brew",
+            title="Tigeraugengebräu gesammelt ausgeben",
+            category=CATEGORY_COOLDOWNS,
+            summary=(
+                "Das Gebräu wirkt umso stärker, je mehr Stapel es "
+                "hat - einzeln getrunken verschenkt es genau diesen "
+                "Vorteil."
+            ),
+            steps=(
+                "Bis zu einer festen Stapelzahl sammeln.",
+                "Erst dann und möglichst im Heldentum trinken.",
+                "Vor Kampfende nichts übrig lassen.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Windwandler",
+            checks=(cooldown_check("Tigereye Brew"),),
+        ),
+        Lesson(
+            lesson_id="monk-windwalker.survival.defensives",
+            title="Die eigenen Minderungen einplanen",
+            category=CATEGORY_SURVIVAL,
+            summary=(
+                "Der Windwandler bringt gleich mehrere persönliche "
+                "Minderungen mit und benutzt in der Praxis meist "
+                "keine davon."
+            ),
+            steps=(
+                "Die eigenen Minderungen mit Dauer und Abklingzeit "
+                "auflisten.",
+                "Jeder eine feste Bossmechanik zuordnen.",
+                "Nach dem Pull prüfen, ob sie genutzt wurden.",
+            ),
+            class_name=CLASS_NAME,
+            spec="Windwandler",
+            checks=(defensive_check(),),
         ),
         Lesson(
             lesson_id="monk-windwalker.rotation.dummy_practice",
@@ -139,6 +285,43 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
             ),
             class_name=CLASS_NAME,
             spec="Windwandler",
+        ),
+    ),
+
+    "": (
+        Lesson(
+            lesson_id="monk.mechanics.spear_hand_strike",
+            title="Speerhandstoß fest zuteilen",
+            category=CATEGORY_MECHANICS,
+            summary=(
+                "Jede Spezialisierung des Mönchs hat eine "
+                "Unterbrechung mit kurzer Abklingzeit. Vergessen wird "
+                "sie, weil niemand zugeteilt war."
+            ),
+            steps=(
+                "Vor dem Pull eine feste Unterbrecherreihenfolge "
+                "vereinbaren.",
+                "Die Unterbrechung auf eine gut erreichbare Taste legen.",
+                "Nach dem Pull prüfen, ob eine Unterbrechung fehlte.",
+            ),
+            class_name=CLASS_NAME,
+            checks=(interrupt_check(),),
+        ),
+        Lesson(
+            lesson_id="monk.survival.diffuse_magic",
+            title="Gegen Magieschaden vorbereitet sein",
+            category=CATEGORY_SURVIVAL,
+            summary=(
+                "Der Mönch hat für Magieschaden eine eigene Antwort. "
+                "Sie hilft nur, wenn sie vor dem Zauber steht - danach "
+                "ist sie eine verschenkte Abklingzeit."
+            ),
+            steps=(
+                "Die magischen Angriffe des Bosses auflisten.",
+                "Die passende Fähigkeit fest darauf legen.",
+                "Auf die Ansage reagieren, nicht auf den Treffer.",
+            ),
+            class_name=CLASS_NAME,
         ),
     ),
 

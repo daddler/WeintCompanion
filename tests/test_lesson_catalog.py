@@ -206,6 +206,97 @@ def test_find_lesson_returns_none_for_unknown_ids():
     assert find_lesson(GENERIC_LESSONS[0].lesson_id) is GENERIC_LESSONS[0]
 
 
+def test_every_specialisation_has_lessons_of_its_own():
+    """
+    Der Katalog kannte zwar alle vierunddreißig Spezialisierungen,
+    aber sehr unterschiedlich gut: manche hatten vier Lektionen,
+    mehrere Tanks genau eine. Wer nur eine hat, bekommt ab dem
+    zweiten Trainingsplan nur noch allgemeine Ratschläge - und die
+    sind notwendigerweise so allgemein, dass sie niemandem konkret
+    weiterhelfen.
+    """
+
+    from analyzer.data.specs import SPECS
+
+    for spec in SPECS:
+
+        actor = _actor(spec.class_name, spec.name, spec.role)
+
+        own = [
+            lesson
+            for lesson in lessons_for_actor(actor)
+            if lesson.class_name == spec.class_name
+        ]
+
+        assert len(own) >= 5, (spec.class_name, spec.name, len(own))
+
+
+def test_every_specialisation_covers_rotation_and_cooldowns():
+    """
+    Die beiden Bereiche, in denen sich Spezialisierungen tatsächlich
+    unterscheiden - Laufwege und der Platz im Ranking tun das nicht
+    und dürfen deshalb auf die Rollenebene fallen.
+    """
+
+    from analyzer.data.specs import SPECS
+
+    for spec in SPECS:
+
+        actor = _actor(spec.class_name, spec.name, spec.role)
+
+        for category in ("rotation", "cooldowns"):
+
+            own = [
+                lesson
+                for lesson in lessons_in_category(actor, category)
+                if lesson.class_name == spec.class_name
+            ]
+
+            assert own, (spec.class_name, spec.name, category)
+
+
+def test_every_tank_specialisation_teaches_active_mitigation():
+    """
+    Die aktive Schadensminderung ist der größte Beitrag eines Tanks
+    zum eigenen Überleben und seit dieser Fassung auch messbar
+    (`buff_uptime`). Fehlt sie im Katalog, kann der Trainingsplan
+    ausgerechnet die wichtigste Frage nicht stellen.
+    """
+
+    from analyzer.data.specs import specs_for_role
+
+    for spec in specs_for_role(ROLE_TANK):
+
+        actor = _actor(spec.class_name, spec.name, ROLE_TANK)
+
+        measured = [
+            check
+            for lesson in lessons_for_actor(actor)
+            if lesson.class_name == spec.class_name
+            for check in lesson.checks
+            if check.metric == "buff_uptime"
+        ]
+
+        assert measured, (spec.class_name, spec.name)
+
+
+def test_every_class_carries_its_utility_lessons():
+    """
+    Nutzfähigkeiten gehören zur Klasse, nicht zur Spezialisierung -
+    eine Unterbrechung, ein Seelenstein, eine Anti-Magie-Zone. Ohne
+    klassenweite Ebene müssten sie in jeder Spezialisierung erneut
+    stehen, und genau das läuft mit der Zeit auseinander.
+    """
+
+    from analyzer.data.specs import SPECS
+
+    classes = {spec.class_name for spec in SPECS}
+
+    for class_name in classes:
+
+        assert SPEC_LESSONS.get((class_name, "")), class_name
+
+
 def test_the_catalog_actually_grew():
     """
     Die erste Fassung hatte 23 Lektionen und deckte vier Bereiche ab.

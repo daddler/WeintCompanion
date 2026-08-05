@@ -37,6 +37,7 @@ from analyzer.models import (
     MECHANIC_INTERRUPT,
     MECHANIC_MOVEMENT,
     MECHANIC_POSITIONING,
+    UPTIME_BUFF,
     UPTIME_DOT,
     UPTIME_HOT,
 )
@@ -434,6 +435,32 @@ UPTIMES: tuple[tuple[str, str, str, float, float], ...] = (
     ("Yunwei", "Renewing Mist", UPTIME_HOT, 76.0, 85.0),
     ("Torvald", "Beacon of Light", UPTIME_HOT, 94.0, 95.0),
     ("Miraia", "Power Word: Shield", UPTIME_HOT, 63.0, 60.0),
+
+    #
+    # Eigene Buffs. Für die Tanks ist das die eigentliche
+    # Leistungskennzahl: die aktive Schadensminderung ist ihr Beitrag
+    # zum Überleben, und ohne diese Zeilen wäre ein Tank in der
+    # Simulation - wie vorher im Echtbetrieb - allein an seiner
+    # Aktivzeit gemessen worden.
+    #
+    # Bramborn hält seinen Schildblock ordentlich, Sigmara lässt
+    # Mischen fallen: auch hier steht bewusst ein guter neben einem
+    # verbesserungswürdigen Fall.
+    #
+
+    ("Bramborn", "Shield Block", UPTIME_BUFF, 74.0, 70.0),
+    ("Bramborn", "Shield Barrier", UPTIME_BUFF, 21.0, 20.0),
+    ("Sigmara", "Shuffle", UPTIME_BUFF, 78.0, 90.0),
+    ("Sigmara", "Elusive Brew", UPTIME_BUFF, 19.0, 25.0),
+
+    #
+    # Schadensausteiler mit Selbstbuffs, die genauso zur Rotation
+    # gehören wie ein DoT - sie standen bisher nirgends.
+    #
+
+    ("Dolchtanz", "Slice and Dice", UPTIME_BUFF, 94.0, 95.0),
+    ("Krallenwut", "Savage Roar", UPTIME_BUFF, 81.0, 90.0),
+    ("Lichthammer", "Inquisition", UPTIME_BUFF, 87.0, 95.0),
 
 )
 
