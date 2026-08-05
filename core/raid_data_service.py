@@ -254,7 +254,22 @@ class ReplayState:
     der Wiedergabe wieder genau dort landet, wo man war.
     """
 
+    #
+    # `loading` heißt "eine Zeitleiste wird gerade geholt", `starting`
+    # zusätzlich "und danach soll sofort abgespielt werden".
+    #
+    # Die Trennung ist nötig, seit die Zeitleiste bereits mit der Wahl
+    # des Pulls im Hintergrund geladen wird (siehe
+    # RaidDataService.select_archive_fight): währenddessen ist
+    # `loading` wahr, ohne dass der Nutzer irgendetwas gedrückt hätte.
+    # Der Wiedergabe-Knopf darf dann weder ausgegraut sein noch "Wird
+    # geladen …" behaupten - er soll drückbar bleiben und den Start
+    # eben vormerken.
+    #
+
     loading: bool = False
+
+    starting: bool = False
 
     error: str = ""
 
@@ -1092,6 +1107,16 @@ class RaidDataService(QObject):
             name="WarcraftLogsFightFetch",
         ).start()
 
+        #
+        # Die Zeitleiste gleich mitholen, damit der Wiedergabe-Knopf
+        # später nicht mehr warten muss (siehe prefetch_timeline).
+        # Bewusst NACH dem Abruf des Pulls gestartet, obwohl beide
+        # nebeneinander laufen: der Pull ist die kleinere Antwort und
+        # das, was gleich auf dem Schirm stehen soll.
+        #
+
+        self.prefetch_timeline(report_code, fight_id)
+
     def _archive_report_label(self, report_code: str) -> str:
         """
         Nur unter gehaltenem Lock aufrufen.
@@ -1259,13 +1284,44 @@ class RaidDataService(QObject):
         angefragt, live liefert der Provider sie direkt (bei der
         Simulation ist das reine Rechnung). Ist bereits eine
         Wiedergabe geladen, wird sie nur zurückgespult - ein
-        erneuter Abruf derselben Daten wäre Verschwendung.
+        erneuter Abruf derselben Daten wäre Verschwendung. Im Archiv
+        ist das inzwischen der Regelfall: die Zeitleiste wird schon
+        beim Wählen des Pulls im Hintergrund geholt (siehe
+        select_archive_fight), der Druck auf Wiedergabe startet dann
+        ohne jede Wartezeit.
+
+        Läuft dieser Abruf noch, wird der Start nur VORGEMERKT statt
+        verworfen. Vorher endete der Aufruf in dem Fall wortlos - der
+        Knopf sah kaputt aus, weil ein Druck zum falschen Zeitpunkt
+        schlicht nichts tat.
         """
 
         with self._lock:
 
             if self._replay.loading:
-                return
+
+                if self._replay.starting:
+                    return
+
+                self._replay = replace(
+                    self._replay,
+                    starting=True,
+                    error="",
+                )
+
+                pending = True
+
+            else:
+
+                pending = False
+
+        if pending:
+
+            self.replayChanged.emit()
+
+            return
+
+        with self._lock:
 
             if self._timeline is not None:
 
@@ -1307,6 +1363,7 @@ class RaidDataService(QObject):
                 self._replay = replace(
                     self._replay,
                     loading=True,
+                    starting=True,
                     error="",
                     report_code=report_code,
                     fight_id=fight_id,
@@ -1349,6 +1406,61 @@ class RaidDataService(QObject):
             args=(report_code, fight_id, label),
             daemon=True,
             name="WarcraftLogsTimelineFetch",
+        ).start()
+
+    # --------------------------------------------------
+
+    def prefetch_timeline(self, report_code: str, fight_id: int):
+        """
+        Holt die Zeitleiste eines Pulls im Voraus, ohne sie
+        abzuspielen.
+
+        Der Grund ist die gefühlte Ladezeit. Bis hierher lagen
+        zwischen "Archiv öffnen" und "es läuft" vier Abrufe beim Bot,
+        die alle erst nacheinander starteten: Berichte, Pulls, der
+        Pull selbst - und erst auf Knopfdruck die Zeitleiste, mit
+        Abstand die größte Antwort von allen. Die Wartezeit lag damit
+        vollständig HINTER dem Druck auf Wiedergabe, also genau dort,
+        wo sie am meisten stört.
+
+        Jetzt läuft der Zeitleisten-Abruf parallel zum Abruf des
+        Pulls: sichtbar wird zuerst weiter der Pull (die kleinere und
+        schnellere Antwort), und wer danach auf Wiedergabe drückt,
+        wartet im Normalfall gar nicht mehr.
+
+        Schlägt der Abruf fehl, bleibt das absichtlich still - der
+        Nutzer hat nichts angefordert. Der Knopf versucht es dann bei
+        Bedarf erneut und meldet den Fehler dort, wo er zu einer
+        Handlung gehört.
+        """
+
+        if not report_code or fight_id is None:
+            return
+
+        with self._lock:
+
+            if self._replay.loading or self._timeline is not None:
+                return
+
+            label = self._archive_report_label(report_code)
+
+            self._replay = replace(
+                self._replay,
+                loading=True,
+                starting=False,
+                error="",
+                report_code=report_code,
+                fight_id=fight_id,
+                origin=MODE_ARCHIVE,
+            )
+
+        self.replayChanged.emit()
+
+        threading.Thread(
+            target=self._fetch_timeline_worker,
+            args=(report_code, fight_id, label),
+            daemon=True,
+            name="WarcraftLogsTimelinePrefetch",
         ).start()
 
     def _begin_live_replay(self):
@@ -1456,22 +1568,48 @@ class RaidDataService(QObject):
         self._begin_replay(timeline)
 
     def _begin_replay(self, timeline):
+        """
+        Die geladene Zeitleiste übernehmen.
+
+        Ob dabei auch losgespielt wird, entscheidet `starting` und
+        nicht der Aufrufer: der Abruf kann eine Vorabladung gewesen
+        sein (dann bleibt alles stehen, wie es ist), oder der Nutzer
+        hat währenddessen auf Wiedergabe gedrückt - dann steht das
+        Flag längst, und genau dafür wurde es gesetzt.
+        """
 
         with self._lock:
 
             self._timeline = timeline
 
-            self._archive = replace(self._archive, mode=MODE_REPLAY)
+            play = self._replay.starting
+
+            if play:
+
+                self._archive = replace(self._archive, mode=MODE_REPLAY)
 
             self._replay = replace(
                 self._replay,
                 loading=False,
+                starting=False,
                 error="",
                 duration=timeline.duration,
                 position=0.0,
-                playing=True,
+                playing=play,
                 label=timeline.source_label,
             )
+
+        if not play:
+
+            #
+            # Eine Vorabladung darf das gezeigte Bild nicht anfassen -
+            # auf dem Schirm steht der Pull aus dem Archiv, und der
+            # bleibt stehen, bis jemand Wiedergabe drückt.
+            #
+
+            self.replayChanged.emit()
+
+            return
 
         self._publish_replay_frame()
 
@@ -1482,14 +1620,33 @@ class RaidDataService(QObject):
         self.replayChanged.emit()
 
     def _fail_replay(self, reason: str):
+        """
+        Ein gescheiterter Zeitleisten-Abruf.
+
+        Der Text erscheint nur, wenn tatsächlich jemand auf
+        Wiedergabe gedrückt hat. Eine im Hintergrund gescheiterte
+        Vorabladung wird protokolliert und sonst verschwiegen: eine
+        Fehlermeldung für etwas, das der Nutzer nie angefordert hat,
+        wäre nur beunruhigend - und der Knopf fragt beim nächsten
+        Druck ohnehin erneut an.
+        """
 
         with self._lock:
+
+            announce = self._replay.starting
 
             self._replay = replace(
                 self._replay,
                 loading=False,
+                starting=False,
                 playing=False,
-                error=reason,
+                error=reason if announce else "",
+            )
+
+        if not announce:
+
+            self.manager.logger.warning(
+                f"Zeitleiste konnte nicht vorgeladen werden: {reason}"
             )
 
         self.replayChanged.emit()

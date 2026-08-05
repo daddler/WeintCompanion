@@ -271,7 +271,7 @@ class WeintTvPage(QWidget):
         #
 
         self.service.snapshotChanged.connect(
-            self._apply_snapshot
+            self._on_snapshot
         )
 
         self.refresh()
@@ -1044,6 +1044,27 @@ class WeintTvPage(QWidget):
     # --------------------------------------------------
     # Snapshot anwenden
     # --------------------------------------------------
+
+    def _on_snapshot(self, snapshot: RaidSnapshot):
+        """
+        Der Anschluss an `snapshotChanged`.
+
+        Er zeichnet nur, solange diese Seite auch angemeldet ist. Der
+        Dienst veröffentlicht nämlich weiter, während eine andere
+        Seite im Vordergrund ist: bei einer laufenden Wiedergabe
+        viermal je Sekunde, und die WeintAcademy hängt am selben
+        Signal. Ohne diese Prüfung baute jede der beiden Seiten
+        dauerhaft die jeweils andere mit auf - doppelte Arbeit für
+        ein Bild, das niemand sieht.
+
+        `on_enter()` zeichnet direkt nach dem Anmelden selbst, ein
+        verpasster Snapshot geht also nicht verloren.
+        """
+
+        if not self._attached:
+            return
+
+        self._apply_snapshot(snapshot)
 
     def _apply_snapshot(self, snapshot: RaidSnapshot):
 

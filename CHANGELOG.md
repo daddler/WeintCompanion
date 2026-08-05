@@ -1,6 +1,47 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.5.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.4.6.
+
+## 1.4.6
+
+Der Wiedergabe-Knopf und die Ladezeiten.
+
+Die Zeitleiste eines Pulls - die mit Abstand größte Antwort des Bots -
+wurde erst auf Knopfdruck angefordert. Die gesamte Wartezeit lag damit
+hinter dem Klick, und wer währenddessen ein zweites Mal drückte, löste
+gar nichts aus: `start_replay()` brach bei laufendem Abruf wortlos ab.
+Beides ist behoben. `RaidDataService.prefetch_timeline()` holt die
+Zeitleiste jetzt schon beim Wählen des Pulls, parallel zum Abruf des
+Pulls selbst, sodass die Wiedergabe im Normalfall ohne Wartezeit
+startet; ein Druck während des Ladens wird vorgemerkt statt verworfen
+(`ReplayState.starting`). Der Zeitleisten-Endpunkt bekommt außerdem
+60 statt 15 Sekunden Zeit - dieselbe Frist wie für eine dreizeilige
+Berichtsliste anzusetzen, war beim teuersten Abruf die knappste, und
+das Ergebnis sah aus wie ein kaputter Knopf.
+
+Während einer laufenden Wiedergabe waren Bericht- und Pull-Auswahl
+nicht mehr bedienbar: `ArchivePicker` hängt an `replayChanged`, das
+viermal je Sekunde gesendet wird, und leerte seine Auswahlfelder bei
+jedem Takt - ein aufgeklapptes Dropdown klappte sofort wieder zu. Die
+Felder werden jetzt nur noch neu gefüllt, wenn sich ihr Inhalt
+wirklich geändert hat.
+
+Dazu drei Ursachen für spürbare Trägheit, alle gemessen:
+
+- `setStyleSheet()` verwirft in Qt die Stilberechnung eines Widgets
+  und zeichnet neu, auch bei unverändertem Inhalt. Beim Zeichnen eines
+  WeintTV-Snapshots kamen rund 280 solcher Aufrufe zusammen, drei
+  Viertel der Rechenzeit eines Bildes. `gui/theme/restyle.py` setzt
+  nur noch, was sich geändert hat: ein Bild kostet statt 25 nun 3,5 ms.
+- WeintTV und die Academy hängen am selben `snapshotChanged` und
+  zeichneten sich auch dann neu, wenn die jeweils andere Seite im
+  Vordergrund war - bei laufender Wiedergabe dauerhaft doppelte
+  Arbeit für ein Bild, das niemand sieht.
+- Der Programmstart baute alle sieben Seiten im Voraus, obwohl meist
+  nur eine angesehen wird; allein WeintTV und die Academy legen dabei
+  ihre Listenzeilen auf Vorrat an. Seiten entstehen jetzt beim ersten
+  Betreten (`MainWindow._ensure_page()`), der Start dauert statt rund
+  vier nur noch knapp eine Sekunde.
 
 ## 1.4.5
 

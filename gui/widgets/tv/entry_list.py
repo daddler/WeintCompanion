@@ -15,6 +15,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from gui.theme.colors import Colors
+from gui.theme.restyle import restyle
 
 
 #
@@ -119,7 +120,14 @@ class _Entry(QWidget):
 
         color = LEVEL_COLORS.get(data.level, Colors.INFO)
 
-        self.dot.setStyleSheet(f"""
+        #
+        # restyle() statt setStyleSheet(): die Stufe einer Zeile
+        # bleibt zwischen zwei Bildern fast immer gleich, das
+        # Neusetzen wäre also fast immer umsonst (siehe
+        # gui/theme/restyle.py).
+        #
+
+        restyle(self.dot, f"""
         QLabel{{
             background:{color};
             border-radius:{self.DOT_SIZE // 2}px;

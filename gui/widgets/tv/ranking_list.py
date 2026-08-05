@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 from analyzer.models import MetricEntry
 
 from gui.theme.colors import Colors
+from gui.theme.restyle import restyle
 from gui.theme.wow_colors import class_color
 
 from gui.widgets.tv.meter_bar import MeterBar
@@ -114,9 +115,16 @@ class _RankingRow(QWidget):
 
         self.name.setText(entry.actor.name)
 
-        self.name.setStyleSheet(
+        #
+        # restyle() statt setStyleSheet(): die Klassenfarbe eines
+        # Platzes wechselt nur, wenn dort jemand anders steht (siehe
+        # gui/theme/restyle.py).
+        #
+
+        restyle(
+            self.name,
             f"font-size:13px;font-weight:600;color:{color};"
-            "background:transparent;"
+            "background:transparent;",
         )
 
         self.spec.setText(entry.actor.spec)

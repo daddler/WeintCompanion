@@ -129,6 +129,7 @@ class _FakeArchiveClient:
         fights_result=None,
         fight_result=None,
         timeline_result=None,
+        timeline_gate=None,
     ):
 
         from core.warcraftlogs_archive_client import (
@@ -155,6 +156,16 @@ class _FakeArchiveClient:
         self.fight_result = fight_result
 
         self.timeline_result = timeline_result
+
+        #
+        # Ein optionales threading.Event, auf das fetch_timeline
+        # wartet. Nötig, seit die Zeitleiste schon beim Wählen eines
+        # Pulls im Hintergrund geladen wird: ohne eine Bremse wäre
+        # nicht vorhersagbar, ob dieser Abruf zum Zeitpunkt einer
+        # Zusicherung schon durch ist.
+        #
+
+        self.timeline_gate = timeline_gate
 
         self.report_calls = 0
         self.fights_calls = 0
@@ -189,6 +200,9 @@ class _FakeArchiveClient:
         from analyzer.providers.warcraftlogs import FetchResult
 
         self.timeline_calls += 1
+
+        if self.timeline_gate is not None:
+            self.timeline_gate.wait(5.0)
 
         if self.timeline_result is not None:
             return self.timeline_result
@@ -1057,7 +1071,15 @@ def test_choosing_another_pull_discards_the_loaded_timeline():
 
     from core.raid_data_service import MODE_ARCHIVE, MODE_REPLAY
 
-    service = _make_service()
+    #
+    # Die Vorabladung der neuen Auswahl wird angehalten, damit hier
+    # sicher der Zustand UNMITTELBAR nach dem Wechsel geprüft wird
+    # und nicht zufällig schon der der neu geladenen Zeitleiste.
+    #
+
+    gate = threading.Event()
+
+    service = _make_service(_FakeArchiveClient(timeline_gate=gate))
 
     service.start_replay()
 
@@ -1072,6 +1094,8 @@ def test_choosing_another_pull_discards_the_loaded_timeline():
     assert service.archive_state().mode == MODE_ARCHIVE
 
     assert service.replay_state().duration == 0.0
+
+    gate.set()
 
 
 def test_restarting_a_loaded_replay_returns_to_replay_mode():
@@ -1190,3 +1214,148 @@ def test_switching_the_data_source_discards_the_replay():
     #
 
     assert service.archive_state().mode == MODE_LIVE
+
+
+# --------------------------------------------------
+# Wiedergabe: Vorabladen und vorgemerkter Start
+# --------------------------------------------------
+
+
+def test_choosing_a_pull_preloads_its_timeline():
+    """
+    Der Grund, aus dem der Wiedergabe-Knopf sich lange "kaputt"
+    anfühlte: die mit Abstand größte Antwort des Bots wurde erst auf
+    Knopfdruck angefordert. Die Wartezeit lag damit vollständig hinter
+    dem Klick.
+
+    Jetzt läuft der Abruf parallel zum Laden des Pulls - und darf
+    dabei weder den Modus wechseln noch etwas abspielen.
+    """
+
+    from core.raid_data_service import MODE_ARCHIVE
+
+    client = _FakeArchiveClient()
+
+    service = _make_service(client)
+
+    service.select_archive_fight("aBc", 12)
+
+    assert _wait_until(lambda: service._timeline is not None)
+
+    assert client.timeline_calls == 1
+
+    assert service.archive_state().mode == MODE_ARCHIVE
+
+    assert service.replay_state().playing is False
+
+    assert service.replay_state().duration > 0.0
+
+
+def test_a_preloaded_timeline_makes_the_play_button_instant():
+    """
+    Nach dem Vorabladen darf der Druck auf Wiedergabe keinen zweiten
+    Abruf mehr auslösen - er spult nur noch zurück und startet.
+    """
+
+    from core.raid_data_service import MODE_REPLAY
+
+    client = _FakeArchiveClient()
+
+    service = _make_service(client)
+
+    service.select_archive_fight("aBc", 12)
+
+    assert _wait_until(lambda: service._timeline is not None)
+
+    service.start_replay()
+
+    assert service.archive_state().mode == MODE_REPLAY
+
+    assert service.replay_state().playing is True
+
+    assert client.timeline_calls == 1
+
+
+def test_pressing_play_during_the_preload_remembers_the_start():
+    """
+    Der Fall, in dem der Knopf vorher wortlos nichts tat.
+
+    `start_replay()` brach bei laufendem Abruf ab. Seit die Zeitleiste
+    schon beim Wählen des Pulls geholt wird, ist genau das der
+    wahrscheinlichste Moment für einen Klick - er wird deshalb
+    vorgemerkt und beim Eintreffen der Daten ausgeführt.
+    """
+
+    from core.raid_data_service import MODE_REPLAY
+
+    gate = threading.Event()
+
+    client = _FakeArchiveClient(timeline_gate=gate)
+
+    service = _make_service(client)
+
+    service.select_archive_fight("aBc", 12)
+
+    assert _wait_until(lambda: client.timeline_calls == 1)
+
+    assert service.replay_state().loading is True
+
+    assert service.replay_state().starting is False
+
+    service.start_replay()
+
+    assert service.replay_state().starting is True
+
+    gate.set()
+
+    assert _wait_until(
+        lambda: service.archive_state().mode == MODE_REPLAY
+    )
+
+    assert service.replay_state().playing is True
+
+    #
+    # Und wirklich nur ein einziger Abruf, kein zweiter durch den
+    # Klick.
+    #
+
+    assert client.timeline_calls == 1
+
+
+def test_a_failed_preload_stays_quiet_and_can_be_retried():
+    """
+    Eine im Hintergrund gescheiterte Vorabladung ist keine
+    Fehlermeldung wert - der Nutzer hat nichts angefordert. Der Knopf
+    muss danach aber erneut anfragen können.
+    """
+
+    from analyzer.providers.warcraftlogs import FetchResult
+
+    client = _FakeArchiveClient(
+        timeline_result=FetchResult(reason="Bot nicht erreichbar"),
+    )
+
+    service = _make_service(client)
+
+    service.select_archive_fight("aBc", 12)
+
+    assert _wait_until(lambda: client.timeline_calls == 1)
+
+    assert _wait_until(
+        lambda: service.replay_state().loading is False
+    )
+
+    assert service.replay_state().error == ""
+
+    #
+    # Jetzt der ausdrückliche Wunsch - und diesmal wird der Fehler
+    # auch benannt.
+    #
+
+    service.start_replay()
+
+    assert _wait_until(
+        lambda: service.replay_state().error == "Bot nicht erreichbar"
+    )
+
+    assert client.timeline_calls == 2

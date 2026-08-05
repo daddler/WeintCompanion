@@ -103,15 +103,33 @@ class ToggleSwitch(QAbstractButton):
 
     def _animate_to_state(self, checked: bool):
 
+        target = 1.0 if checked else 0.0
+
+        #
+        # Steht das Thumb schon am Ziel, gibt es nichts zu animieren.
+        # Ohne diese Prüfung war das trotzdem nicht folgenlos: der
+        # Lektionskatalog der Academy ruft setChecked() beim Zeichnen
+        # jedes Snapshots für JEDE Zeile auf, auch wenn sich nichts
+        # geändert hat. Bei laufender Wiedergabe (vier Bilder je
+        # Sekunde) liefen so dauerhaft dutzende Animationen, die jede
+        # für sich ein Neuzeichnen anstießen - Rechenzeit für eine
+        # Bewegung, die niemand sieht, weil Start- und Endwert
+        # identisch sind.
+        #
+
+        if (
+            self._animation.state() != QPropertyAnimation.Running
+            and self._thumb_position == target
+        ):
+            return
+
         self._animation.stop()
 
         self._animation.setStartValue(
             self._thumb_position
         )
 
-        self._animation.setEndValue(
-            1.0 if checked else 0.0
-        )
+        self._animation.setEndValue(target)
 
         self._animation.start()
 

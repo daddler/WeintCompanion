@@ -220,29 +220,40 @@ class MainWindow(QMainWindow):
         # ChangelogCard/QTextEdit).
         #
 
+        #
+        # Seiten entstehen erst beim ersten Betreten.
+        #
+        # Sie alle hier zu bauen kostete beim Start rund zwei Sekunden,
+        # in denen das Fenster noch nicht steht - und zwar für Seiten,
+        # von denen der Nutzer meist nur eine einzige ansieht. Der
+        # Löwenanteil geht an WeintTV und die Academy: beide legen ihre
+        # Listen- und Tabellenzeilen bewusst im Voraus an, damit das
+        # spätere Neuzeichnen im Sekundentakt flackerfrei bleibt (siehe
+        # gui/widgets/tv/ranking_list.py). Das ist richtig so - es
+        # gehört nur nicht in den Programmstart.
+        #
+        # Ein leerer Platzhalter je Seite hält die Reihenfolge des
+        # Stapels stabil, denn dessen Index IST die PageId (siehe
+        # gui/navigation.py). _ensure_page() tauscht ihn beim ersten
+        # Betreten gegen die echte Seite.
+        #
+
         self.pages_by_id: dict[PageId, QWidget] = {}
+
+        self._placeholders: dict[PageId, QWidget] = {}
+
+        self._specs_by_id = {
+            spec.page_id: spec
+            for spec in self.page_specs
+        }
 
         for spec in self.page_specs:
 
-            page = spec.page_factory(self.manager)
+            placeholder = QWidget()
 
-            self.pages_by_id[spec.page_id] = page
+            self._placeholders[spec.page_id] = placeholder
 
-            #
-            # Zusätzlich als benanntes Attribut ablegen
-            # (self.dashboard, self.settings, ...) - bestehender Code
-            # spricht die Seiten so an.
-            #
-
-            if spec.attribute:
-
-                setattr(self, spec.attribute, page)
-
-            self.pages.addWidget(
-                self.wrap_page(page)
-                if spec.scroll
-                else page
-            )
+            self.pages.addWidget(placeholder)
 
         #
         # Bleibt als Attribut erhalten, wird aber nicht mehr aus der
@@ -270,31 +281,9 @@ class MainWindow(QMainWindow):
             lambda: self.open_settings_section("discord")
         )
 
-        self.dashboard.openSettingsSection.connect(
-            self.open_settings_section
-        )
-
         #
-        # Seitenübergreifende Sprünge.
-        #
-        # Duck-getypt über alle Seiten statt je Seite eine eigene
-        # Zeile - dasselbe Vorgehen wie bei den on_enter()/on_leave()-
-        # Haken in change_page(). Eine neue Seite, die springen können
-        # soll, braucht damit nur das Signal und keine Änderung hier.
-        #
-
-        for page in self.pages_by_id.values():
-
-            if hasattr(page, "pageRequested"):
-
-                page.pageRequested.connect(self.change_page)
-
-            if hasattr(page, "playerRequested"):
-
-                page.playerRequested.connect(self.open_academy_for)
-
-        #
-        # Startseite
+        # Startseite - und damit die einzige Seite, die beim Start
+        # tatsächlich gebaut wird.
         #
 
         self.change_page(PageId.DASHBOARD)
@@ -354,12 +343,101 @@ class MainWindow(QMainWindow):
         return scroll
 
     # --------------------------------------------------
+    # Seiten auf Abruf
+    # --------------------------------------------------
+
+    def _ensure_page(self, page_id):
+        """
+        Die Seite zu `page_id` - gebaut, falls sie noch ein
+        Platzhalter ist.
+
+        Alles, was früher in der Aufbauschleife stand, passiert hier:
+        das benannte Attribut (`self.dashboard`, `self.settings`, ...),
+        der Scroll-Rahmen und die seitenübergreifenden Signale. Damit
+        gibt es weiterhin genau eine Stelle, an der eine Seite
+        entsteht - sie läuft nur nicht mehr zwangsläufig beim Start.
+
+        `None` für ein unbekanntes Ziel: die Methode hängt über
+        change_page() an Qt-Signalen, und eine Ausnahme in einem Slot
+        ist schwer zu verfolgen. Die Navigation bricht dann lieber
+        ab, als auf einer falschen Seite zu landen.
+        """
+
+        try:
+            page_id = PageId(int(page_id))
+
+        except ValueError:
+            return None
+
+        page = self.pages_by_id.get(page_id)
+
+        if page is not None:
+            return page
+
+        spec = self._specs_by_id[page_id]
+
+        page = spec.page_factory(self.manager)
+
+        self.pages_by_id[page_id] = page
+
+        if spec.attribute:
+
+            setattr(self, spec.attribute, page)
+
+        #
+        # Den Platzhalter gegen die Seite tauschen, ohne die
+        # Reihenfolge anzutasten: der Index im Stapel IST die PageId.
+        # insertWidget() an genau dieser Stelle, dann den Platzhalter
+        # entfernen - andersherum rutschten alle folgenden Seiten um
+        # eine Position nach vorn.
+        #
+
+        placeholder = self._placeholders.pop(page_id)
+
+        self.pages.insertWidget(
+            int(page_id),
+            self.wrap_page(page) if spec.scroll else page,
+        )
+
+        self.pages.removeWidget(placeholder)
+
+        placeholder.deleteLater()
+
+        #
+        # Seitenübergreifende Sprünge, weiterhin duck-getypt: eine
+        # neue Seite, die springen können soll, braucht nur das
+        # Signal und keine Änderung hier.
+        #
+
+        if hasattr(page, "pageRequested"):
+
+            page.pageRequested.connect(self.change_page)
+
+        if hasattr(page, "playerRequested"):
+
+            page.playerRequested.connect(self.open_academy_for)
+
+        if hasattr(page, "openSettingsSection"):
+
+            page.openSettingsSection.connect(self.open_settings_section)
+
+        return page
+
+    # --------------------------------------------------
     # Navigation
     # --------------------------------------------------
 
     def change_page(self, index: int):
 
         index = int(index)
+
+        #
+        # Erst bauen, dann umschalten - sonst zeigte der Stapel den
+        # leeren Platzhalter.
+        #
+
+        if self._ensure_page(index) is None:
+            return
 
         #
         # Sidebar aktualisieren
@@ -448,13 +526,15 @@ class MainWindow(QMainWindow):
 
     def open_settings_section(self, key: str):
 
+        settings = self._ensure_page(PageId.SETTINGS)
+
         self.change_page(
             self.SETTINGS_PAGE_INDEX
         )
 
-        if hasattr(self.settings, "show_section"):
+        if hasattr(settings, "show_section"):
 
-            self.settings.show_section(key)
+            settings.show_section(key)
 
     def open_academy_for(self, player_name: str):
         """
@@ -468,9 +548,9 @@ class MainWindow(QMainWindow):
         der Seite.
         """
 
-        academy = getattr(self, "academy", None)
+        academy = self._ensure_page(PageId.ACADEMY)
 
-        if academy is not None and hasattr(academy, "show_player"):
+        if hasattr(academy, "show_player"):
 
             academy.show_player(player_name)
 

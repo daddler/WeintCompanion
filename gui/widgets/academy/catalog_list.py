@@ -22,6 +22,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from gui.theme.colors import Colors
+from gui.theme.restyle import restyle
 from gui.widgets.toggle_switch import ToggleSwitch
 
 
@@ -136,19 +137,21 @@ class _CatalogRow(QWidget):
         # Darstellungsfehler.
         #
 
-        self.title.setStyleSheet(
+        restyle(
+            self.title,
             "font-size:13px;font-weight:600;"
             f"color:{Colors.TEXT if data.active else Colors.TEXT_FAINT};"
-            "background:transparent;border:none;"
+            "background:transparent;border:none;",
         )
 
         self.detail.setText(data.detail)
 
         self.detail.setVisible(bool(data.detail))
 
-        self.dot.setStyleSheet(
+        restyle(
+            self.dot,
             f"color:{STATUS_COLORS.get(data.status, Colors.TEXT_FAINT)};"
-            "font-size:10px;background:transparent;border:none;"
+            "font-size:10px;background:transparent;border:none;",
         )
 
         self.toggle.blockSignals(True)

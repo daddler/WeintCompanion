@@ -38,6 +38,22 @@ REPORTS_ENDPOINT = "/companion/warcraftlogs/reports"
 
 TIMEOUT = 15.0
 
+#
+# Die Zeitleiste bekommt mehr Zeit als die übrigen Endpunkte.
+#
+# Report- und Fightliste sind ein paar Zeilen, ein einzelner Fight
+# ist das Gesamtbild eines Kampfes. Die Zeitleiste dagegen enthält
+# für jeden der 25 Spieler mehrere Reihen mit einem Wert je Sekunde,
+# und der Bot muss sie aus mehreren WarcraftLogs-Abfragen
+# zusammensetzen. Dieselben 15 Sekunden wie für eine Liste anzusetzen
+# hieß, den mit Abstand teuersten Abruf am knappsten zu bemessen -
+# und das Ergebnis war der Fehlerfall, der am meisten wie ein
+# kaputter Knopf aussieht: "Wird geladen …", dann eine
+# Zeitüberschreitung.
+#
+
+TIMELINE_TIMEOUT = 60.0
+
 
 #
 # --------------------------------------------------
@@ -97,9 +113,9 @@ class WarcraftLogsArchiveClient:
     # Roher Abruf
     # --------------------------------------------------
 
-    def _get(self, path: str):
+    def _get(self, path: str, timeout: float = TIMEOUT):
         """
-        Gemeinsamer HTTP-Teil aller drei Endpunkte.
+        Gemeinsamer HTTP-Teil aller Endpunkte.
 
         Liefert (status_code, body, reason). `status_code` ist -1
         bei einem Netzwerkfehler; `body` ist dann None. Ein
@@ -124,7 +140,7 @@ class WarcraftLogsArchiveClient:
                 headers={
                     "Authorization": f"Bearer {account['companion_token']}",
                 },
-                timeout=TIMEOUT,
+                timeout=timeout,
             )
 
         except Exception as exc:
@@ -272,7 +288,8 @@ class WarcraftLogsArchiveClient:
             )
 
         status, body, reason = self._get(
-            f"{REPORTS_ENDPOINT}/{report_code}/fights/{fight_id}/timeline"
+            f"{REPORTS_ENDPOINT}/{report_code}/fights/{fight_id}/timeline",
+            timeout=TIMELINE_TIMEOUT,
         )
 
         if status == 404:

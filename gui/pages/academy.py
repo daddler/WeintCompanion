@@ -49,6 +49,7 @@ from core.resources import Resources
 
 from gui.navigation import PageId
 from gui.theme.colors import Colors
+from gui.theme.restyle import restyle
 from gui.theme.wow_colors import class_color, class_label, role_label
 
 from gui.widgets.academy.catalog_list import CatalogList, CatalogRowData
@@ -247,7 +248,7 @@ class AcademyPage(QWidget):
         )
 
         self.service.snapshotChanged.connect(
-            self._apply_snapshot
+            self._on_snapshot
         )
 
         self.refresh()
@@ -764,6 +765,20 @@ class AcademyPage(QWidget):
     # Snapshot anwenden
     # --------------------------------------------------
 
+    def _on_snapshot(self, snapshot: RaidSnapshot):
+        """
+        Der Anschluss an `snapshotChanged` - dieselbe Prüfung und
+        derselbe Grund wie in WeintTvPage._on_snapshot(): eine
+        unsichtbare Seite wertet nicht mit aus. Hier wiegt das noch
+        etwas schwerer, weil jedes Bild ein vollständiges Profil und
+        einen Trainingsplan nach sich zieht.
+        """
+
+        if not self._attached:
+            return
+
+        self._apply_snapshot(snapshot)
+
     def _apply_snapshot(self, snapshot: RaidSnapshot):
 
         self._sync_roster(snapshot)
@@ -915,10 +930,11 @@ class AcademyPage(QWidget):
 
         self.profile_name.setText(profile.name)
 
-        self.profile_name.setStyleSheet(
+        restyle(
+            self.profile_name,
             f"font-size:22px;font-weight:700;"
             f"color:{class_color(profile.class_name)};"
-            "letter-spacing:-0.01em;background:transparent;border:none;"
+            "letter-spacing:-0.01em;background:transparent;border:none;",
         )
 
         if profile.actor is not None:

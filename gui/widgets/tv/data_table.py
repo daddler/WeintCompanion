@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from gui.theme.colors import Colors
+from gui.theme.restyle import restyle
 from gui.widgets.eyebrow import eyebrow_label
 from gui.widgets.tv.meter_bar import MeterBar
 
@@ -147,9 +148,17 @@ class _Cell(QWidget):
 
         self.label.setText(cell.text)
 
-        self.label.setStyleSheet(
+        #
+        # restyle() statt setStyleSheet(): der Text einer Zelle
+        # ändert sich im Takt, ihre Farbe fast nie. Qt prüft das
+        # nicht selbst und würde bei jedem Bild neu parsen und
+        # polishen (siehe gui/theme/restyle.py).
+        #
+
+        restyle(
+            self.label,
             self._base_style
-            + f"color:{cell.color or Colors.TEXT_SECONDARY};"
+            + f"color:{cell.color or Colors.TEXT_SECONDARY};",
         )
 
         show_bar = cell.ratio >= 0.0

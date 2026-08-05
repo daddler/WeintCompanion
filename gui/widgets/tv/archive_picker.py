@@ -32,6 +32,7 @@ from core.raid_data_service import (
 )
 
 from gui.theme.colors import Colors
+from gui.theme.restyle import restyle
 from gui.widgets.hero_banner import HeroButton
 from gui.widgets.segmented_control import SegmentedControl
 
@@ -102,6 +103,16 @@ class ArchivePicker(QWidget):
         )
 
         layout.addWidget(self.status_label, 1)
+
+        #
+        # Womit die Auswahlfelder zuletzt gefüllt wurden. Siehe
+        # _fill_reports/_fill_fights: ohne dieses Gedächtnis leerte
+        # eine laufende Wiedergabe die Felder viermal je Sekunde.
+        #
+
+        self._reports_signature = None
+
+        self._fights_signature = None
 
         service.archiveChanged.connect(
             self._refresh
@@ -205,22 +216,60 @@ class ArchivePicker(QWidget):
 
         replaying = state.mode == MODE_REPLAY
 
-        loading = self.service.replay_state().loading
+        #
+        # `starting`, nicht `loading`: die Zeitleiste wird schon beim
+        # Wählen eines Pulls im Hintergrund geholt. Am ausgegrauten
+        # Knopf abzulesen, dass irgendwo etwas lädt, wäre in dem
+        # Moment nur irreführend - gedrückt werden darf er trotzdem,
+        # der Dienst merkt sich den Start dann vor.
+        #
+
+        starting = self.service.replay_state().starting
 
         self.play_button.setVisible(
             not replaying
             and self.service.replay_available()
         )
 
-        self.play_button.setEnabled(not loading)
+        self.play_button.setEnabled(not starting)
 
         self.play_button.setText(
             "Wird geladen …"
-            if loading
+            if starting
             else "▶  Wiedergabe"
         )
 
     def _fill_reports(self, state: ArchiveState):
+
+        #
+        # Nur neu füllen, wenn sich am Inhalt wirklich etwas geändert
+        # hat.
+        #
+        # Das ist keine reine Sparmaßnahme. `replayChanged` wird bei
+        # JEDEM Takt der Wiedergabe gesendet (viermal je Sekunde, die
+        # ReplayBar braucht das für Uhr und Schieberegler), und
+        # _refresh() hängt mit daran. Ohne diese Prüfung wurden beide
+        # Auswahlfelder währenddessen viermal je Sekunde geleert und
+        # neu befüllt: ein aufgeklapptes Dropdown klappt dabei sofort
+        # wieder zu, sodass man während einer laufenden Wiedergabe
+        # keinen anderen Pull mehr auswählen konnte. Die Auswahl
+        # blieb zwar erhalten - bedienbar war die Leiste trotzdem
+        # nicht mehr.
+        #
+
+        signature = (
+            state.reports_loading,
+            tuple(
+                (report.code, report.label)
+                for report in state.reports
+            ),
+            state.selected_report,
+        )
+
+        if signature == self._reports_signature:
+            return
+
+        self._reports_signature = signature
 
         self.report_box.blockSignals(True)
 
@@ -258,6 +307,25 @@ class ArchivePicker(QWidget):
         self.report_box.blockSignals(False)
 
     def _fill_fights(self, state: ArchiveState):
+
+        #
+        # Dieselbe Prüfung und derselbe Grund wie in _fill_reports.
+        #
+
+        signature = (
+            state.selected_report,
+            state.fights_loading,
+            tuple(
+                (fight.fight_id, fight.label)
+                for fight in state.fights
+            ),
+            state.selected_fight,
+        )
+
+        if signature == self._fights_signature:
+            return
+
+        self._fights_signature = signature
 
         self.fight_box.blockSignals(True)
 
@@ -304,8 +372,9 @@ class ArchivePicker(QWidget):
 
             self.status_label.setText(reason)
 
-            self.status_label.setStyleSheet(
-                f"font-size:11px;color:{Colors.WARNING_LIGHT};"
+            restyle(
+                self.status_label,
+                f"font-size:11px;color:{Colors.WARNING_LIGHT};",
             )
 
             return
@@ -324,6 +393,7 @@ class ArchivePicker(QWidget):
 
         self.status_label.setText(text)
 
-        self.status_label.setStyleSheet(
-            f"font-size:11px;color:{Colors.TEXT_MUTED};"
+        restyle(
+            self.status_label,
+            f"font-size:11px;color:{Colors.TEXT_MUTED};",
         )
