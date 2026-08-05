@@ -61,14 +61,112 @@ der Voreinstellung von 300 Ereignissen je Seite, viel zu wenig für
 einen 25-Mann-Kampf, sodass spät gezündete Cooldowns schlicht nicht
 mehr in der Antwort waren.
 
+### Und warum sie danach *immer noch* leer ankamen
+
+Nach all dem meldete die Praxis unverändert „keine DoTs, keine eigenen
+Buffs, keine Cooldown-Nutzung, keine Unterbrechungen". Drei weitere
+Ursachen, alle vom selben Schlag — jede erzeugt ein leeres Feld, und
+ein leeres Feld ist in der Oberfläche nicht von „hat der Spieler eben
+nicht gemacht" zu unterscheiden:
+
+- **Der Live-Endpunkt hat die Aura-Ströme gar nicht geladen.**
+  `LIVE_EVENT_TYPES` enthielt nur `Casts`, `Interrupts` und `Dispels`.
+  Weggelassen waren `Debuffs`/`Buffs` aus einem guten Grund (es sind
+  die größten Ströme, und `/live` wird alle 15 s je Zuschauer
+  abgefragt) — nur eben mit der Folge, dass `players[].dots`/`hots`
+  live **strukturell** leer waren, unabhängig von jedem Katalog. Beide
+  kommen jetzt mit, aber **serverseitig gefiltert**: die
+  `filterExpression` schränkt sie auf die Spell-IDs des Aurenkatalogs
+  ein, typisch ein bis zwei Prozent des Rohstroms. Das Archiv lädt
+  weiterhin ungefiltert — dort zählt Vollständigkeit, und eine
+  unbekannte Aura soll im Diagnose-Log auftauchen statt vorher
+  weggeschnitten zu werden.
+
+- **`events(dataType: Debuffs)` fragte die falsche Seite des Kampfes
+  ab.** Ohne `hostilityType` liefert WarcraftLogs die
+  Schwächungszauber auf **Freundlichen** — also das, was der Boss auf
+  den Raid legt. Die DoTs, um die es geht, liegen auf dem Gegner. Die
+  Debuffs-*Tabelle* im selben Modul fragte seit jeher korrekt mit
+  `hostilityType: Enemies`; nur der Ereignisweg tat es nicht.
+
+- **`players[].buffs` hat der Bot nie gebaut.** Der Vertrag kennt drei
+  Uptime-Listen, geliefert wurden zwei. Es fehlte schlicht die
+  Grundlage: ohne einen Katalog, der weiß, *welche* Aura ein Selbstbuff
+  ist, lässt sich der Buff-Strom nicht aufteilen — `sourceID ==
+  targetID` allein würde jeden Klassenbuff, jedes Trinket-Proc und
+  jedes Essen mitzählen. Den Katalog gibt es jetzt
+  (`services/warcraftlogs_auras.py`, gleiche Drei-Wege-Erkennung wie
+  bei den Cooldowns); für die aktive Schadensminderung der Tanks war
+  das die einzige fehlende Zutat.
+
+### Sprache: warum die Oberfläche gemischt aussah
+
+„Viele Fähigkeiten auf Englisch, einige auf Deutsch" hatte eine
+einfache Ursache: die beiden Wege in dieselbe Oberfläche haben
+verschieden übersetzt. Auren kamen als **Rohname aus dem Bericht**
+(bei einer deutschen Gilde also deutsch), Cooldowns als **englischer
+Katalogschlüssel** — „Flammenschock" und „Rallying Cry" nebeneinander.
+
+Der Bot liefert jetzt durchgehend den **deutschen** Anzeigenamen
+(`name`) und behält den englischen Katalogschlüssel daneben als `key`.
+
+Wichtiger noch: **jede Fähigkeitszeile trägt jetzt ihre `spell_id`** —
+`dots`, `hots`, `buffs`, `cooldowns`, `raid_cooldowns`,
+`heal_cooldowns`, `interrupts`, `dispels`. Damit erkennt die Companion
+über die ID statt über den Namen, und die beiden Repos dürfen sich
+beim deutschen Namen unterscheiden, ohne dass eine Zeile unerkannt
+liegen bleibt. Das war kein theoretisches Risiko: ein Abgleich der
+beiden Kataloge fand **35 Spell-IDs mit verschiedenen deutschen
+Namen** (Zerfleischen/Hauen, Aufstieg/Aszendenz, Seelenruhe/
+Gelassenheit …). Über den Namen gematcht wäre jede davon eine
+dauerhaft unerkannte Zeile gewesen.
+
+### Speicher: warum der Bot bei manchen Bossen abstürzte
+
+Der Zielhost hat **0,15 vCPU und 0,15 GB** für den ganzen Prozess;
+allein die Importe (discord.py, FastAPI, uvicorn, httpx, aiosqlite)
+belegen davon rund 63 MB. Die Brücke lud ihre Ereignisströme
+**gleichzeitig und vollständig** in Listen — bei der Zeitleiste acht
+Stück. Ein 25-Mann-Pull von sechs Minuten kommt auf grob 180 000
+Ereignisse; gemessen sind das ~63 MB allein für die Listen, und damit
+war der Prozess weg. Genau das erklärt „einige Bosse kann ich
+abfragen, bei anderen stürzt der Bot ab": es hing an Länge und Größe
+des Pulls, nicht am Boss.
+
+Die Ströme werden jetzt **nacheinander geladen und Seite für Seite
+gefaltet** (`_iter_event_pages` + die Falter in `services/
+warcraftlogs.py`, `TimelineFold` in `services/
+warcraftlogs_timeline.py`). Was bleibt, sind Zähler; der Spitzenbedarf
+hängt an der Seitengröße statt an der Kampflänge. Derselbe Testfall:
+**62,8 MB → 2,2 MB** (Faktor 28). Dazu ein wiederverwendeter
+`httpx.AsyncClient` statt eines neuen je Abfrage — bei 0,15 vCPU ist
+ein TLS-Handschlag je GraphQL-Aufruf ein spürbarer Posten.
+
+Zwei Rechnungen mussten dafür umgestellt werden, und beide sind es
+wert, gemerkt zu werden:
+
+- Die **Vereinigung der Aura-Fenster** wird fortlaufend gebildet, ohne
+  die Fenster aufzuheben. Das geht, weil Ereignisse zeitlich geordnet
+  ankommen: Fenster schließen in der Reihenfolge ihres *Endes*, und
+  dann genügt je Fähigkeit ein „bis hierher schon abgedeckt"-Zeitpunkt.
+- Die **Bosserkennung der Zeitleiste** brauchte einen zweiten Durchgang
+  über den Schadensstrom, um erst die Zielsummen zu bilden. Jetzt wird
+  der Verlauf je Gegner mitgeführt (begrenzt) und der Boss am Ende
+  ausgewählt.
+
 ### Was jetzt geliefert wird
 
-`players[].dots`/`hots` (aus rohen Buff-/Debuff-Ereignissen, Uptime als
-Vereinigung der aktiven Fenster, nie über 100 %),
-`players[].cooldowns` (Zeitpunkte aus `events(dataType: Casts)`, über
-die Spell-ID erkannt), `players[].movement_units` (Summe der Abstände
-zwischen aufeinanderfolgenden Positionsangaben), die top-level
-`interrupts[]`/`dispels[]`, sowie der komplette `/timeline`-Endpunkt.
+`players[].dots`/`hots`/**`buffs`** (aus rohen Buff-/Debuff-Ereignissen,
+Uptime als Vereinigung der aktiven Fenster, nie über 100 %) — **in Live
+und Archiv**, nicht mehr nur im Archiv. `players[].cooldowns`
+(Zeitpunkte aus `events(dataType: Casts)`, über die Spell-ID erkannt),
+`players[].movement_units` (Summe der Abstände zwischen
+aufeinanderfolgenden Positionsangaben, auf eine Probe je Spieler und
+Sekunde ausgedünnt), die top-level `interrupts[]`/`dispels[]`, sowie
+der komplette `/timeline`-Endpunkt.
+
+Jede dieser Zeilen trägt ihre `spell_id` und einen deutschen
+Anzeigenamen.
 
 Weiterhin offen (noch nicht im Bot umgesetzt): `active_time`/`casts`
 im Einzel-Fight (in der Zeitleiste gibt es sie), `resurrects[]`,
@@ -77,10 +175,16 @@ vollständige `mechanics[]`-Neufassung für weitere Bosse. Jedes
 fehlende Feld degradiert weiterhin sauber zu „keine Daten"
 (Companion-seitig getestet).
 
-Ein Diagnose-Log in `get_report_fight` und `get_report_timeline` zeigt
-bei jedem Archiv-Abruf die rohen Ereigniszahlen und Beispielwerte im
-Bot-Terminal — darüber lässt sich ein weiterhin leeres Feld gezielt
-eingrenzen, statt zu raten.
+Ein Diagnose-Log in `get_live_report`, `get_report_fight` und
+`get_report_timeline` zeigt bei jedem Abruf die rohen Ereigniszahlen
+und Beispielwerte im Bot-Terminal. Die Zahlen beantworten die Frage,
+die zweimal geraten werden musste: **null Rohereignisse** heißt
+„WarcraftLogs hat nichts geliefert", **Zahl bei den Rohereignissen und
+trotzdem leeres Feld** heißt „der Katalog kennt die Fähigkeit nicht" —
+zwei völlig verschiedene Baustellen. Der Archiv-Log listet dazu die
+nicht erkannten Auren nach Häufigkeit; das ist der Weg, über den eine
+Lücke in `services/warcraftlogs_auras.py` auffällt, bevor sie als
+fehlende Zeile in der App auffällt.
 
 ---
 
@@ -484,8 +588,13 @@ für unbekannte Fähigkeiten bleibt die des Bots stehen -, sondern
 verhindert, dass eine ganze Karte leer aussieht, obwohl die Zahl
 geliefert wurde.
 
-Quelle: `table(dataType: Debuffs, hostilityType: Enemies)` für DoTs,
-`table(dataType: Buffs)` für HoTs.
+Quelle: `events(dataType: Debuffs, hostilityType: Enemies)` für DoTs,
+`events(dataType: Buffs)` für HoTs und eigene Buffs — nur rohe
+Ereignisse kennen mit `sourceID` den Auslöser. Die Tabellenform
+(`table(...)`) bleibt als Rückfallebene für DoTs und HoTs; für
+`buffs[]` gibt es sie bewusst **nicht**: die Buffs-Tabelle kennt den
+Auslöser nicht, und ein Raidbuff, den jemand anders gegeben hat, ist
+kein eigener Buff. Lieber leer als falsch zugeordnet.
 
 `buffs[]` sind Effekte auf dem Spieler **selbst**: die aktive
 Schadensminderung eines Tanks (Schildblock, Mischen, Schild des
@@ -498,8 +607,13 @@ eigentliche Aufgabe misst: ohne sie werden sie in „Rotation" allein an
 ihrer Aktivzeit gemessen, also an der einen Zahl, die über einen Tank
 am wenigsten aussagt.
 
-Quelle: `table(dataType: Buffs)`, gefiltert auf Effekte, deren Quelle
-und Ziel derselbe Spieler ist.
+Welche Aura ein eigener Buff ist, entscheidet der **Aurenkatalog** des
+Bots (`services/warcraftlogs_auras.py`), nicht `sourceID == targetID`:
+sonst stünden Essen, Fläschchen, Klassenbuffs und jedes Trinket-Proc
+in dieser Liste. Umgekehrt gilt für **Debuffs auf Gegnern** die andere
+Regel — was der Katalog nicht kennt, zählt trotzdem als DoT, denn ein
+Spieler-Debuff auf dem Boss ist per Konstruktion Rotationsarbeit. Eine
+Katalog­lücke kostet dort die Übersetzung, nicht die Zeile.
 
 #### `cooldowns[]`
 

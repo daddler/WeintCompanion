@@ -9,6 +9,8 @@ Geprüft werden deshalb Vollständigkeit und die Böden, unter die keine
 Spezialisierung fallen darf, nicht einzelne Zahlenwerte.
 """
 
+import pytest
+
 from analyzer.data import class_abilities, player_abilities, specs
 from analyzer.models import (
     CD_PERSONAL,
@@ -274,3 +276,102 @@ def test_display_name_is_language_independent():
     #
 
     assert class_abilities.display_name("Zauber XY") == "Zauber XY"
+
+
+# =========================
+# DIE GEMELDETEN DOTS
+# =========================
+#
+# Die Rückmeldung, die diese Runde ausgelöst hat, war eine Liste von
+# achtzehn DoTs mit dem Satz "sind noch immer nicht aufgeführt". Der
+# Bot schickt sie inzwischen mitsamt Spell-ID; hier steht die andere
+# Hälfte der Kette: dass diese Tabelle sie auch erkennt, richtig
+# einsortiert und auf einen deutschen Namen bringt.
+#
+# Die IDs sind dieselben, die der Bot in services/warcraftlogs_auras.py
+# führt. Laufen die beiden auseinander, fällt das hier auf - und nicht
+# erst als fehlende Zeile in der Oberfläche, wo eine nicht erkannte
+# Aura genauso aussieht wie eine, die der Spieler nie benutzt hat.
+
+REPORTED_DOTS = {
+    8050: "Flammenschock",
+    348: "Feuerbrand",
+    1079: "Blutung",                 # Rip
+    1943: "Blutung",                 # Rupture
+    1822: "Krallenhieb",
+    55095: "Frostfieber",
+    55078: "Blutseuche",
+    8921: "Mondfeuer",
+    93402: "Sonnenfeuer",
+    44457: "Lebende Bombe",
+    114923: "Nethersturm",
+    118253: "Schlangengift",
+    3674: "Schwarzer Pfeil",
+    980: "Agonie",
+    172: "Verderbnis",
+    30108: "Instabiles Gebrechen",
+    589: "Schattenwort: Schmerz",
+    34914: "Vampirberührung",
+    31803: "Tadel",
+}
+
+
+@pytest.mark.parametrize("spell_id", sorted(REPORTED_DOTS))
+def test_every_reported_dot_is_known_by_spell_id(spell_id):
+    """
+    Die Spell-ID ist der einzige Weg ohne Sprache - und seit der Bot
+    sie mitschickt der Weg, über den die Erkennung tatsächlich läuft.
+    """
+
+    assert class_abilities.aura_kind(spell_id=spell_id) == UPTIME_DOT
+
+
+@pytest.mark.parametrize("spell_id,german", sorted(REPORTED_DOTS.items()))
+def test_every_reported_dot_resolves_to_its_german_name(spell_id, german):
+
+    assert class_abilities.display_name(spell_id=spell_id) == german
+
+
+@pytest.mark.parametrize("spell_id", sorted(REPORTED_DOTS))
+def test_every_reported_dot_belongs_to_at_least_one_spec(spell_id):
+    """
+    In der Tabelle zu stehen genügt nicht: die Aura muss einer
+    Spezialisierung zugeordnet sein, sonst findet `match()` sie für
+    keinen Spieler und `reference_hint()` nennt sie nie.
+    """
+
+    owners = [
+        (spec.class_name, spec.spec)
+        for spec in class_abilities.SPEC_ABILITIES
+        for aura in spec.auras
+        if spell_id in aura.spell_ids
+    ]
+
+    assert owners, f"Spell-ID {spell_id} gehört zu keiner Spezialisierung"
+
+
+def test_no_spell_id_is_shared_by_two_different_abilities():
+    """
+    Zwei Fähigkeiten unter einer ID sind ein stiller Fehler: die zweite
+    bekommt Namen und Abklingzeit der ersten. Genau daran hingen zwei
+    echte Fälle - Göttliche Gunst lief als Zornige Vergeltung, und der
+    Gedankenschinder wurde gegen die dreifache Abklingzeit des
+    Schattengeists gemessen und damit dauerhaft als "kaum genutzt"
+    bewertet.
+    """
+
+    owners: dict[int, str] = {}
+    clashes = []
+
+    for spec in class_abilities.SPEC_ABILITIES:
+
+        for row in list(spec.auras) + list(spec.cooldowns):
+
+            for spell_id in row.spell_ids:
+
+                if spell_id in owners and owners[spell_id] != row.english:
+                    clashes.append((spell_id, owners[spell_id], row.english))
+
+                owners.setdefault(spell_id, row.english)
+
+    assert clashes == []

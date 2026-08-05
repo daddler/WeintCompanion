@@ -341,7 +341,17 @@ _HOLY_AVENGER = _cd(
 )
 
 _AVENGING_WRATH = _cd(
-    "Avenging Wrath", "Zornige Vergeltung", (31884, 31842), 180,
+    "Avenging Wrath", "Zornige Vergeltung", (31884,), 180,
+    aliases=("Zorn der Gerechtigkeit",),
+)
+
+# 31842 stand bis hierher mit in der Zeile darüber - das ist aber
+# **Göttliche Gunst**, eine eigene Fähigkeit mit eigener Abklingzeit.
+# Ein Einsatz davon wurde dadurch als Avenging Wrath gezählt: eine
+# Zahl, die stimmt, unter einem Namen, der nicht stimmt - schlimmer
+# als eine fehlende Zeile, weil nichts daran auffällt.
+_DIVINE_FAVOR = _cd(
+    "Divine Favor", "Göttliche Gunst", (31842,), 180, CD_HEAL, True,
 )
 
 _DESPERATE_PRAYER = _cd(
@@ -354,7 +364,16 @@ _POWER_INFUSION = _cd(
 )
 
 _SHADOWFIEND = _cd(
-    "Shadowfiend", "Schattengeist", (34433, 123040), 180,
+    "Shadowfiend", "Schattengeist", (34433,), 180,
+)
+
+# 123040 ist **Gedankenschinder**, der Talent-Ersatz für den
+# Schattengeist - und eben nicht derselbe Zauber: 60 Sekunden
+# Abklingzeit statt 180. Zusammen in einer Zeile wurde jeder
+# Gedankenschinder gegen die dreifache Abklingzeit gemessen, also
+# dauerhaft als "kaum genutzt" bewertet.
+_MINDBENDER = _cd(
+    "Mindbender", "Gedankenschinder", (123040,), 60, CD_PERSONAL, True,
 )
 
 _MASS_DISPEL = _cd(
@@ -581,7 +600,8 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
                 (124974,), 90, CD_PERSONAL, True,
             ),
             _BARKSKIN,
-            _cd("Tranquility", "Gelassenheit", (740,), 180, CD_RAID),
+            _cd("Tranquility", "Seelenruhe", (740,), 180, CD_RAID,
+                aliases=("Gelassenheit",)),
             _STAMPEDING_ROAR,
             _REBIRTH,
         ),
@@ -653,7 +673,8 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _hot("Regrowth", "Nachwachsen", (8936,), 40.0, True),
         ),
         cooldowns=(
-            _cd("Tranquility", "Gelassenheit", (740,), 180, CD_HEAL),
+            _cd("Tranquility", "Seelenruhe", (740,), 180, CD_HEAL,
+                aliases=("Gelassenheit",)),
             _cd(
                 "Ironbark", "Eisenborke", (102342,), 60, CD_HEAL,
             ),
@@ -741,6 +762,14 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
     SpecAbilities(
         "Mage", "Arkan",
         auras=(
+            # Der DoT des Arkan-Magiers - fehlte hier komplett, obwohl
+            # er in der Rückmeldung ausdrücklich genannt war. Ohne ihn
+            # hatte die Spezialisierung überhaupt keinen nicht-
+            # optionalen DoT, und "Rotation" blieb dauerhaft unbewertet.
+            _dot(
+                "Nether Tempest", "Nethersturm", (114923,), 90.0,
+                aliases=("Netherorkan",),
+            ),
             _dot("Living Bomb", "Lebende Bombe", (44457,), 80.0, True),
             _buff("Arcane Charge", "Arkane Ladung", (36032,), 0.0, True),
         ),
@@ -895,6 +924,7 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
                 (86669,), 300, CD_HEAL,
             ),
             _AVENGING_WRATH,
+            _DIVINE_FAVOR,
             _DEVOTION_AURA,
             _HOLY_AVENGER,
             _HAND_OF_SACRIFICE,
@@ -992,6 +1022,7 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _cd("Divine Hymn", "Gotteshymne", (64843, 64844), 180, CD_HEAL),
             _POWER_INFUSION,
             _SHADOWFIEND,
+            _MINDBENDER,
             _DESPERATE_PRAYER,
             _MASS_DISPEL,
         ),
@@ -1016,6 +1047,7 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             ),
             _POWER_INFUSION,
             _SHADOWFIEND,
+            _MINDBENDER,
             _DESPERATE_PRAYER,
             _MASS_DISPEL,
         ),
@@ -1033,6 +1065,7 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
         ),
         cooldowns=(
             _SHADOWFIEND,
+            _MINDBENDER,
             _POWER_INFUSION,
             _cd("Dispersion", "Dispersion", (47585,), 120, CD_DEFENSIVE),
             _DESPERATE_PRAYER,
