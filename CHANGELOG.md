@@ -1,6 +1,43 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.1.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
+
+## 1.6.2
+
+Einen Pull aus dem Archiv auszuwählen endete zuverlässig mit **"Bot
+nicht erreichbar: The read operation timed out"** - obwohl im Bot-Log
+zu sehen war, dass derselbe Pull kurz darauf sehr wohl fertig
+ausgewertet wurde. Aufgegeben hat also die App, nicht der Bot.
+
+Drei Ursachen, alle drei behoben:
+
+**Die App wartete zu kurz.** Für einen archivierten Pull liest der Bot
+die vollständigen Ereignisströme des Kampfes - in einem gemessenen
+Fall über 30.000 Ereignisse, seitenweise von WarcraftLogs geholt und
+auf einem Host mit 0,15 vCPU ausgewertet. Dafür waren 15 Sekunden
+angesetzt, dieselbe Spanne wie für eine dreizeilige Berichtsliste. Die
+Zeitgrenzen richten sich jetzt nach dem, was der Bot für die jeweilige
+Antwort tatsächlich tun muss.
+
+**Die App ließ den Bot zwei Kämpfe gleichzeitig auswerten.** Mit der
+Wahl eines Pulls wurde neben dem Pull selbst auch dessen Zeitleiste im
+Voraus geholt - beide lesen dieselben Ereignisströme. Nebeneinander
+konkurrierten sie um genau die Anfrage, auf die man gerade wartete.
+Die Zeitleiste wird jetzt erst geholt, wenn der Pull da ist; der Zweck
+des Vorabladens bleibt, die Wartezeit liegt weiterhin vor dem
+Wiedergabe-Knopf statt hinter ihm.
+
+**Aufgeben machte es schlimmer.** Brach die App den Abruf ab, verwarf
+der Bot die halbfertige Arbeit und begann beim nächsten Versuch wieder
+bei null - bei einem Abruf, der länger dauert als die Geduld der App,
+wird daraus eine Schleife, die nie fertig wird. Der Bot rechnet einen
+begonnenen Pull jetzt zu Ende und hält das Ergebnis einige Minuten
+vor; ein zweiter Versuch ist damit sofort da.
+
+Nebenbei sagen die Meldungen jetzt mehr: statt der englischen
+httpx-Zeile steht dort, dass ein erneuter Versuch schneller ist, und
+nennt der Bot einen Grund (etwa "WarcraftLogs hat nicht rechtzeitig
+geantwortet"), steht der in der Oberfläche statt nur einer HTTP-Nummer.
 
 ## 1.6.1
 

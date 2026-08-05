@@ -380,7 +380,15 @@ class ArchivePicker(QWidget):
             return
 
         if state.fight_loading:
-            text = "Lädt Pull ..."
+
+            #
+            # Mit dem Zusatz, weil dieser eine Schritt wirklich lange
+            # dauern kann: der Bot liest dafür die vollständigen
+            # Ereignisströme des Kampfes. Ohne den Hinweis sieht ein
+            # ehrliches Warten genauso aus wie ein hängender Knopf.
+            #
+
+            text = "Lädt Pull ... (bei großen Pulls dauert das etwas)"
 
         elif state.fights_loading:
             text = "Lädt Pulls ..."
