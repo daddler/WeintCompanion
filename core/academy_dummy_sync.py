@@ -22,17 +22,26 @@ hiesigen Katalogs (z.B. "warrior-arms"). Ein nicht gefundener Key wird
 geloggt und die Sitzung verworfen, statt den ganzen Sync-Lauf zu
 gefährden - gleiche Philosophie wie in addon/sync_reader.py.
 
-Eine Sitzung zählt nur als "gültiger Übungstag", wenn ihre
-Trefferquote MIN_COMPLIANCE_PERCENT erreicht. Drei solche Tage IN
-FOLGE (Kalendertag auf Kalendertag, keine Lücke) hakt die zugehörige
-Lektion automatisch über AcademyService.set_completed() ab - dieselbe
-Persistenz wie beim manuell gesetzten Häkchen, nur ein neuer Aufrufer.
+Eine Sitzung zählt nur als "gültiger Übungstag", wenn sie
+MIN_SESSION_SECONDS Kampfzeit erreicht und ihre Note bei
+MIN_COMPLIANCE_PERCENT liegt. Drei solche Tage IN FOLGE (Kalendertag
+auf Kalendertag, keine Lücke) hakt die zugehörige Lektion automatisch
+über AcademyService.set_completed() ab - dieselbe Persistenz wie beim
+manuell gesetzten Häkchen, nur ein neuer Aufrufer.
+
+Die Mindestdauer steht bewusst auf beiden Seiten: das Addon meldet
+seit 1.3.2.0 gar nichts Kürzeres mehr (MIN_SESSION_SECONDS in
+modules/rotationtrainer.lua), aber welche Addon-Version installiert
+ist, entscheidet der Spieler - eine ältere schickt weiterhin
+Dreißig-Sekunden-Sitzungen, und die dürfen die Tage-Serie nicht
+tragen. Beide Zahlen müssen deshalb gleich bleiben.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
+MIN_SESSION_SECONDS = 180
 MIN_COMPLIANCE_PERCENT = 80.0
 STREAK_TARGET = 3
 
@@ -124,6 +133,15 @@ def apply_dummy_practice_session(academy, payload: str) -> bool:
     session = parse_dummy_practice_session(payload)
 
     if session is None:
+        return False
+
+    #
+    # Zu kurz ist kein Übungstag: unter drei Minuten am Stück sagt eine
+    # Sitzung nichts über die Rotation aus. Neuere Addon-Versionen
+    # melden solche Sitzungen gar nicht erst, ältere schon.
+    #
+
+    if session["duration"] < MIN_SESSION_SECONDS:
         return False
 
     if session["compliance"] < MIN_COMPLIANCE_PERCENT:

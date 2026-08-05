@@ -162,6 +162,8 @@ Messages written into the inbox may carry an optional `community` (the Discord g
 
 All inbound senders go through `AddonInbox` (`addon/addon_inbox.py`), which keeps one channel per sender and writes the union. `InboxWriter.send_batch()` replaces the *whole* queue (correct, since the addon empties it at login), so without channels the second sender in a sync cycle would silently delete the first one's messages.
 
+The addon's Rotationshelfer reports one `dummy_practice_session` message per finished practice session at a training dummy, handled locally by `core/academy_dummy_sync.py` (never sent to the bot). Three consecutive calendar days with a qualifying session tick the spec's `<slug>.rotation.dummy_practice` lesson. Qualifying means **at least `MIN_SESSION_SECONDS` (180) of combat time** and `MIN_COMPLIANCE_PERCENT`; the duration floor is also enforced in the addon (`MIN_SESSION_SECONDS` in `modules/rotationtrainer.lua`) and the two numbers must stay equal — the addon-side one is what the player sees, this one is what holds when they run an older addon version. The message's seven positional fields are fixed; extending them means touching both sides.
+
 The return path is the outbound `academy` state message: lesson checkboxes ticked in-game come back as `<char>|<done,…>|<excluded,…>;…` and `SyncManager._apply_academy_progress()` replaces the local `AcademyService` lists with them. It never reaches the bot — this is desktop-local data.
 
 The bot backend base URL is centralized as `BOT_BASE_URL` in `core/backend_config.py`, imported by `core/discord_auth.py`, `core/character_sync_client.py`, and `core/discord_roster_sync.py`.

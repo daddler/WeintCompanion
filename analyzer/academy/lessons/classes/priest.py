@@ -287,7 +287,9 @@ SPEC_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 "Im Addon an eine Trainingspuppe treten oder "
                 "/wc training nutzen.",
                 "Das Fenster zeigt die Prioritätenliste live mit.",
-                "An drei Tagen in Folge mit guter Trefferquote üben - "
+                "Mindestens drei Minuten am Stück üben - kürzere "
+                "Sitzungen zählen nicht.",
+                "An drei Tagen in Folge mit guter Note üben - "
                 "hakt sich danach von selbst ab.",
             ),
             class_name=CLASS_NAME,
