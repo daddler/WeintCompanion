@@ -970,6 +970,35 @@ Pflichtfeld (Einträge ohne nutzbare ID werden verworfen); `name`,
 zusammen die Zeilenbeschriftung im Dropdown (z. B.
 "Pull 7 · Horridon · 42 % · 03:07").
 
+**Nur Bosskämpfe.** WarcraftLogs führt Trash in derselben
+`fights`-Liste und unterscheidet es über `encounterID == 0`. Der Bot
+lässt Trash hier weg: eine Trashgruppe ist kein Pull — kein
+Bossanteil, keine Pull-Nummer, die etwas bedeutet, keine Taktik, gegen
+die sich etwas bewerten ließe —, in der Auswahlliste standen davon
+aber Dutzende zwischen den paar Kämpfen, die man ansehen will. Die
+Encounter-ID ist dafür das einzige verlässliche Merkmal: `name` trägt
+bei Trash den Namen irgendeines Mobs, und `difficulty` fehlt dort zwar
+meist, aber nicht nur dort.
+
+Die App verwirft Trash **zusätzlich selbst** (`build_fight_list()`
+überspringt `encounter_id <= 0`). Das ist keine doppelte Arbeit,
+sondern der Grund, aus dem `encounter_id` überhaupt im Vertrag steht:
+die Liste kommt von einem Server, der nicht mit der App zusammen
+aktualisiert wird, und ohne diese Zeile hinge die Auswahl davon ab,
+wann jemand den Bot neu ausrollt.
+
+Die `pull_number` zählt weiterhin gegen die **vollständige**
+`fights`-Liste — sie zählt die Pulls desselben Encounters, und Trash
+dazwischen darf sie nicht verschieben.
+
+Dieselbe Unterscheidung gilt für den Live-Endpunkt: dort galt bis
+1.6.1 schlicht der jüngste Eintrag als aktueller Pull, und das ist an
+einem Raidabend überwiegend eine Trashgruppe. Jetzt gilt der jüngste
+**Bosskampf**; enthält der Bericht noch keinen, antwortet `/live` mit
+`"idle"` und "Bericht liegt vor, aber noch kein Bosskampf" — ehrlicher
+als eine Trashgruppe mit Pull-Nummer, Bossleiste und
+Academy-Bewertung.
+
 ### Einzelner Fight
 
 ```

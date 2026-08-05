@@ -1,6 +1,40 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.0.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.1.
+
+## 1.6.1
+
+Im Archiv lassen sich nur noch **Bosskämpfe** auswählen.
+
+WarcraftLogs führt Trash in derselben Liste wie die Bosskämpfe. In der
+Pull-Auswahl standen dadurch Dutzende Trashgruppen zwischen den paar
+Kämpfen, die man tatsächlich ansehen will - eine Trashgruppe ist aber
+kein Pull: kein Bossanteil, keine Pull-Nummer, die etwas bedeutet, und
+keine Taktik, gegen die sich etwas bewerten ließe. Unterschieden wird
+über die Encounter-ID, die bei Trash 0 ist; das ist das einzige
+verlässliche Merkmal, denn der Name trägt dort irgendeinen Mob.
+
+Gefiltert wird auf **beiden** Seiten: der Bot schickt Trash gar nicht
+mehr mit, und die App verwirft es zusätzlich selbst. Ohne das zweite
+hinge die Auswahl davon ab, wann jemand den Bot neu ausrollt.
+
+Dieselbe Ursache steckte im Live-Betrieb: dort galt schlicht der
+jüngste Eintrag als "aktueller Pull", und das ist an einem Raidabend
+überwiegend eine Trashgruppe. WeintTV zeigte sie mitsamt Pull-Nummer,
+Bossleiste und Academy-Bewertung an. Jetzt gilt der jüngste
+**Bosskampf**; hat ein Bericht noch keinen, sagt der Bot das auch so,
+statt eine Trashgruppe wie einen Pull aussehen zu lassen.
+
+Außerdem, aus derselben Runde: Fähigkeiten werden jetzt über ihre
+Spell-ID erkannt statt über den Namen. Ein Abgleich mit den Katalogen
+des Bots fand 35 Spell-IDs, die auf beiden Seiten einen verschiedenen
+deutschen Namen tragen - über den Namen gematcht wäre jede davon eine
+dauerhaft unerkannte Zeile gewesen, und eine unerkannte Zeile sieht
+genauso aus wie eine Fähigkeit, die nie benutzt wurde. Zwei Einträge
+waren dabei schlicht falsch: Göttliche Gunst lief als Zorn der
+Gerechtigkeit, und der Gedankenschinder wurde gegen die dreifache
+Abklingzeit des Schattengeists gemessen. Der Nethersturm des
+Arkan-Magiers fehlte ganz.
 
 ## 1.6.0
 

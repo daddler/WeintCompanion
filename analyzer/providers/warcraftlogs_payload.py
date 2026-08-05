@@ -1434,6 +1434,15 @@ class FightSummary:
 
     encounter_name: str = ""
 
+    #
+    # WarcraftLogs' Encounter-ID. 0 bedeutet **Trash** - das ist das
+    # einzige verlässliche Merkmal dafür, denn `encounter_name` trägt
+    # bei Trash den Namen irgendeines Mobs und `difficulty` fehlt dort
+    # zwar meist, aber nicht immer nur dort.
+    #
+
+    encounter_id: int = 0
+
     difficulty: str = ""
 
     kill: bool = False
@@ -1498,6 +1507,17 @@ def build_fight_list(payload: dict) -> tuple[FightSummary, ...]:
     Einträge ohne verwendbare Fight-ID werden verworfen - dieselbe
     Regel wie bei fehlendem Report-Code: ohne ID lässt sich der Fight
     nicht einzeln nachladen.
+
+    **Trash wird ebenfalls verworfen** (`encounter_id == 0`). Eine
+    Trashgruppe ist kein Pull: kein Bossanteil, keine Pull-Nummer, die
+    etwas bedeutet, keine Taktik, gegen die sich etwas bewerten ließe -
+    in der Auswahlliste standen davon aber Dutzende zwischen den paar
+    Bosskämpfen, die man tatsächlich ansehen will.
+
+    Der Bot filtert seit derselben Runde ebenfalls, und trotzdem steht
+    es hier: die Liste kommt von einem Server, der nicht mit der App
+    zusammen aktualisiert wird. Ohne diese Zeile hinge die Auswahl
+    davon ab, wann jemand den Bot neu ausrollt.
     """
 
     entries = []
@@ -1511,10 +1531,16 @@ def build_fight_list(payload: dict) -> tuple[FightSummary, ...]:
         if fight_id < 0:
             continue
 
+        encounter_id = _count(row.get("encounter_id"))
+
+        if encounter_id <= 0:
+            continue
+
         entries.append(
             FightSummary(
                 fight_id=fight_id,
                 encounter_name=_text(row.get("name")),
+                encounter_id=encounter_id,
                 difficulty=(
                     encounters.difficulty_name(_count(row.get("difficulty_id")))
                     if row.get("difficulty_id")

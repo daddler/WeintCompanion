@@ -648,6 +648,7 @@ def test_build_fight_list_maps_known_fields():
         "fights": [
             {
                 "id": 12,
+                "encounter_id": 1640,
                 "name": "Horridon",
                 "difficulty_id": 6,
                 "kill": False,
@@ -663,6 +664,7 @@ def test_build_fight_list_maps_known_fields():
     fight = fights[0]
 
     assert fight.fight_id == 12
+    assert fight.encounter_id == 1640
     assert fight.encounter_name == "Horridon"
     assert fight.difficulty == "25 Heroisch"
     assert fight.kill is False
@@ -675,7 +677,13 @@ def test_build_fight_list_labels_a_kill_without_a_percentage():
 
     fights = build_fight_list({
         "fights": [
-            {"id": 1, "name": "Horridon", "kill": True, "duration": 200.0},
+            {
+                "id": 1,
+                "encounter_id": 1640,
+                "name": "Horridon",
+                "kill": True,
+                "duration": 200.0,
+            },
         ],
     })
 
@@ -686,12 +694,35 @@ def test_build_fight_list_drops_entries_without_a_usable_id():
 
     fights = build_fight_list({
         "fights": [
-            {"name": "ohne id"},
-            {"id": 3, "name": "gueltig"},
+            {"name": "ohne id", "encounter_id": 1640},
+            {"id": 3, "encounter_id": 1640, "name": "gueltig"},
         ],
     })
 
     assert [fight.fight_id for fight in fights] == [3]
+
+
+def test_build_fight_list_drops_trash():
+    """
+    Trash trägt bei WarcraftLogs `encounter_id == 0` und steht in
+    derselben Liste wie die Bosskämpfe. In der Auswahl hat es nichts
+    verloren: kein Bossanteil, keine Pull-Nummer, die etwas bedeutet,
+    keine Taktik, gegen die sich etwas bewerten ließe.
+
+    Der Bot filtert inzwischen ebenfalls - diese Zeile steht trotzdem
+    hier, weil die Liste von einem Server kommt, der nicht mit der App
+    zusammen aktualisiert wird.
+    """
+
+    fights = build_fight_list({
+        "fights": [
+            {"id": 1, "encounter_id": 0, "name": "Trash"},
+            {"id": 2, "encounter_id": 1640, "name": "Horridon"},
+            {"id": 3, "name": "ohne encounter_id"},
+        ],
+    })
+
+    assert [fight.fight_id for fight in fights] == [2]
 
 
 def test_build_fight_list_survives_malformed_input():
