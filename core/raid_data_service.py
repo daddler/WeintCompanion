@@ -1108,14 +1108,10 @@ class RaidDataService(QObject):
         ).start()
 
         #
-        # Die Zeitleiste gleich mitholen, damit der Wiedergabe-Knopf
-        # später nicht mehr warten muss (siehe prefetch_timeline).
-        # Bewusst NACH dem Abruf des Pulls gestartet, obwohl beide
-        # nebeneinander laufen: der Pull ist die kleinere Antwort und
-        # das, was gleich auf dem Schirm stehen soll.
+        # Die Zeitleiste wird ebenfalls im Voraus geholt, aber erst
+        # NACHDEM der Pull da ist - siehe das Ende von
+        # _fetch_fight_worker().
         #
-
-        self.prefetch_timeline(report_code, fight_id)
 
     def _archive_report_label(self, report_code: str) -> str:
         """
@@ -1202,6 +1198,28 @@ class RaidDataService(QObject):
             self._archive_snapshot = snapshot
 
         self.archiveChanged.emit()
+
+        #
+        # Erst jetzt die Zeitleiste vorladen - nicht parallel zum
+        # Pull.
+        #
+        # Beide Abrufe lesen beim Bot dieselben Ereignisströme eines
+        # ganzen Kampfes, und der Bot läuft auf 0,15 vCPU. Parallel
+        # gestartet konkurrierten sie um genau die Anfrage, auf die
+        # der Nutzer gerade wartet: die Auswahl eines Pulls endete
+        # dann mit "Bot nicht erreichbar: The read operation timed
+        # out", während im Bot-Log zu sehen war, dass der Pull kurz
+        # darauf sehr wohl fertig wurde.
+        #
+        # Der Zweck des Vorladens bleibt erhalten: die Wartezeit liegt
+        # weiterhin vor dem Wiedergabe-Knopf statt hinter ihm - sie
+        # beginnt nur eine Antwort später. Bei einem Fehlschlag wird
+        # gar nicht erst vorgeladen: ein Bot, der den kleineren Abruf
+        # nicht beantworten konnte, soll nicht sofort mit dem größten
+        # belegt werden.
+        #
+
+        self.prefetch_timeline(report_code, fight_id)
 
     # --------------------------------------------------
     # Wiedergabe

@@ -172,6 +172,16 @@ class _FakeArchiveClient:
         self.fight_calls = 0
         self.timeline_calls = 0
 
+        #
+        # Reihenfolge der Abrufe, in der Form "was wurde begonnen /
+        # beendet". Der Pull und seine Zeitleiste lesen beim Bot
+        # dieselben Ereignisströme eines ganzen Kampfes; laufen sie
+        # gleichzeitig, konkurrieren sie um genau die Anfrage, auf die
+        # der Nutzer gerade wartet.
+        #
+
+        self.order = []
+
     def fetch_reports(self):
 
         self.report_calls += 1
@@ -190,16 +200,26 @@ class _FakeArchiveClient:
 
         self.fight_calls += 1
 
-        if self.fight_result is not None:
-            return self.fight_result
+        self.order.append("fight:start")
 
-        return FetchResult(payload=PAYLOAD)
+        try:
+
+            if self.fight_result is not None:
+                return self.fight_result
+
+            return FetchResult(payload=PAYLOAD)
+
+        finally:
+
+            self.order.append("fight:done")
 
     def fetch_timeline(self, report_code, fight_id):
 
         from analyzer.providers.warcraftlogs import FetchResult
 
         self.timeline_calls += 1
+
+        self.order.append("timeline:start")
 
         if self.timeline_gate is not None:
             self.timeline_gate.wait(5.0)
@@ -1228,8 +1248,8 @@ def test_choosing_a_pull_preloads_its_timeline():
     Knopfdruck angefordert. Die Wartezeit lag damit vollständig hinter
     dem Klick.
 
-    Jetzt läuft der Abruf parallel zum Laden des Pulls - und darf
-    dabei weder den Modus wechseln noch etwas abspielen.
+    Jetzt wird sie schon beim Wählen des Pulls geholt - und darf dabei
+    weder den Modus wechseln noch etwas abspielen.
     """
 
     from core.raid_data_service import MODE_ARCHIVE
@@ -1249,6 +1269,58 @@ def test_choosing_a_pull_preloads_its_timeline():
     assert service.replay_state().playing is False
 
     assert service.replay_state().duration > 0.0
+
+
+def test_the_timeline_is_preloaded_after_the_pull_not_beside_it():
+    """
+    Vorabladen ja - aber nicht auf Kosten der Anfrage, auf die der
+    Nutzer gerade wartet.
+
+    Beide Abrufe lassen den Bot dieselben Ereignisströme eines ganzen
+    Kampfes lesen, auf 0,15 vCPU. Gleichzeitig gestartet brachten sie
+    genau das Fehlerbild hervor, für das dieser Test steht: die
+    Auswahl eines Pulls endete mit einer Zeitüberschreitung ("Bot
+    nicht erreichbar"), während der Bot den Pull kurz darauf sehr wohl
+    fertig auswertete.
+    """
+
+    client = _FakeArchiveClient()
+
+    service = _make_service(client)
+
+    service.select_archive_fight("aBc", 12)
+
+    assert _wait_until(lambda: service._timeline is not None)
+
+    assert client.order == [
+        "fight:start",
+        "fight:done",
+        "timeline:start",
+    ]
+
+
+def test_a_failed_pull_does_not_start_the_bigger_request():
+    """
+    Ein Bot, der die kleinere Antwort nicht liefern konnte, soll nicht
+    unaufgefordert mit der größten belegt werden - der Nutzer sieht
+    ohnehin einen Fehler und wird es selbst erneut versuchen.
+    """
+
+    from analyzer.providers.warcraftlogs import FetchResult
+
+    client = _FakeArchiveClient(
+        fight_result=FetchResult(reason="Bot nicht erreichbar"),
+    )
+
+    service = _make_service(client)
+
+    service.select_archive_fight("aBc", 12)
+
+    assert _wait_until(
+        lambda: service.archive_state().fight_error != ""
+    )
+
+    assert client.timeline_calls == 0
 
 
 def test_a_preloaded_timeline_makes_the_play_button_instant():

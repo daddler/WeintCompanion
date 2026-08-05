@@ -36,23 +36,48 @@ from core.discord_account import DiscordAccountStore
 
 REPORTS_ENDPOINT = "/companion/warcraftlogs/reports"
 
-TIMEOUT = 15.0
+#
+# Die drei Zeitgrenzen sind nach dem bemessen, was der Bot für die
+# jeweilige Antwort tatsächlich tun muss - nicht nach einem
+# einheitlichen "das reicht schon".
+#
+# Report- und Fightliste sind je eine einzige WarcraftLogs-Abfrage.
+# Dass sie trotzdem mehr als 15 Sekunden bekommen, liegt an der
+# Zeitgrenze auf der anderen Seite: der Bot wartet selbst bis zu 30
+# Sekunden auf WarcraftLogs. Wer früher aufgibt, bekommt nie die
+# Erklärung des Bots zu sehen ("WarcraftLogs hat nicht rechtzeitig
+# geantwortet"), sondern immer nur die eigene Zeitüberschreitung -
+# also ausgerechnet in dem Fall, in dem die Ursache woanders liegt,
+# die unbrauchbarste Meldung.
+#
+
+TIMEOUT = 40.0
 
 #
-# Die Zeitleiste bekommt mehr Zeit als die übrigen Endpunkte.
+# Ein einzelner Pull ist keine Liste, sondern das Gesamtbild eines
+# Kampfes: der Bot liest dafür die vollständigen Ereignisströme
+# (Zauber, Auren, erlittener Schaden) - in einem beobachteten Fall
+# über 30.000 Ereignisse, seitenweise geholt und auf 0,15 vCPU
+# ausgewertet. Das dauert Minuten, nicht Sekunden.
 #
-# Report- und Fightliste sind ein paar Zeilen, ein einzelner Fight
-# ist das Gesamtbild eines Kampfes. Die Zeitleiste dagegen enthält
-# für jeden der 25 Spieler mehrere Reihen mit einem Wert je Sekunde,
-# und der Bot muss sie aus mehreren WarcraftLogs-Abfragen
-# zusammensetzen. Dieselben 15 Sekunden wie für eine Liste anzusetzen
-# hieß, den mit Abstand teuersten Abruf am knappsten zu bemessen -
-# und das Ergebnis war der Fehlerfall, der am meisten wie ein
-# kaputter Knopf aussieht: "Wird geladen …", dann eine
-# Zeitüberschreitung.
+# Mit den früheren 15 Sekunden war der Ausgang damit vorherbestimmt:
+# die App gab auf, während der Bot noch arbeitete, und meldete "Bot
+# nicht erreichbar: The read operation timed out" neben dem
+# Wiedergabe-Knopf. Schlimmer noch, jeder Versuch begann von vorn.
 #
 
-TIMELINE_TIMEOUT = 60.0
+FIGHT_TIMEOUT = 180.0
+
+#
+# Die Zeitleiste bekommt am meisten Zeit.
+#
+# Sie enthält für jeden der 25 Spieler mehrere Reihen mit einem Wert
+# je Sekunde, und der Bot setzt sie aus denselben Ereignisströmen wie
+# den Pull zusammen, zuzüglich Schaden und Heilung - der mit Abstand
+# teuerste Abruf der ganzen Brücke.
+#
+
+TIMELINE_TIMEOUT = 240.0
 
 
 #
@@ -60,6 +85,27 @@ TIMELINE_TIMEOUT = 60.0
 # Ergebnisse
 # --------------------------------------------------
 #
+
+
+def _detail_of(response) -> str:
+    """
+    Der `detail`-Text einer Fehlerantwort des Bots, sofern vorhanden.
+
+    Wirft nie: eine Fehlerantwort muss kein JSON sein (ein Proxy oder
+    uvicorn selbst antwortet mit HTML), und dann bleibt es eben bei
+    der Statuszeile.
+    """
+
+    try:
+        body = response.json()
+
+    except Exception:
+        return ""
+
+    if not isinstance(body, dict):
+        return ""
+
+    return str(body.get("detail") or "").strip()
 
 
 @dataclass(frozen=True)
@@ -143,6 +189,24 @@ class WarcraftLogsArchiveClient:
                 timeout=timeout,
             )
 
+        except httpx.TimeoutException:
+
+            #
+            # Nicht die Ausnahme durchreichen: httpx meldet hier "The
+            # read operation timed out" - englisch, technisch, und vor
+            # allem ohne den einen Hinweis, der weiterhilft, nämlich
+            # dass ein zweiter Versuch schneller ist (der Bot hält das
+            # Ergebnis eines fertig gerechneten Pulls einige Minuten
+            # vor).
+            #
+
+            return -1, None, (
+                "Der Bot hat nicht rechtzeitig geantwortet. Bei einem "
+                "großen Pull kann die Auswertung beim Bot länger "
+                "dauern - ein erneuter Versuch ist meist deutlich "
+                "schneller."
+            )
+
         except Exception as exc:
 
             return -1, None, f"Bot nicht erreichbar: {exc}"
@@ -171,8 +235,19 @@ class WarcraftLogsArchiveClient:
 
         if response.status_code != 200:
 
+            #
+            # Den Grund des Bots mitnehmen, wenn er einen nennt: die
+            # Archiv-Endpunkte antworten bei einem Problem mit
+            # WarcraftLogs mit 502 und einem `detail`, das die
+            # eigentliche Ursache benennt ("WarcraftLogs hat nicht
+            # rechtzeitig geantwortet"). Ohne das stand in der
+            # Oberfläche nur die nackte Zahl, und die Ursache blieb
+            # allein im Bot-Terminal sichtbar.
+            #
+
             return response.status_code, None, (
-                f"Der Bot antwortete mit HTTP {response.status_code}."
+                f"Der Bot antwortete mit HTTP {response.status_code}"
+                + (f": {_detail_of(response)}" if _detail_of(response) else ".")
             )
 
         try:
@@ -249,7 +324,8 @@ class WarcraftLogsArchiveClient:
             )
 
         status, body, reason = self._get(
-            f"{REPORTS_ENDPOINT}/{report_code}/fights/{fight_id}"
+            f"{REPORTS_ENDPOINT}/{report_code}/fights/{fight_id}",
+            timeout=FIGHT_TIMEOUT,
         )
 
         if status == 404:
