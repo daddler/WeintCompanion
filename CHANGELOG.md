@@ -1,6 +1,17 @@
 # Changelog
 
-Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.5.1.
+Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.5.2.
+
+## 1.5.2
+
+Reiner Versionssprung, kein funktionaler Unterschied zu 1.5.1: der Tag
+`v1.5.1` war auf den Stand vor dem Merge des Rotationstrainer-Fixes
+gesetzt worden (`core/version.py` stand dort noch auf 1.5.0), und
+genau das prüft `scripts/check_version.py` vor jedem Build - der
+Build brach deshalb schon im Versionsabgleich ab, bevor irgendetwas
+gepackt wurde. `v1.5.1` bleibt als kaputter Tag ohne Release stehen,
+dieses Release trägt den Inhalt von 1.5.1 unter der nächsten
+Versionsnummer nach.
 
 ## 1.5.1
 
