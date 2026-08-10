@@ -11,8 +11,8 @@ die falschen Ziele umgeleitet.
 
 Hier gibt es nur noch eine Quelle: `PageId` legt die Reihenfolge
 fest, `build_page_specs()` beschreibt jede Seite genau einmal.
-Sidebar und Seitenstapel werden beide daraus aufgebaut und können
-deshalb nicht mehr auseinanderlaufen. Ein neuer Bereich ist ein
+Navigationsspalte und Seitenstapel werden beide daraus aufgebaut und
+können deshalb nicht mehr auseinanderlaufen. Ein neuer Bereich ist ein
 Eintrag im Enum plus ein Eintrag in der Liste.
 
 Zu den Importen: `build_page_specs()` importiert die Seitenklassen
@@ -21,6 +21,11 @@ absichtlich erst im Funktionsrumpf. Die Seiten brauchen ihrerseits
 wäre also ein Zirkelbezug. Die Funktion wird genau einmal beim Aufbau
 des Hauptfensters aufgerufen - zu diesem Zeitpunkt ist dieses Modul
 längst vollständig geladen.
+
+Neu in 2.0: die Bereiche sind **gruppiert** (RAID / CHARAKTER /
+SYSTEM). Die Gruppe steht am `PageSpec` und nicht in der
+Navigationsspalte, damit auch sie aus derselben einen Liste entsteht -
+sonst gäbe es wieder zwei Reihenfolgen, die zusammenpassen müssen.
 """
 
 from __future__ import annotations
@@ -34,18 +39,47 @@ class PageId(IntEnum):
     """
     Reihenfolge der Hauptbereiche.
 
-    Der Wert IST der Index im QStackedWidget und in der Rail. Weil
-    IntEnum von int erbt, funktioniert er unverändert mit
-    `Signal(int)` und `setCurrentIndex()`.
+    Der Wert IST der Index im QStackedWidget und in der
+    Navigationsspalte. Weil IntEnum von int erbt, funktioniert er
+    unverändert mit `Signal(int)` und `setCurrentIndex()`.
     """
 
-    DASHBOARD = 0
-    ADDON = 1
-    SYNC = 2
-    WEINTTV = 3
-    ACADEMY = 4
-    SETTINGS = 5
-    LOGS = 6
+    #
+    # RAID
+    #
+
+    OVERVIEW = 0
+    WEINTTV = 1
+    ACADEMY = 2
+    ARCHIVE = 3
+
+    #
+    # CHARAKTER
+    #
+
+    CHARACTERS = 4
+    PREPARATION = 5
+
+    #
+    # SYSTEM
+    #
+
+    ADDON = 6
+    CONNECTIONS = 7
+    SETTINGS = 8
+    LOGS = 9
+
+
+#
+# Gruppenlabels, in Reihenfolge. Sie erscheinen als `type.micro` über
+# dem ersten Eintrag ihrer Gruppe.
+#
+
+GROUP_RAID = "RAID"
+
+GROUP_CHARACTER = "CHARAKTER"
+
+GROUP_SYSTEM = "SYSTEM"
 
 
 @dataclass(frozen=True)
@@ -54,20 +88,27 @@ class PageSpec:
     Beschreibung einer Seite.
 
     `icon_factory` und `page_factory` sind bewusst Funktionen und
-    keine fertigen Objekte: das Icon wird erst beim Aufbau der Rail
-    aufgelöst (dasselbe Vorgehen wie bei TOUR_PAGES im
-    Was-ist-neu-Dialog), die Seite erst beim Aufbau des Stapels.
+    keine fertigen Objekte: das Icon wird erst beim Aufbau der
+    Navigationsspalte aufgelöst (dasselbe Vorgehen wie bei TOUR_PAGES
+    im Was-ist-neu-Dialog), die Seite erst beim Aufbau des Stapels.
 
     `scroll` steuert, ob die Seite in einen QScrollArea-Wrapper
-    kommt. Das Dashboard bekommt bewusst keinen - siehe den
+    kommt. Übersicht und WeintTV bekommen bewusst keinen - siehe den
     ausführlichen Kommentar in main_window.py.
     """
 
     page_id: PageId
 
-    tooltip: str
+    #
+    # Beschriftung in der ausgeklappten Spalte. Eingeklappt (72 px)
+    # wird sie zum Tooltip.
+    #
 
-    icon_factory: Callable[[], str]
+    label: str
+
+    group: str
+
+    icon: str
 
     page_factory: Callable[[object], object]
 
@@ -75,11 +116,20 @@ class PageSpec:
 
     #
     # Name des Attributs, unter dem MainWindow die Seite zusätzlich
-    # ablegt (self.dashboard, self.settings, ...). Bestehender Code
+    # ablegt (self.overview, self.settings, ...). Bestehender Code
     # spricht die Seiten so an; das bleibt unverändert erhalten.
     #
 
     attribute: str = ""
+
+    #
+    # Bereiche, die dichter sind als der Rest, verlangen die volle
+    # Breite: WeintTV muss 25 Zeilen ohne Scrollen unterbringen und
+    # klappt die Navigationsspalte deshalb immer ein, unabhängig von
+    # der Fensterbreite.
+    #
+
+    force_collapsed_nav: bool = False
 
 
 def build_page_specs() -> tuple[PageSpec, ...]:
@@ -87,71 +137,121 @@ def build_page_specs() -> tuple[PageSpec, ...]:
     Die vollständige Seitenliste, in Navigationsreihenfolge.
     """
 
-    from core.resources import Resources
-
     from gui.pages.academy import AcademyPage
     from gui.pages.addon import AddonPage
-    from gui.pages.dashboard import DashboardPage
+    from gui.pages.archive import ArchivePage
+    from gui.pages.characters import CharactersPage
+    from gui.pages.connections import ConnectionsPage
     from gui.pages.logs import LogsPage
+    from gui.pages.overview import OverviewPage
+    from gui.pages.preparation import PreparationPage
     from gui.pages.settings import SettingsPage
-    from gui.pages.sync import SyncPage
     from gui.pages.weinttv import WeintTvPage
 
     return (
 
         PageSpec(
-            page_id=PageId.DASHBOARD,
-            tooltip="Dashboard",
-            icon_factory=Resources.dashboard,
-            page_factory=DashboardPage,
+            page_id=PageId.OVERVIEW,
+            label="Übersicht",
+            group=GROUP_RAID,
+            icon="dashboard",
+            page_factory=OverviewPage,
             scroll=False,
-            attribute="dashboard",
-        ),
-
-        PageSpec(
-            page_id=PageId.ADDON,
-            tooltip="Software",
-            icon_factory=Resources.software,
-            page_factory=AddonPage,
-            attribute="addon",
-        ),
-
-        PageSpec(
-            page_id=PageId.SYNC,
-            tooltip="Synchronisation",
-            icon_factory=Resources.sync,
-            page_factory=SyncPage,
-            attribute="sync",
+            attribute="overview",
         ),
 
         PageSpec(
             page_id=PageId.WEINTTV,
-            tooltip="WeintTV",
-            icon_factory=Resources.weinttv,
+            label="WeintTV",
+            group=GROUP_RAID,
+            icon="weinttv",
             page_factory=WeintTvPage,
+            #
+            # Der Entwurf verlangt für WeintTV `scroll=False`: 25
+            # Zeilen sollen bei 1440 x 900 ohne Scrollen passen, und
+            # das geht nur, wenn die Seite die volle Höhe bekommt
+            # statt eines Scrollbereichs. Solange die Seite noch die
+            # Anordnung aus 1.7 trägt (Zeilenhöhen und feste Höhen aus
+            # einer Zeit, in der jede Schrift versehentlich 14 px war),
+            # würde das ihren unteren Teil abschneiden. Der Wechsel auf
+            # False gehört mit dem Umbau der Seite zusammen, nicht
+            # davor.
+            #
+            scroll=True,
             attribute="weinttv",
+            force_collapsed_nav=True,
         ),
 
         PageSpec(
             page_id=PageId.ACADEMY,
-            tooltip="WeintAcademy",
-            icon_factory=Resources.academy,
+            label="Academy",
+            group=GROUP_RAID,
+            icon="academy",
             page_factory=AcademyPage,
             attribute="academy",
         ),
 
         PageSpec(
+            page_id=PageId.ARCHIVE,
+            label="Archiv",
+            group=GROUP_RAID,
+            icon="archiv",
+            page_factory=ArchivePage,
+            scroll=False,
+            attribute="archive",
+            force_collapsed_nav=True,
+        ),
+
+        PageSpec(
+            page_id=PageId.CHARACTERS,
+            label="Meine Charaktere",
+            group=GROUP_CHARACTER,
+            icon="charaktere",
+            page_factory=CharactersPage,
+            attribute="characters",
+        ),
+
+        PageSpec(
+            page_id=PageId.PREPARATION,
+            label="Vorbereitung",
+            group=GROUP_CHARACTER,
+            icon="vorbereitung",
+            page_factory=PreparationPage,
+            attribute="preparation",
+        ),
+
+        PageSpec(
+            page_id=PageId.ADDON,
+            label="Addon & Updates",
+            group=GROUP_SYSTEM,
+            icon="software",
+            page_factory=AddonPage,
+            attribute="addon",
+        ),
+
+        PageSpec(
+            page_id=PageId.CONNECTIONS,
+            label="Verbindungen",
+            group=GROUP_SYSTEM,
+            icon="sync",
+            page_factory=ConnectionsPage,
+            attribute="connections",
+        ),
+
+        PageSpec(
             page_id=PageId.SETTINGS,
-            tooltip="Einstellungen",
-            icon_factory=Resources.settings,
+            label="Einstellungen",
+            group=GROUP_SYSTEM,
+            icon="settings",
             page_factory=SettingsPage,
             attribute="settings",
         ),
 
         PageSpec(
             page_id=PageId.LOGS,
-            tooltip="Logs",
-            icon_factory=Resources.logs,
+            label="Protokoll",
+            group=GROUP_SYSTEM,
+            icon="logs",
             page_factory=LogsPage,
             attribute="logs",
         ),

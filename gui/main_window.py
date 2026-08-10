@@ -1,11 +1,20 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, Qt, QTimer
+from PySide6.QtCore import (
+    QEasingCurve,
+    QEvent,
+    QParallelAnimationGroup,
+    QPoint,
+    QPropertyAnimation,
+    Qt,
+    QTimer,
+)
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QWidget,
     QFrame,
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QVBoxLayout,
     QMainWindow,
@@ -21,10 +30,14 @@ from core.resources import Resources
 from gui.dialogs.discord_link_prompt import show_discord_link_prompt_if_needed
 from gui.dialogs.whats_new_dialog import show_whats_new_if_needed
 
-from gui.theme.colors import Colors
-from gui.theme.metrics import Metrics
+from gui.layout.breakpoints import LayoutState, resolve as resolve_layout
 
-from gui.widgets.sidebar import Sidebar
+from gui.theme import tokens
+from gui.theme.motion import curve, duration, is_reduced
+from gui.theme.theme_manager import theme
+
+from gui.widgets.nav_column import NavColumn
+from gui.widgets.title_bar import TitleBar
 
 from gui.navigation import PageId, build_page_specs
 
@@ -40,22 +53,47 @@ class MainWindow(QMainWindow):
         # Fenster
         # --------------------------------------------------
         #
+        # Rahmenlos: die Titelleiste kommt seit 2.0 von der Anwendung
+        # selbst (gui/widgets/title_bar.py). Was dabei verloren geht,
+        # muss ersetzt werden - Ziehen und Maximieren übernimmt die
+        # Titelleiste, die Größenänderung an den Kanten dieses Fenster
+        # (siehe _resize_edge weiter unten).
+        #
 
         self.setWindowTitle("WeintCompanion")
 
-        self.resize(
-            Metrics.WINDOW_MIN_WIDTH,
-            Metrics.WINDOW_MIN_HEIGHT,
+        self.setWindowFlags(
+            Qt.FramelessWindowHint
+            | Qt.Window
         )
 
-        self.setMinimumSize(
-            Metrics.WINDOW_MIN_WIDTH,
-            Metrics.WINDOW_MIN_HEIGHT,
-        )
+        self.resize(*tokens.WINDOW_DEFAULT)
+
+        #
+        # Bis 1.7 stand das Minimum auf 1500 x 900, weil das Dashboard
+        # diese Höhe brauchte. Auf einem 1366er Bildschirm ließ sich
+        # das Fenster dadurch nicht vollständig anzeigen. 2.0 löst das
+        # über Haltepunkte statt über ein großes Minimum.
+        #
+
+        self.setMinimumSize(*tokens.WINDOW_MIN)
 
         self.setWindowIcon(
             QIcon(Resources.icon())
         )
+
+        #
+        # Für die Kantengriffe: welche Kante gerade gezogen wird und
+        # wo das Fenster beim Ansetzen stand.
+        #
+
+        self._resize_edges = Qt.Edges()
+
+        self._resize_origin: QPoint | None = None
+
+        self._resize_geometry = None
+
+        self.setMouseTracking(True)
 
         #
         # --------------------------------------------------
@@ -90,10 +128,6 @@ class MainWindow(QMainWindow):
         # Root Widget
         # --------------------------------------------------
         #
-
-        root = QWidget()
-
-        #
         # Ohne einen expliziten, opaken Hintergrund bleibt dieses
         # zentrale Widget (und alles, was sich per "background:
         # transparent" darauf verlässt) im echten Rendering-Backing-
@@ -106,57 +140,84 @@ class MainWindow(QMainWindow):
         # gemalt wird.
         #
 
+        root = QWidget()
+
         root.setObjectName("rootWidget")
 
         root.setAttribute(Qt.WA_StyledBackground, True)
 
+        #
+        # Der einzige echte umlaufende Rahmen im ganzen Programm neben
+        # den Eingabefeldern: er ersetzt den Rahmen, den sonst der
+        # Fenstermanager zeichnet, und trennt das Fenster vom
+        # Bildschirmhintergrund.
+        #
+
         root.setStyleSheet(
-            f"QWidget#rootWidget{{background:{Colors.BACKGROUND};}}"
+            f"""
+            QWidget#rootWidget{{
+                background:{tokens.SURFACE["base"]};
+                border:1px solid {tokens.BORDER["base"]};
+            }}
+            """
         )
 
         self.setCentralWidget(root)
 
-        self.root_layout = QHBoxLayout(root)
+        self.window_layout = QVBoxLayout(root)
 
-        self.root_layout.setContentsMargins(
-            0,
-            0,
-            0,
-            0,
-        )
+        self.window_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.window_layout.setSpacing(0)
+
+        #
+        # --------------------------------------------------
+        # Titelleiste
+        # --------------------------------------------------
+        #
+
+        self.title_bar = TitleBar(self)
+
+        self.window_layout.addWidget(self.title_bar)
+
+        body = QWidget()
+
+        self.root_layout = QHBoxLayout(body)
+
+        self.root_layout.setContentsMargins(0, 0, 0, 0)
 
         self.root_layout.setSpacing(0)
+
+        self.window_layout.addWidget(body, 1)
 
         #
         # --------------------------------------------------
         # Seitenregistrierung
         # --------------------------------------------------
         #
-        # Eine einzige Liste beschreibt Reihenfolge, Icon, Tooltip
-        # und Klasse jeder Seite (siehe gui/navigation.py). Sowohl
-        # die Rail als auch der Seitenstapel entstehen daraus -
-        # dadurch können beide nicht mehr auseinanderlaufen.
+        # Eine einzige Liste beschreibt Reihenfolge, Icon, Gruppe,
+        # Beschriftung und Klasse jeder Seite (siehe gui/navigation.py).
+        # Sowohl die Navigationsspalte als auch der Seitenstapel
+        # entstehen daraus - dadurch können beide nicht mehr
+        # auseinanderlaufen.
         #
 
         self.page_specs = build_page_specs()
 
+        self._specs_by_id = {
+            spec.page_id: spec
+            for spec in self.page_specs
+        }
+
         #
         # --------------------------------------------------
-        # Sidebar
+        # Navigationsspalte
         # --------------------------------------------------
         #
 
-        self.sidebar = Sidebar(
-            self.manager,
-            [
-                (spec.icon_factory(), spec.tooltip)
-                for spec in self.page_specs
-            ],
-        )
+        self.nav = NavColumn(self.manager, self.page_specs)
 
-        self.root_layout.addWidget(
-            self.sidebar
-        )
+        self.root_layout.addWidget(self.nav)
 
         #
         # --------------------------------------------------
@@ -166,35 +227,21 @@ class MainWindow(QMainWindow):
 
         self.content = QFrame()
 
-        self.content.setObjectName(
-            "contentContainer"
-        )
+        self.content.setObjectName("contentContainer")
 
-        self.content.setAttribute(
-            Qt.WA_StyledBackground, True
-        )
+        self.content.setAttribute(Qt.WA_StyledBackground, True)
 
         self.content.setStyleSheet(
-            f"QFrame#contentContainer{{background:{Colors.BACKGROUND};}}"
+            f"QFrame#contentContainer{{background:{tokens.SURFACE['base']};}}"
         )
 
-        self.content_layout = QVBoxLayout(
-            self.content
-        )
+        self.content_layout = QVBoxLayout(self.content)
 
-        self.content_layout.setContentsMargins(
-            0,
-            0,
-            0,
-            0,
-        )
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
 
         self.content_layout.setSpacing(0)
 
-        self.root_layout.addWidget(
-            self.content,
-            1,
-        )
+        self.root_layout.addWidget(self.content, 1)
 
         #
         # --------------------------------------------------
@@ -204,21 +251,7 @@ class MainWindow(QMainWindow):
 
         self.pages = QStackedWidget()
 
-        self.content_layout.addWidget(
-            self.pages
-        )
-
-        #
-        # ScrollContainer
-        #
-        # Das Dashboard bekommt bewusst KEINEN Scroll-Wrapper (in der
-        # Registry als scroll=False markiert): das Fenster ist auf
-        # Metrics.WINDOW_MIN_HEIGHT dimensioniert, damit der komplette
-        # Dashboard-Inhalt (inkl. Changelog-Karte) immer ohne Scrollen
-        # der Hauptseite passt - lediglich die Changelog-Karte selbst
-        # darf bei längerem Text intern scrollen (siehe
-        # ChangelogCard/QTextEdit).
-        #
+        self.content_layout.addWidget(self.pages)
 
         #
         # Seiten entstehen erst beim ersten Betreten.
@@ -242,11 +275,6 @@ class MainWindow(QMainWindow):
 
         self._placeholders: dict[PageId, QWidget] = {}
 
-        self._specs_by_id = {
-            spec.page_id: spec
-            for spec in self.page_specs
-        }
-
         for spec in self.page_specs:
 
             placeholder = QWidget()
@@ -263,21 +291,30 @@ class MainWindow(QMainWindow):
         self.SETTINGS_PAGE_INDEX = int(PageId.SETTINGS)
 
         #
-        # Die zuletzt gezeigte Seite - nur nötig, um ihr beim
-        # Verlassen on_leave() melden zu können.
+        # Die zuletzt gezeigte Seite - nötig, um ihr beim Verlassen
+        # on_leave() melden zu können, und um die Richtung des
+        # Seitenübergangs zu bestimmen.
         #
 
         self._current_page = None
+
+        self._current_page_id: PageId | None = None
+
+        self._page_animation = None
+
+        #
+        # Haltepunkte
+        #
+
+        self._layout_state = LayoutState()
 
         #
         # Navigation
         #
 
-        self.sidebar.pageChanged.connect(
-            self.change_page
-        )
+        self.nav.pageChanged.connect(self.change_page)
 
-        self.sidebar.avatarClicked.connect(
+        self.nav.avatarClicked.connect(
             lambda: self.open_settings_section("discord")
         )
 
@@ -286,7 +323,7 @@ class MainWindow(QMainWindow):
         # tatsächlich gebaut wird.
         #
 
-        self.change_page(PageId.DASHBOARD)
+        self.change_page(PageId.OVERVIEW)
 
         #
         # "Was ist neu"-Popup, danach ggf. der Discord-Verknüpfungs-
@@ -314,31 +351,16 @@ class MainWindow(QMainWindow):
 
         scroll.setWidgetResizable(True)
 
-        scroll.setFrameShape(
-            QScrollArea.NoFrame
+        scroll.setFrameShape(QScrollArea.NoFrame)
+
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        scroll.setStyleSheet(
+            "QScrollArea{background:transparent;border:none;}"
+            "QScrollArea > QWidget > QWidget{background:transparent;}"
         )
-
-        scroll.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarAlwaysOff
-        )
-
-        scroll.setVerticalScrollBarPolicy(
-            Qt.ScrollBarAsNeeded
-        )
-
-        scroll.setStyleSheet("""
-        QScrollArea{
-
-            background:transparent;
-
-            border:none;
-        }
-
-        QWidget{
-
-            background:transparent;
-        }
-        """)
 
         return scroll
 
@@ -352,7 +374,7 @@ class MainWindow(QMainWindow):
         Platzhalter ist.
 
         Alles, was früher in der Aufbauschleife stand, passiert hier:
-        das benannte Attribut (`self.dashboard`, `self.settings`, ...),
+        das benannte Attribut (`self.overview`, `self.settings`, ...),
         der Scroll-Rahmen und die seitenübergreifenden Signale. Damit
         gibt es weiterhin genau eine Stelle, an der eine Seite
         entsteht - sie läuft nur nicht mehr zwangsläufig beim Start.
@@ -439,13 +461,25 @@ class MainWindow(QMainWindow):
         if self._ensure_page(index) is None:
             return
 
+        page_id = PageId(index)
+
+        spec = self._specs_by_id[page_id]
+
         #
-        # Sidebar aktualisieren
+        # Richtung des Übergangs: nach unten in der Navigation heißt
+        # von rechts herein. Ohne die Richtung wäre der Versatz
+        # beliebig und würde nichts über die Herkunft aussagen.
         #
 
-        for i, item in enumerate(self.sidebar.items):
+        previous = self._current_page_id
 
-            item.setActive(i == index)
+        direction = 0
+
+        if previous is not None and previous != page_id:
+
+            direction = 1 if int(page_id) > int(previous) else -1
+
+        self.nav.setCurrentPage(index)
 
         #
         # Die verlassene Seite abmelden, bevor die neue kommt.
@@ -467,8 +501,13 @@ class MainWindow(QMainWindow):
         self.pages.setCurrentIndex(index)
 
         #
-        # Aktuelle Seite holen
+        # Dichte Ansichten bekommen die volle Breite: WeintTV muss
+        # 25 Zeilen ohne Scrollen unterbringen und klappt die
+        # Navigationsspalte deshalb ein. Die Wahl des Nutzers bleibt
+        # gespeichert und gilt wieder, sobald er die Ansicht verlässt.
         #
+
+        self._apply_forced_nav(spec)
 
         current = self.pages.currentWidget()
 
@@ -477,8 +516,8 @@ class MainWindow(QMainWindow):
 
         #
         # Die meisten Seiten stecken in einem QScrollArea-Wrapper
-        # (siehe wrap_page) - das Dashboard bewusst nicht (siehe
-        # Kommentar bei dessen addWidget-Aufruf oben).
+        # (siehe wrap_page) - Übersicht, WeintTV und Archiv bewusst
+        # nicht (siehe scroll=False in der Registry).
         #
 
         page = (
@@ -489,8 +528,12 @@ class MainWindow(QMainWindow):
 
         self._current_page = page
 
+        self._current_page_id = page_id
+
         #
-        # Anmelden (optional) und aktualisieren
+        # Anmelden (optional) und aktualisieren - vor der Animation,
+        # damit die Seite bereits ihren Inhalt trägt, wenn sie
+        # eingeblendet wird.
         #
 
         if hasattr(page, "on_enter"):
@@ -501,11 +544,279 @@ class MainWindow(QMainWindow):
 
             page.refresh()
 
+        if direction:
+            self._animate_page(current, direction)
+
         #
-        # Sidebar ebenfalls aktualisieren
+        # Navigationsspalte ebenfalls aktualisieren
         #
 
-        self.sidebar.refresh()
+        self.nav.refresh()
+
+    def _apply_forced_nav(self, spec):
+        """
+        Ob diese Seite die Navigationsspalte einklappt.
+
+        Zwei Gründe können das verlangen - die Seite selbst und der
+        Haltepunkt. Beide laufen über `set_forced_collapsed`, das die
+        Wahl des Nutzers unberührt lässt.
+        """
+
+        self.nav.set_forced_collapsed(
+            spec.force_collapsed_nav
+            or self._layout_state.nav_collapsed
+        )
+
+    def _animate_page(self, widget, direction: int):
+        """
+        motion.page: Deckkraft 0 -> 1 und ein Versatz von 12 px in
+        Navigationsrichtung, parallel (180 ms, OutCubic).
+        """
+
+        ms = duration("page")
+
+        if ms <= 0 or is_reduced():
+
+            #
+            # Bei reduzierter Bewegung ohne Versatz und ohne
+            # Überblendung. Ein zurückgelassener Opazitätseffekt
+            # würde die Seite dauerhaft halbdurchsichtig lassen.
+            #
+
+            widget.setGraphicsEffect(None)
+
+            return
+
+        effect = QGraphicsOpacityEffect(widget)
+
+        widget.setGraphicsEffect(effect)
+
+        fade = QPropertyAnimation(effect, b"opacity", self)
+
+        fade.setDuration(ms)
+
+        fade.setEasingCurve(QEasingCurve(curve("page")))
+
+        fade.setStartValue(0.0)
+
+        fade.setEndValue(1.0)
+
+        start = widget.pos()
+
+        slide = QPropertyAnimation(widget, b"pos", self)
+
+        slide.setDuration(ms)
+
+        slide.setEasingCurve(QEasingCurve(curve("page")))
+
+        slide.setStartValue(
+            QPoint(start.x() + 12 * direction, start.y())
+        )
+
+        slide.setEndValue(start)
+
+        group = QParallelAnimationGroup(self)
+
+        group.addAnimation(fade)
+
+        group.addAnimation(slide)
+
+        #
+        # Den Effekt am Ende wieder entfernen: ein dauerhaft
+        # angehängter QGraphicsOpacityEffect zwingt Qt, die ganze
+        # Seite in eine Zwischenebene zu rendern - bei WeintTV mit
+        # vier Bildern je Sekunde ist das dauerhaft teuer.
+        #
+
+        group.finished.connect(
+            lambda: widget.setGraphicsEffect(None)
+        )
+
+        group.start()
+
+        self._page_animation = group
+
+    # --------------------------------------------------
+    # Haltepunkte
+    # --------------------------------------------------
+
+    def resizeEvent(self, event):
+
+        super().resizeEvent(event)
+
+        state = resolve_layout(self.width(), self._layout_state)
+
+        if state == self._layout_state:
+            return
+
+        self._layout_state = state
+
+        spec = (
+            self._specs_by_id.get(self._current_page_id)
+            if self._current_page_id is not None
+            else None
+        )
+
+        self.nav.set_forced_collapsed(
+            (spec.force_collapsed_nav if spec else False)
+            or state.nav_collapsed
+        )
+
+        #
+        # Seiten, die sich für die Breite interessieren, melden sich
+        # duck-getypt - genau wie bei on_enter/on_leave. Eine Seite,
+        # die nichts umzubauen hat, braucht nichts zu tun.
+        #
+
+        for page in self.pages_by_id.values():
+
+            if hasattr(page, "on_layout_changed"):
+
+                page.on_layout_changed(state)
+
+    # --------------------------------------------------
+    # Größenänderung an den Fensterkanten
+    # --------------------------------------------------
+    #
+    # Was beim rahmenlosen Fenster sonst der Fenstermanager erledigt.
+    # Eine Zone von 6 px an jeder Kante: schmal genug, um nicht mit
+    # dem Inhalt zu kollidieren, breit genug, um sie zu treffen.
+
+    def _resize_edge(self, position) -> Qt.Edges:
+
+        margin = 6
+
+        x = position.x()
+
+        y = position.y()
+
+        edges = Qt.Edges()
+
+        if x <= margin:
+            edges |= Qt.LeftEdge
+
+        elif x >= self.width() - margin:
+            edges |= Qt.RightEdge
+
+        if y <= margin:
+            edges |= Qt.TopEdge
+
+        elif y >= self.height() - margin:
+            edges |= Qt.BottomEdge
+
+        return edges
+
+    def _cursor_for(self, edges: Qt.Edges):
+
+        if edges in (
+            Qt.LeftEdge | Qt.TopEdge,
+            Qt.RightEdge | Qt.BottomEdge,
+        ):
+            return Qt.SizeFDiagCursor
+
+        if edges in (
+            Qt.RightEdge | Qt.TopEdge,
+            Qt.LeftEdge | Qt.BottomEdge,
+        ):
+            return Qt.SizeBDiagCursor
+
+        if edges & (Qt.LeftEdge | Qt.RightEdge):
+            return Qt.SizeHorCursor
+
+        if edges & (Qt.TopEdge | Qt.BottomEdge):
+            return Qt.SizeVerCursor
+
+        return Qt.ArrowCursor
+
+    def mousePressEvent(self, event):
+
+        if event.button() == Qt.LeftButton and not self.isMaximized():
+
+            edges = self._resize_edge(event.position())
+
+            if edges:
+
+                self._resize_edges = edges
+
+                self._resize_origin = event.globalPosition().toPoint()
+
+                self._resize_geometry = self.geometry()
+
+                event.accept()
+
+                return
+
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+
+        if self._resize_origin is None:
+
+            if not self.isMaximized():
+
+                self.setCursor(
+                    self._cursor_for(
+                        self._resize_edge(event.position())
+                    )
+                )
+
+            super().mouseMoveEvent(event)
+
+            return
+
+        delta = event.globalPosition().toPoint() - self._resize_origin
+
+        geometry = self._resize_geometry.adjusted(0, 0, 0, 0)
+
+        minimum = self.minimumSize()
+
+        if self._resize_edges & Qt.LeftEdge:
+
+            #
+            # Die linke Kante darf nur so weit nach rechts, wie die
+            # Mindestbreite es erlaubt - sonst zöge das Fenster seine
+            # rechte Kante mit und wanderte über den Bildschirm.
+            #
+
+            left = min(
+                geometry.left() + delta.x(),
+                geometry.right() - minimum.width(),
+            )
+
+            geometry.setLeft(left)
+
+        if self._resize_edges & Qt.RightEdge:
+
+            geometry.setRight(geometry.right() + delta.x())
+
+        if self._resize_edges & Qt.TopEdge:
+
+            top = min(
+                geometry.top() + delta.y(),
+                geometry.bottom() - minimum.height(),
+            )
+
+            geometry.setTop(top)
+
+        if self._resize_edges & Qt.BottomEdge:
+
+            geometry.setBottom(geometry.bottom() + delta.y())
+
+        self.setGeometry(geometry)
+
+        event.accept()
+
+    def mouseReleaseEvent(self, event):
+
+        self._resize_edges = Qt.Edges()
+
+        self._resize_origin = None
+
+        self._resize_geometry = None
+
+        self.unsetCursor()
+
+        super().mouseReleaseEvent(event)
 
     # --------------------------------------------------
     # Start-Popups
@@ -520,17 +831,15 @@ class MainWindow(QMainWindow):
     # --------------------------------------------------
     # Zu einem Settings-Unterabschnitt springen
     # --------------------------------------------------
-    # Genutzt vom Discord-Statusbutton in der Sidebar sowie vom
-    # "WoW starten"-Button im Dashboard, wenn unter Linux noch kein
-    # Start-Befehl hinterlegt ist.
+    # Genutzt vom Discord-Statusbutton in der Navigationsspalte sowie
+    # vom "WoW starten"-Button der Übersicht, wenn unter Linux noch
+    # kein Start-Befehl hinterlegt ist.
 
     def open_settings_section(self, key: str):
 
         settings = self._ensure_page(PageId.SETTINGS)
 
-        self.change_page(
-            self.SETTINGS_PAGE_INDEX
-        )
+        self.change_page(self.SETTINGS_PAGE_INDEX)
 
         if hasattr(settings, "show_section"):
 
@@ -666,9 +975,17 @@ class MainWindow(QMainWindow):
         nicht am Leben halten - ihn trotzdem sauber zu beenden
         verhindert, dass er noch einen Snapshot veröffentlicht,
         während die Widgets bereits abgebaut werden.
+
+        Die Pulsuhr ist ein QTimer mit 16 ms: bliebe er laufen,
+        weckte er den Prozess weiter, während die Anwendung schon
+        abgebaut wird.
         """
 
         self.manager.raid_data.shutdown()
+
+        from gui.motion.pulse_clock import pulse_clock
+
+        pulse_clock().stop()
 
     # --------------------------------------------------
     # Fenster minimieren/schließen -> Tray
@@ -736,4 +1053,3 @@ class MainWindow(QMainWindow):
         self._shutdown_services()
 
         super().closeEvent(event)
-

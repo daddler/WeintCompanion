@@ -29,15 +29,19 @@ def test_page_ids_are_unique():
 
 def test_expected_navigation_order():
     """
-    Die vom Produkt vorgegebene Reihenfolge der Hauptbereiche.
+    Die vom Produkt vorgegebene Reihenfolge der Hauptbereiche
+    (WeintCompanion 2.0, gruppiert nach RAID / CHARAKTER / SYSTEM).
     """
 
     assert [page_id.name for page_id in PageId] == [
-        "DASHBOARD",
-        "ADDON",
-        "SYNC",
+        "OVERVIEW",
         "WEINTTV",
         "ACADEMY",
+        "ARCHIVE",
+        "CHARACTERS",
+        "PREPARATION",
+        "ADDON",
+        "CONNECTIONS",
         "SETTINGS",
         "LOGS",
     ]
@@ -49,5 +53,5 @@ def test_page_id_behaves_like_int():
     ein int - PageId muss dort ohne Umwandlung einsetzbar bleiben.
     """
 
-    assert PageId.SETTINGS == 5
+    assert PageId.SETTINGS == 8
     assert isinstance(PageId.SETTINGS, int)

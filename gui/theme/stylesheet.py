@@ -79,12 +79,28 @@ QMainWindow {{
     background: {surface["base"]};
 }}
 
+/*
+   Achtung: hier steht bewusst **keine** Schriftangabe.
+
+   Eine font-size-Regel auf QWidget überschreibt jede über
+   `QFont`/`setFont()` gesetzte Größe - und zwar an jedem Widget im
+   Programm, weil die Regel auf alle passt. Bis das auffiel, war jede
+   Schrift 14 px groß: `fonts.font("title")` setzte zwar 28 px, Gewicht
+   und Laufweite kamen auch an, aber die Größe wurde von dieser einen
+   Zeile wieder eingeebnet. Sichtbar war das nur daran, dass ein
+   Seitentitel kaum größer wirkte als Fließtext.
+
+   Die Grundschrift wird stattdessen über `QApplication.setFont()`
+   gesetzt (siehe ThemeManager.apply_stylesheet). Damit gilt wieder die
+   erwartete Reihenfolge: die Anwendung hat eine Grundschrift, ein
+   Widget kann sie per setFont überschreiben, und ein Stylesheet, das
+   ausdrücklich `font-size` nennt, sticht beide - was dann Absicht ist
+   und nicht Nebenwirkung.
+*/
+
 QWidget {{
     background: transparent;
     color: {text["primary"]};
-
-    font-family: "{sans}";
-    font-size: {body}px;
 }}
 
 QToolTip {{

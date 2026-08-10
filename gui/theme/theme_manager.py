@@ -304,12 +304,24 @@ class ThemeManager(QObject):
 
         from PySide6.QtWidgets import QApplication
 
+        from gui.theme.fonts import font
         from gui.theme.stylesheet import build_stylesheet
 
         app = QApplication.instance()
 
         if app is None:
             return
+
+        #
+        # Die Grundschrift gehoert an die Anwendung, nicht ins
+        # Stylesheet: eine `QWidget { font-size: ... }`-Regel wuerde
+        # jede ueber setFont gesetzte Groesse ueberschreiben (siehe
+        # den ausfuehrlichen Kommentar in stylesheet.py). Sie wird vor
+        # dem Stylesheet gesetzt, damit die anschliessende Politur
+        # bereits die richtige Groesse vorfindet.
+        #
+
+        app.setFont(font("body", self))
 
         app.setStyleSheet(build_stylesheet(self))
 

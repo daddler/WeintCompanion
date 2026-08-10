@@ -52,7 +52,16 @@ def eyebrow_label(
 
     label = QLabel(text)
 
-    label.setObjectName("eyebrow")
+    #
+    # Bewusst **ohne** setObjectName("eyebrow"): das globale Stylesheet
+    # trägt für diese Kennung eine eigene `font-size`, und eine
+    # Stylesheet-Schriftgröße sticht jede über setFont gesetzte. Die
+    # Regel dort gilt 11 px (type.eyebrow); dieses Label kann aber
+    # auch 10 px sein (type.micro) und folgt zudem der Dichte. Mit der
+    # Kennung wären beide Fälle stumm auf 11 px vereinheitlicht.
+    # Die Kennung bleibt für die Seiten bestehen, die sie direkt
+    # setzen und keine eigene Schrift mitbringen.
+    #
 
     label.setFont(font(token))
 
