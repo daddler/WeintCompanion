@@ -2,6 +2,60 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.0.0
+
+Ein komplettes Neudesign. Bernstein trägt jetzt die Bedeutung, Violett
+nur noch das Licht - und die App zeigt an, was heute ansteht, statt
+immer wieder denselben Installationsstatus.
+
+**Die Startseite zeigt nicht mehr, ob die App funktioniert.** Bis 1.7
+öffnete sich WeintCompanion auf einer Übersicht ihres eigenen
+Installationszustands: WoW gefunden, Addon aktuell, Sync läuft. Das
+ist genau einmal interessant, am ersten Tag - danach ist dort
+dauerhaft alles grün, und der Bildschirm, den man bei jedem Start
+zuerst sieht, sagt einem nichts, was man nicht schon weiß. Die neue
+**Übersicht** zeigt stattdessen den nächsten Raidtermin mit Countdown
+und Aufstellung, den letzten Pull mit dem schwächsten Bereich und
+einer konkreten Lektion, und den Stand der Vorbereitung. Der
+Installationsstatus ist nicht verschwunden, er sitzt nur noch als eine
+einzige Zeile am Fuß der Seite - und klappt sich nur auf, wenn dort
+tatsächlich etwas zu tun ist.
+
+**WeintTV zeigt jetzt den ganzen Raid.** Die Ranglisten hörten bisher
+nach Platz fünf auf - nicht aus Absicht, sondern aus Platznot: eine
+Zeile brauchte mit ihrem eigenen Balken darunter rund 40 px, und 25
+davon passten in kein 900 Pixel hohes Fenster. Die Klassenfarbe füllt
+jetzt den Zeilenhintergrund selbst, wodurch eine Zeile mit 24 px
+auskommt - alle 25 Plätze stehen bei 1440 × 900 ohne Scrollen da, die
+eigene Zeile ist hervorgehoben, ein gefallener Spieler zeigt seinen
+Todeszeitpunkt statt aus der Liste zu verschwinden.
+
+**Die Academy zeigt den schwächsten Bereich, statt sechs gleich
+gewichtete Zeilen aufzulisten.** Rotation, Movement, Cooldowns,
+Mechaniken, Überleben und Leistung stehen jetzt als sechs Kacheln
+nebeneinander, und genau eine - der Bereich, an dem sich Training am
+meisten lohnt - hebt sich sichtbar ab.
+
+**Drei Akzentfarben, zwei Dichten, ein Fenster ohne Systemrahmen.**
+Bernstein, Arkan-Violett oder Jade lassen sich jederzeit umschalten
+und wirken sofort - auch auf gemalte Ringe, Sparklines und Sterne.
+Wer "Bewegung reduzieren" einschaltet, bekommt dieselbe App ohne
+Animation: der LIVE-Punkt wird zum Quadrat, nichts versetzt sich mehr
+beim Seitenwechsel. Das Fenstermindestmaß sinkt von 1500 × 900 auf
+960 × 640.
+
+**Kein Emoji mehr als Statusanzeige.** Die grünen, gelben und roten
+Kreise sind gemalten Punkten gewichen, die die gewählte Akzentfarbe
+tragen und auf jedem Rechner gleich aussehen - dasselbe gilt für Inter
+und JetBrains Mono, die der App jetzt beiliegen, statt sich still auf
+eine Systemschrift zu verlassen.
+
+**Neu:** eine eigene Seite für Verbindungen (vormals
+"Synchronisation"), ein kleines Immer-oben-Overlay mit Pull-Uhr,
+Boss-Prozent und dem eigenen Rang, und eine vierschrittige Einrichtung
+für den ersten Start - jederzeit über Einstellungen → Allgemein
+erneut aufrufbar, genau wie die Willkommens-Tour.
+
 ## 1.7.0
 
 Wer in der App einen Charakter auswählte, bekam im Spiel manchmal
