@@ -60,6 +60,7 @@ from gui.widgets.eyebrow import eyebrow_label
 from gui.widgets.hero_banner import HeroButton
 from gui.widgets.section_card import SectionCard
 from gui.widgets.segmented_control import SegmentedControl
+from gui.widgets.toggle_switch import ToggleSwitch
 from gui.widgets.tv.analysis_gap import rating_gap_text
 from gui.widgets.tv.archive_picker import ArchivePicker
 from gui.widgets.tv.entry_list import EntryData, EntryList
@@ -168,7 +169,49 @@ class AcademyPage(QWidget):
 
         header.addWidget(self.character_box)
 
+        #
+        # --------------------------------------------------
+        # "Dem Spiel folgen"
+        # --------------------------------------------------
+        #
+        # Seit WeintCodex 1.3.3.0 meldet das Addon beim Login, welcher
+        # Charakter angemeldet ist, und die Auswahl oben folgt ihm.
+        # Der Schalter muss sichtbar sein: sonst wäre die Automatik
+        # nur ein zweiter, unsichtbarer Akteur an der Auswahlbox -
+        # also genau die Beschwerde, die sie behebt.
+        #
+
+        self.follow_game = ToggleSwitch(
+            self.manager.config.data.get("academy_follow_game", True)
+        )
+
+        self.follow_game.toggled.connect(self._on_follow_game_toggled)
+
+        follow_label = QLabel("Dem Spiel folgen")
+
+        follow_label.setStyleSheet(
+            f"font-size:12px;color:{Colors.TEXT_MUTED};"
+        )
+
+        header.addSpacing(16)
+        header.addWidget(self.follow_game)
+        header.addWidget(follow_label)
+
         root.addLayout(header)
+
+        #
+        # Welchen Charakter das Spiel zuletzt gemeldet hat. Ohne diese
+        # Zeile ist nicht zu erkennen, warum die Auswahl steht, wo sie
+        # steht - und ob die Verbindung zum Addon überhaupt lebt.
+        #
+
+        self.ingame_hint = QLabel("")
+
+        self.ingame_hint.setStyleSheet(
+            f"font-size:11px;color:{Colors.TEXT_FAINT};"
+        )
+
+        root.addWidget(self.ingame_hint)
 
         #
         # --------------------------------------------------
@@ -695,7 +738,10 @@ class AcademyPage(QWidget):
         if not name:
             return
 
-        self.academy.set_player_name(name)
+        # Der Sprung aus WeintTV ist eine ausdrückliche Wahl - anders
+        # als der dortige Anzeigefilter, der die Identität bewusst
+        # nicht anfasst.
+        self.academy.note_manual_choice(name)
 
         self._plan_signature = None
 
@@ -817,7 +863,18 @@ class AcademyPage(QWidget):
 
         self._roster_signature = names
 
-        selected = self.academy.resolve_player_name(snapshot)
+        #
+        # reconcile_selection() entscheidet UND schreibt fest. Vorher
+        # stand hier ein blosses "wenn der gespeicherte Name noch
+        # vorkommt, setz ihn" - fehlte er, blieb die Box sichtbar auf
+        # dem ersten Namen stehen, während die Config den alten
+        # behielt. Die Nutzlast ins Addon entsteht aus der Config,
+        # also zeigte die App X und im Spiel stand Y. Nichts schlug
+        # dabei fehl, deshalb ist es so lange unentdeckt geblieben.
+        #
+        self._sync_ingame_hint()
+
+        selected = self.academy.reconcile_selection(names)
 
         self.character_box.blockSignals(True)
 
@@ -836,9 +893,74 @@ class AcademyPage(QWidget):
         if not name:
             return
 
-        self.academy.set_player_name(name)
+        #
+        # Eine Wahl von Hand: sie gilt für den Charakter, auf dem sie
+        # getroffen wurde, und stellt sofort ins Addon zu.
+        #
+        self.academy.note_manual_choice(name)
+
+        self._sync_ingame_hint()
 
         self._apply_snapshot(self.service.current())
+
+    def _on_follow_game_toggled(self, checked: bool):
+
+        self.manager.config.data["academy_follow_game"] = bool(checked)
+
+        self.manager.config.save()
+
+        if not checked:
+            self._sync_ingame_hint()
+            return
+
+        #
+        # Wieder eingeschaltet: die zuletzt gemeldete Anmeldung
+        # sofort anwenden, statt bis zum nächsten Login zu warten.
+        # note_ingame_character() räumt dabei die Handauswahl weg.
+        #
+        self.manager.config.data["academy_player_source"] = ""
+        self.manager.config.data["academy_manual_for"] = ""
+        self.manager.config.save()
+
+        self.academy.note_ingame_character(
+            self.academy.ingame_character(),
+            self.manager.config.data.get("academy_ingame_realm", ""),
+        )
+
+        self._sync_ingame_hint()
+
+        self._roster_signature = None
+
+        self._apply_snapshot(self.service.current())
+
+    def _sync_ingame_hint(self):
+        """
+        Nennt den zuletzt vom Spiel gemeldeten Charakter - und sagt,
+        wenn eine Auswahl von Hand ihn gerade überstimmt.
+        """
+
+        ingame = self.academy.ingame_character()
+
+        if not ingame:
+            text = (
+                "Das Addon hat noch nicht gemeldet, wer angemeldet ist "
+                "(WeintCodex 1.3.3.0 oder neuer, nach dem nächsten Login)."
+            )
+
+        else:
+            realm = self.manager.config.data.get("academy_ingame_realm", "")
+            text = "Ingame angemeldet: " + ingame + (f"-{realm}" if realm else "")
+
+            manual = (
+                self.manager.config.data.get("academy_player_source") == "manual"
+                and self.manager.config.data.get("academy_follow_game", True)
+            )
+
+            if manual:
+                text += "  ·  eigene Auswahl hat Vorrang"
+
+        if self.ingame_hint.text() != text:
+            self.ingame_hint.setText(text)
 
     # --------------------------------------------------
 

@@ -38,6 +38,7 @@ from analyzer.academy.models import (
 )
 from analyzer.analysis.damage import has_usable_classification
 from analyzer.analysis.spec_reference import cooldown_hint, reference_hint
+from analyzer.names import match_name
 from analyzer.models import (
     CD_PERSONAL,
     MECHANIC_DEFENSIVE,
@@ -170,10 +171,20 @@ def _find_entry(
 def find_actor(snapshot: RaidSnapshot, name: str) -> Actor | None:
     """
     Sucht einen Spieler in allen Listen eines Snapshots.
+
+    Der Name wird vorher über `match_name()` auf die Schreibweise des
+    Rosters gebracht. Ohne das scheiterte jede Suche, sobald sich die
+    beiden Schreibweisen unterschieden - und zwar lautlos: das
+    Ergebnis war ein Profil ohne Akteur, dessen `name` wörtlich "-"
+    lautet, was bis ins Addon durchschlug. Betroffen war vor allem
+    der realmfremde Fall, den WarcraftLogs als "Name-Realm" liefert,
+    während das Spiel nur "Name" kennt.
     """
 
     if not name:
         return None
+
+    name = match_name(name, roster_names(snapshot)) or name
 
     for rows in (snapshot.top_damage, snapshot.top_healing):
 

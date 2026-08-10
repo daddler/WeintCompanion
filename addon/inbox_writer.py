@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from addon.sync_reader import SyncReader
 from core.lua_table import quote_lua_string, to_lua, upsert_variable
+from core.version import VERSION
 
 
 class InboxWriter:
@@ -87,7 +88,26 @@ class InboxWriter:
                 "},\n"
             )
 
+        #
+        # Die eigene Version mitschreiben - bei JEDEM Schreibvorgang,
+        # auch bei leerer Queue.
+        #
+        # Grund: das Addon schickt seit WeintCodex 1.3.3.0 eine
+        # Nachricht "character_report" (wer ist gerade angemeldet).
+        # Eine Companion, die diesen Typ nicht kennt, würde ihn in
+        # ihren generischen Zweig fallen lassen und an den Bot
+        # schicken; der antwortet nicht mit Erfolg, die Nachricht
+        # bleibt liegen, und der Nutzer bekäme alle fünf Sekunden
+        # "Nachricht #N konnte nicht gesendet werden". Das Addon liest
+        # diese Marke deshalb und sendet erst, wenn die Companion neu
+        # genug ist.
+        #
+        # Eine reine Empfehlung zur Update-Reihenfolge hätte das nicht
+        # verhindert - Addon und App werden unabhängig aktualisiert.
+        #
+
         body = (
+            f'["companionVersion"] = {quote_lua_string(VERSION)},\n'
             '["queue"] = {\n'
             + "".join(entries)
             + "},\n"

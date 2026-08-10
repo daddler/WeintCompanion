@@ -284,12 +284,36 @@ def build_academy_catalog(lessons) -> dict:
     }
 
 
+def _identity(profile: PlayerProfile, character: str) -> str:
+    """
+    Der Name, unter dem diese Auswertung im Addon abgelegt wird.
+
+    `PlayerProfile.name` liefert wörtlich `"-"`, wenn der gewählte
+    Spieler im Snapshot nicht gefunden wurde. Genau dieser Wert ging
+    bis 1.6.2 als `character` ins Addon - während `weinttv_report.me`
+    im selben Atemzug den echten Namen trug. Zwei Identitäten aus
+    einer Zustellung, und das Addon musste raten, welche gilt.
+
+    Deshalb gewinnt hier der von außen aufgelöste Name; das Profil
+    ist nur noch Rückfall, und `"-"` erreicht die Leitung nie.
+    """
+
+    if character:
+        return character
+
+    if profile.actor is not None:
+        return profile.actor.name
+
+    return ""
+
+
 def build_academy_state(
     profile: PlayerProfile,
     plan: TrainingPlan,
     snapshot: RaidSnapshot,
     completed,
     excluded,
+    character: str = "",
 ) -> dict:
     """
     Bewertung, Trainingsplan und Fortschritt eines Charakters.
@@ -323,9 +347,11 @@ def build_academy_state(
             ],
         }
 
+    identity = _identity(profile, character)
+
     return {
         "version": PAYLOAD_VERSION,
-        "character": profile.name,
+        "character": identity,
         "capturedAt": int(snapshot.captured_at),
         "source": snapshot.source_label,
 
@@ -333,8 +359,16 @@ def build_academy_state(
         "pull": profile.sample_size,
         "gap": _gap(snapshot),
 
+        #
+        # Stand dieser Charakter überhaupt im ausgewerteten Pull? Ohne
+        # die Angabe zeigt das Addon fünf Null-Stern-Zeilen und kann
+        # nicht sagen, ob die Bewertung fehlt oder schlecht ist.
+        # Additiv - ein älteres Addon ignoriert den Schlüssel.
+        #
+        "hasActor": actor is not None,
+
         "actor": {
-            "name": actor.name if actor else profile.name,
+            "name": actor.name if actor else identity,
             "class": actor.class_name if actor else "",
             "spec": actor.spec if actor else "",
             "role": actor.role if actor else "",

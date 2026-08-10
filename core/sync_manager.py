@@ -3,6 +3,21 @@ from discord.sync_client import SyncClient
 from core.character_sync_client import CharacterSyncClient
 from core.academy_progress_sync import apply_addon_progress
 from core.academy_dummy_sync import apply_dummy_practice_session
+from core.character_report_sync import apply_character_report
+
+
+#
+# Nachrichtenarten, die auf diesem Rechner bleiben. Der Bot hat mit
+# ihnen nichts zu tun: eigener Lernfortschritt, eigene Übungsdaten,
+# der eigene angemeldete Charakter. Die drei Zweige unten sind
+# dieselbe Form dreimal; die Menge ist die Naht, an der die nächste
+# lokale Art dazukommt.
+#
+LOCAL_MESSAGE_TYPES = {
+    "academy",
+    "dummy_practice_session",
+    "character_report",
+}
 
 
 class SyncManager:
@@ -109,6 +124,35 @@ class SyncManager:
 
                 continue
 
+            #
+            # Wer ist ingame angemeldet? Seit WeintCodex 1.3.3.0.
+            # Bleibt lokal - er beantwortet ausschliesslich die Frage,
+            # fuer welchen Charakter Academy und WeintTV gelten, und
+            # die wurde vorher geraten (siehe
+            # core/character_report_sync.py).
+            #
+
+            if message.get("type") == "character_report":
+
+                report = apply_character_report(
+                    getattr(self.manager, "academy", None),
+                    message.get("payload") or "",
+                )
+
+                if report is not None:
+
+                    self.manager.logger.info(
+                        "Ingame angemeldet: "
+                        f"{report['name']}"
+                        + (f"-{report['realm']}" if report["realm"] else "")
+                    )
+
+                self.reader.remove_message(
+                    message["id"]
+                )
+
+                continue
+
             if message.get("type") == "character":
 
                 #
@@ -152,6 +196,27 @@ class SyncManager:
                 "loot_sync_enabled",
                 False,
             ):
+
+                self.reader.remove_message(
+                    message["id"]
+                )
+                continue
+
+            elif message.get("type") in LOCAL_MESSAGE_TYPES:
+
+                #
+                # Sollte oben schon behandelt worden sein. Kommt eine
+                # lokale Art trotzdem hier an (neuer Typ eingeführt,
+                # Zweig vergessen), darf sie NICHT an den Bot gehen -
+                # sie ist persönlich und der Bot antwortet ohnehin
+                # nicht mit Erfolg, sodass sie liegen bliebe und im
+                # Sync-Takt Fehler erzeugte.
+                #
+
+                self.manager.logger.warning(
+                    f"Lokale Nachricht \"{message.get('type')}\" ohne "
+                    "Verarbeitung - verworfen."
+                )
 
                 self.reader.remove_message(
                     message["id"]

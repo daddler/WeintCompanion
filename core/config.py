@@ -91,6 +91,20 @@ class Config:
 
             "academy_player_name": "",
 
+            #
+            # Wer ist "ich"? Die Antwort kam bis 1.6.2 aus einer
+            # Vermutung (der alphabetisch erste Raider). Seit 1.7.0
+            # meldet das Addon den angemeldeten Charakter, und die
+            # Auswahl folgt ihm - es sei denn, der Nutzer hat selbst
+            # gewaehlt, dann gilt seine Wahl fuer genau den Charakter,
+            # auf dem er sie getroffen hat (academy_manual_for).
+            #
+            "academy_follow_game": True,
+            "academy_ingame_character": "",
+            "academy_ingame_realm": "",
+            "academy_player_source": "",
+            "academy_manual_for": "",
+
         }
 
         self.load()
@@ -141,6 +155,11 @@ class Config:
                     "raid_data_source": "mock",
                     "combatlog_path": "",
                     "academy_player_name": "",
+                    "academy_follow_game": True,
+                    "academy_ingame_character": "",
+                    "academy_ingame_realm": "",
+                    "academy_player_source": "",
+                    "academy_manual_for": "",
 
                 }
 

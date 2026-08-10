@@ -371,6 +371,20 @@ class CompanionManager(QObject):
             if classic_path:
                 self.config.set_classic_path(classic_path)
 
+        #
+        # Ein anderer Pfad heißt eine andere SavedVariables-Datei, in
+        # der noch gar nichts steht. Der Merker in AddonAnalysisSync
+        # kennt nur den Inhalt, nicht das Ziel - ohne dieses
+        # Verwerfen würde die erste Zustellung dorthin als
+        # "unverändert" unterdrückt und käme nie an.
+        #
+        if classic_path != self.state.wow_path:
+
+            sync = getattr(self, "addon_analysis_sync", None)
+
+            if sync is not None:
+                sync.invalidate()
+
         self.state.wow_path = classic_path
         self.state.wow_found = classic_path is not None
 

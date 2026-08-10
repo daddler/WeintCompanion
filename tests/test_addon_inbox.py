@@ -20,6 +20,7 @@ import pytest
 from addon.addon_inbox import AddonInbox
 from addon.inbox_writer import InboxWriter
 from core.lua_table import extract_variable_body, quote_lua_string, to_lua
+from core.version import VERSION
 
 
 class _Logger:
@@ -285,3 +286,81 @@ def test_to_lua_rejects_unsupported_types():
     # Lieber ein Fehler beim Bauen als eine unlesbare Datei im Spiel.
     with pytest.raises(TypeError):
         to_lua({"wann": object()})
+
+
+# --------------------------------------------------
+# Versionsmarke
+# --------------------------------------------------
+#
+# Das Addon sendet seit WeintCodex 1.3.3.0 eine Nachricht
+# "character_report" (wer ist gerade angemeldet). Eine Companion, die
+# den Typ nicht kennt, würde ihn an den Bot schicken; der antwortet
+# nicht mit Erfolg, die Nachricht bliebe liegen und der Nutzer bekäme
+# alle fünf Sekunden einen Fehler. Das Addon liest deshalb diese
+# Marke und sendet erst ab 1.7.0.
+#
+# Eine blosse Empfehlung zur Update-Reihenfolge hätte das nicht
+# verhindert - Addon und App werden unabhängig aktualisiert.
+# --------------------------------------------------
+
+
+def test_die_companion_version_steht_in_der_inbox(wow_path):
+
+    InboxWriter(wow_path).send_batch([
+        {"type": "raid_import", "payload": "WCIMPORT:RAIDWED:x"},
+    ])
+
+    body = extract_variable_body(
+        (
+            wow_path
+            / "WTF" / "Account" / "TESTACC" / "SavedVariables" / "WeintCodex.lua"
+        ).read_text(encoding="utf-8"),
+        "WeintCompanionInboxDB",
+    )
+
+    assert f'["companionVersion"] = "{VERSION}"' in body
+
+
+def test_die_marke_steht_auch_bei_leerer_warteschlange(wow_path):
+    """
+    Sonst erschiene sie erst, wenn zufällig etwas zuzustellen ist -
+    und das Addon bliebe bis dahin stumm, obwohl die App neu genug
+    ist.
+    """
+
+    InboxWriter(wow_path).send_batch([])
+
+    body = extract_variable_body(
+        (
+            wow_path
+            / "WTF" / "Account" / "TESTACC" / "SavedVariables" / "WeintCodex.lua"
+        ).read_text(encoding="utf-8"),
+        "WeintCompanionInboxDB",
+    )
+
+    assert "companionVersion" in body
+
+
+@pytest.mark.skipif(LUA is None, reason="kein Lua-Interpreter vorhanden")
+def test_das_addon_liest_die_marke_als_zeichenkette(wow_path):
+
+    InboxWriter(wow_path).send_batch([])
+
+    file = (
+        wow_path
+        / "WTF" / "Account" / "TESTACC" / "SavedVariables" / "WeintCodex.lua"
+    )
+
+    script = f"""
+        dofile({quote_lua_string(str(file))})
+        local v = WeintCompanionInboxDB.companionVersion
+        assert(type(v) == "string", "Version ist keine Zeichenkette")
+        local major, minor = v:match("^v?(%d+)%.(%d+)")
+        assert(major and minor, "Version nicht zerlegbar: " .. tostring(v))
+        print("ok")
+    """
+
+    result = subprocess.run([LUA, "-e", script], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert "ok" in result.stdout

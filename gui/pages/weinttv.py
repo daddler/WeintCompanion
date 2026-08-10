@@ -598,6 +598,24 @@ class WeintTvPage(QWidget):
 
         filter_row.addWidget(self.player_filter)
 
+        #
+        # Dieser Filter ist reine Anzeige - er sagt NICHT, wer "ich"
+        # bin. Das ist Absicht: die Raid-Ansicht ist dazu da, sich
+        # andere anzusehen, und ein Blick auf den Kollegen darf nicht
+        # die Ingame-Identität umstellen. Weil man das dem Auswahlfeld
+        # nicht ansieht, steht der tatsächlich gewählte
+        # Academy-Charakter daneben; die Abweichung wird damit dort
+        # sichtbar, wo sie entsteht.
+        #
+        self.identity_hint = QLabel("")
+
+        self.identity_hint.setStyleSheet(
+            f"font-size:11px;color:{Colors.TEXT_FAINT};"
+            "background:transparent;border:none;"
+        )
+
+        filter_row.addWidget(self.identity_hint)
+
         filter_row.addStretch()
 
         layout.addLayout(filter_row)
@@ -1879,6 +1897,8 @@ class WeintTvPage(QWidget):
         Sekundentakt zurückgesetzt, während man es bedient.
         """
 
+        self._sync_identity_hint()
+
         names = snapshot.actor_names
 
         if names == self._roster_signature:
@@ -1905,6 +1925,28 @@ class WeintTvPage(QWidget):
 
         self.player_filter.blockSignals(False)
 
+    def _sync_identity_hint(self):
+        """
+        Nennt den Charakter, den das Addon als "ich" behandelt.
+
+        `setText()` vergleicht selbst nicht, aber der Text ändert sich
+        nur bei einem Charakterwechsel - anders als bei
+        `setStyleSheet()` ist hier nichts pro Bild zu sparen.
+        """
+
+        academy = getattr(self.manager, "academy", None)
+
+        name = academy.player_name() if academy is not None else ""
+
+        text = (
+            f"Ingame „Nur ich“ zeigt: {name}"
+            if name
+            else ""
+        )
+
+        if self.identity_hint.text() != text:
+            self.identity_hint.setText(text)
+
     def _on_filter_changed(self, index: int):
 
         value = self.player_filter.itemData(index)
@@ -1912,6 +1954,12 @@ class WeintTvPage(QWidget):
         if value is None:
             return
 
+        #
+        # Nur die Anzeige. Die Academy-Auswahl bleibt unberührt -
+        # begründet oben beim Anlegen von identity_hint. Der
+        # ausdrückliche Weg ist der Sprung "in der Academy ansehen"
+        # (playerRequested).
+        #
         self._filter = value
 
         self._apply_deep_analysis(self.service.current())

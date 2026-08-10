@@ -480,3 +480,85 @@ def test_state_survives_a_profile_without_actor():
 
     assert state["actor"]["class"] == ""
     assert state["gap"] == "no_raid"
+
+
+# --------------------------------------------------
+# Eine Identität, nicht zwei
+# --------------------------------------------------
+#
+# Bis 1.6.2 trug `academy_state.character` den `PlayerProfile.name` -
+# und der ist wörtlich `"-"`, sobald der gewählte Spieler im Snapshot
+# nicht gefunden wurde. `weinttv_report.me` trug im selben Atemzug den
+# echten Namen. Das Addon bekam also zwei Antworten auf dieselbe Frage
+# und musste raten, welche gilt; sichtbar wurde das als "im Spiel
+# steht ein anderer Charakter".
+# --------------------------------------------------
+
+
+def test_beide_nutzlasten_nennen_denselben_charakter():
+
+    profile = PlayerProfile(actor=None, ratings=(), encounter_name="")
+
+    snapshot = RaidSnapshot.empty()
+
+    state = build_academy_state(
+        profile,
+        TrainingPlan(),
+        snapshot,
+        frozenset(),
+        frozenset(),
+        character="Aldrin",
+    )
+
+    report = build_weinttv_report(snapshot, "Aldrin")
+
+    assert state["character"] == report["me"] == "Aldrin"
+
+
+def test_der_unname_erreicht_die_leitung_nie():
+    """
+    Weder als `character` noch als Anzeigename im `actor`-Block.
+    """
+
+    profile = PlayerProfile(actor=None, ratings=(), encounter_name="")
+
+    state = build_academy_state(
+        profile,
+        TrainingPlan(),
+        RaidSnapshot.empty(),
+        frozenset(),
+        frozenset(),
+        character="Aldrin",
+    )
+
+    assert profile.name == "-"          # die Quelle des Problems
+    assert state["character"] == "Aldrin"
+    assert state["actor"]["name"] == "Aldrin"
+
+
+def test_hasActor_unterscheidet_unbewertet_von_schlecht():
+    """
+    Ohne diese Angabe zeigt das Addon fünf Null-Stern-Zeilen und kann
+    nicht sagen, ob die Bewertung fehlt oder schlecht ist.
+    """
+
+    ohne = build_academy_state(
+        PlayerProfile(actor=None, ratings=(), encounter_name=""),
+        TrainingPlan(),
+        RaidSnapshot.empty(),
+        frozenset(),
+        frozenset(),
+        character="Aldrin",
+    )
+
+    mit = build_academy_state(
+        PlayerProfile(actor=ACTOR, ratings=(), encounter_name=""),
+        TrainingPlan(),
+        RaidSnapshot.empty(),
+        frozenset(),
+        frozenset(),
+        character="Testchar",
+    )
+
+    assert ohne["hasActor"] is False
+    assert mit["hasActor"] is True

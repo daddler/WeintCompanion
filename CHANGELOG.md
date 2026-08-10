@@ -2,6 +2,68 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 1.7.0
+
+Wer in der App einen Charakter auswählte, bekam im Spiel manchmal
+**einen alten oder einen völlig fremden Charakter** zu sehen -
+in der Academy wie in WeintTV.
+
+Die Ursache war nicht ein Fehler, sondern dass es **vier voneinander
+unabhängige Antworten auf „wer bin ich"** gab: die Auswahlbox, die
+gespeicherte Auswahl, das ausgewertete Profil und der im Spiel
+angemeldete Charakter. Nichts davon glich irgendetwas ab - und die
+einzige verlässliche Quelle, der angemeldete Charakter, wurde nirgends
+gefragt.
+
+**Der alte Charakter.** Wechselte die Raid-Besetzung, füllte die
+Academy-Seite ihre Auswahlliste neu und setzte die Auswahl nur, *wenn*
+der gespeicherte Name noch vorkam. Fehlte er, stand die Box sichtbar
+auf dem ersten Namen, während die Einstellung den alten behielt - und
+die Zustellung ans Addon entsteht aus der Einstellung. Die App zeigte
+also X und im Spiel stand Y. Nichts schlug dabei fehl, deshalb ist es
+so lange unentdeckt geblieben. Die Auswahl wird jetzt an einer Stelle
+entschieden **und festgeschrieben**; beides kann nicht mehr
+auseinanderlaufen.
+
+**Der fremde Charakter.** War noch nichts ausgewählt, nahm die App den
+**alphabetisch ersten Raider** - bei jedem Bericht neu und ohne es je
+festzuhalten. Diese Vermutung ging bis ins Spiel. Sie gibt es
+weiterhin, aber nur noch als ausdrücklichen Vorschlag, der
+festgeschrieben wird, bevor er wirkt: was ins Addon geht, hat der
+Nutzer auch gesehen.
+
+**Die Umkehrung: das Spiel sagt jetzt, wer spielt.** WeintCodex
+1.3.3.0 meldet beim Login den angemeldeten Charakter, und die Auswahl
+folgt ihm von selbst. Eine Auswahl von Hand behält Vorrang - aber nur
+für den Charakter, auf dem sie getroffen wurde. „Ich habe als Alice
+kurz Bobs Werte angesehen" gilt nicht mehr, wenn ich als Carol
+einlogge. Der Schalter „Dem Spiel folgen" sitzt neben der Auswahl,
+darunter steht, wer zuletzt angemeldet war.
+
+**Eine Identität statt zwei.** Die Auswertung trug bisher zwei Namen:
+`weinttv_report.me` den echten, `academy_state.character` den aus dem
+Profil - und der ist wörtlich `"-"`, sobald der gewählte Spieler im
+Pull nicht gefunden wurde. Das Addon bekam zwei Antworten auf dieselbe
+Frage. Jetzt wird der Name genau einmal aufgelöst und überall
+derselbe verwendet; ein neues Feld `hasActor` sagt dem Addon, ob der
+Charakter im Pull überhaupt dabei war - null Sterne heissen „keine
+Daten", nicht „schlecht".
+
+**Ein Auswahlwechsel kommt sofort an.** Vorher wartete er auf den
+nächsten Sync-Takt und fiel meist ganz aus, weil ohne geöffnete
+WeintTV- oder Academy-Seite gar keine Auswertung vorliegt.
+
+Der WeintTV-Spielerfilter bleibt absichtlich reine Anzeige: die
+Raid-Ansicht ist dazu da, sich *andere* anzusehen, und ein Blick auf
+den Kollegen darf die Ingame-Identität nicht umstellen. Damit man das
+nicht verwechselt, steht der tatsächlich gewählte Academy-Charakter
+jetzt daneben.
+
+**Zur Update-Reihenfolge:** die App schreibt ihre Version in die
+Addon-Inbox, und das Addon schickt die neue Nachricht erst ab 1.7.0.
+Wer zuerst das Addon aktualisiert, bekommt also keine Fehlermeldungen -
+nur die automatische Auswahl greift dann noch nicht.
+
 ## 1.6.2
 
 Einen Pull aus dem Archiv auszuwählen endete zuverlässig mit **"Bot

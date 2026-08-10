@@ -35,12 +35,13 @@ class _Logger:
     def __init__(self):
         self.successes = []
         self.infos = []
+        self.errors = []
 
     def info(self, message):
         self.infos.append(message)
 
     def error(self, message):
-        pass
+        self.errors.append(message)
 
     def success(self, message):
         self.successes.append(message)
@@ -75,7 +76,13 @@ class _Academy:
             sample_size=snapshot.pull_number,
         )
 
-    def build_plan(self, profile, snapshot=None):
+    #
+    # `character` wird seit 1.7.0 durchgereicht: das Profil allein
+    # kann den Namen nicht liefern, weil `PlayerProfile.name` "-"
+    # ist, sobald der Spieler im Pull fehlt.
+    #
+    def build_plan(self, profile, snapshot=None, character=""):
+        self.plan_character = character
         return TrainingPlan()
 
     def completed_for(self, name):
@@ -291,3 +298,79 @@ def test_parsing_survives_a_missing_academy():
     # Der SyncManager reicht getattr(..., "academy", None) durch -
     # eine halb aufgebaute Anwendung darf hier nicht abstuerzen.
     assert apply_addon_progress(None, "A|x|") is False
+
+
+# --------------------------------------------------
+# Sofortzustellung
+# --------------------------------------------------
+#
+# Der Merker verhindert überflüssige Schreibvorgänge - er darf aber
+# nichts verhindern, was sich ausserhalb der Nutzlast geändert hat.
+# Der Auswahlwechsel eines Charakters ist genau so ein Fall gewesen:
+# er wartete auf den nächsten Takt und fiel meist ganz aus, weil ohne
+# geöffnete Seite kein ausgewerteter Snapshot vorliegt.
+# --------------------------------------------------
+
+
+def test_invalidate_schreibt_gleichen_inhalt_erneut():
+
+    inbox = _Inbox()
+    manager = _Manager(_snapshot(), inbox)
+    sync = AddonAnalysisSync(manager, inbox)
+
+    sync.process()
+    sync.process()
+
+    assert len(inbox.published) == 1
+
+    sync.invalidate()
+    sync.process()
+
+    assert len(inbox.published) == 2
+
+
+def test_publish_now_stellt_sofort_zu():
+
+    inbox = _Inbox()
+    manager = _Manager(_snapshot(), inbox)
+    sync = AddonAnalysisSync(manager, inbox)
+
+    sync.publish_now()
+    sync.publish_now()
+
+    assert len(inbox.published) == 2
+
+
+def test_publish_now_reisst_den_aufrufer_nicht_mit():
+    """
+    Aufgerufen wird sie aus der Oberfläche, beim blossen Umstellen
+    eines Namens. Ein Fehler dabei ist eine Logzeile, kein Absturz.
+    """
+
+    class _Kaputt:
+
+        ok = True
+
+        def publish(self, channel, messages):
+            raise RuntimeError("Platte voll")
+
+    manager = _Manager(_snapshot())
+    sync = AddonAnalysisSync(manager, _Kaputt())
+
+    sync.publish_now()
+
+    assert manager.logger.errors
+
+
+def test_ohne_ausgewaehlten_charakter_wird_nichts_zugestellt():
+    """
+    Eine geratene Identität hat auf der Leitung nichts verloren.
+    """
+
+    inbox = _Inbox()
+    manager = _Manager(_snapshot(), inbox)
+    manager.academy.resolve_player_name = lambda snapshot: ""
+
+    AddonAnalysisSync(manager, inbox).process()
+
+    assert inbox.published == []
