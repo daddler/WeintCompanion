@@ -17,13 +17,24 @@ from PySide6.QtGui import (
 
 from PySide6.QtWidgets import QAbstractButton
 
-from gui.theme.colors import Colors
+from gui.theme import tokens
+from gui.theme.motion import curve, duration
+from gui.theme.theme_manager import theme
 
 
 class ToggleSwitch(QAbstractButton):
     """
-    Pill-Toggle mit animiertem Thumb, wie im Design
-    (Gradient lila->indigo wenn an, dunkelgrau wenn aus).
+    Umschaltknopf, 36 x 20 px, Knauf 16 px.
+
+    Aus: angehobene Flaeche mit Rahmen, Knauf in `text.muted`.
+    Ein: Verlauf in der Akzentfarbe, Knauf weiss.
+
+    Der Verlauf trug bis 1.7 das Violett-Indigo der alten Marke. Seit
+    2.0 gilt "Bernstein traegt die Bedeutung, Violett nur das Licht":
+    ein Schalter sagt an/aus, ist also bedeutungstragend, und faerbt
+    sich deshalb im Akzent. Gelesen wird die Farbe im paintEvent -
+    ein im Konstruktor gemerkter Wert ueberlebte den Akzentwechsel
+    nicht.
     """
 
     WIDTH = 36
@@ -48,9 +59,22 @@ class ToggleSwitch(QAbstractButton):
             b"thumbPosition",
         )
 
-        self._animation.setDuration(160)
+        #
+        # Dauer und Kurve kommen aus den Bewegungstoken - insbesondere
+        # liefert duration() bei "Bewegung reduzieren" 0 ms, und der
+        # Knauf springt statt zu gleiten. Eine hier fest eingetragene
+        # Zahl haette diese Einstellung stumm umgangen.
+        #
+
+        self._animation.setDuration(duration("toggle"))
         self._animation.setEasingCurve(
-            QEasingCurve.InOutQuad
+            QEasingCurve(curve("toggle"))
+        )
+
+        theme().accent_changed.connect(lambda _n: self.update())
+
+        theme().motion_changed.connect(
+            lambda _r: self._animation.setDuration(duration("toggle"))
         )
 
         #
@@ -157,7 +181,7 @@ class ToggleSwitch(QAbstractButton):
         if not self.isEnabled():
 
             painter.setPen(Qt.NoPen)
-            painter.setBrush(QColor(Colors.SURFACE_LIGHT))
+            painter.setBrush(QColor(tokens.SURFACE["raised"]))
             painter.drawRoundedRect(rect, radius, radius)
 
         elif self._thumb_position > 0.001:
@@ -169,8 +193,8 @@ class ToggleSwitch(QAbstractButton):
                 0,
             )
 
-            gradient.setColorAt(0, QColor(Colors.PRIMARY))
-            gradient.setColorAt(1, QColor(Colors.PRIMARY_2))
+            gradient.setColorAt(0, QColor(theme().accent_light()))
+            gradient.setColorAt(1, QColor(theme().accent_base()))
 
             painter.setPen(Qt.NoPen)
             painter.setBrush(gradient)
@@ -179,11 +203,11 @@ class ToggleSwitch(QAbstractButton):
         else:
 
             painter.setPen(
-                QColor(Colors.BORDER_LIGHT)
+                QColor(tokens.BORDER["strong"])
             )
 
             painter.setBrush(
-                QColor(Colors.SURFACE_LIGHT)
+                QColor(tokens.SURFACE["raised"])
             )
 
             painter.drawRoundedRect(
@@ -205,9 +229,9 @@ class ToggleSwitch(QAbstractButton):
         painter.setPen(Qt.NoPen)
 
         painter.setBrush(
-            QColor(Colors.WHITE)
-            if self.isEnabled()
-            else QColor(Colors.TEXT_MUTED)
+            QColor(tokens.WHITE)
+            if self.isEnabled() and self._thumb_position > 0.001
+            else QColor(tokens.TEXT["muted"])
         )
 
         painter.drawEllipse(

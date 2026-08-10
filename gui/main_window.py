@@ -37,6 +37,7 @@ from gui.theme.motion import curve, duration, is_reduced
 from gui.theme.theme_manager import theme
 
 from gui.widgets.nav_column import NavColumn
+from gui.widgets.toast import ToastHost
 from gui.widgets.title_bar import TitleBar
 
 from gui.navigation import PageId, build_page_specs
@@ -307,6 +308,29 @@ class MainWindow(QMainWindow):
         #
 
         self._layout_state = LayoutState()
+
+        #
+        # Meldungsstreifen statt Dialogen (§6.5). Der Wirt hängt am
+        # Fenster und nicht an einer Seite: eine Meldung über ein
+        # abgeschlossenes Update soll auch dann erscheinen, wenn der
+        # Nutzer inzwischen woanders ist.
+        #
+
+        self.toasts = ToastHost(self)
+
+    # --------------------------------------------------
+
+    def notify(self, text: str, variant: str = "ok", action: str = ""):
+        """
+        Eine Meldung unten rechts einblenden.
+
+        Der Weg für alles, was bisher ein Dialog gewesen wäre.
+        Fehlermeldungen (`variant="error"`) bleiben stehen, bis sie
+        weggeklickt werden - eine Fehlermeldung, die von selbst geht,
+        ist eine, die niemand gelesen hat.
+        """
+
+        return self.toasts.post(text, variant, action)
 
         #
         # Navigation
