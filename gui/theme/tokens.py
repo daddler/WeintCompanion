@@ -79,6 +79,16 @@ CARD_GRADIENT = ("#121217", "#0C0C0F")
 
 CARD_GRADIENT_ACCENT = ("#17141A", "#0D0C10")
 
+#
+# Die eine hervorgehobene Kachel im Bewertungsraster der Academy
+# (§6.3): der schwächste Bereich bekommt eine in Richtung Fehlerfarbe
+# gezogene Fläche, damit er sich von den fünf neutralen Kacheln
+# absetzt, ohne dass die Fläche selbst schon rot wäre - das bleibt der
+# Oberkante vorbehalten.
+#
+
+CARD_GRADIENT_WEAKEST = ("#1A1418", "#120E10")
+
 TEXT = {
     "primary": "#E8E8EA",
     "secondary": "#A8A8B0",

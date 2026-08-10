@@ -35,6 +35,7 @@ from PySide6.QtCore import Signal
 
 from analyzer.academy.lessons import lessons_in_category
 from analyzer.academy.models import (
+    CATEGORY_HINTS,
     CATEGORY_LABELS,
     CATEGORY_ORDER,
     MAX_STARS,
@@ -53,8 +54,9 @@ from gui.theme.restyle import restyle
 from gui.theme.wow_colors import class_color, class_label, role_label
 
 from gui.widgets.academy.catalog_list import CatalogList, CatalogRowData
+from gui.widgets.academy.history_card import HistoryCard
 from gui.widgets.academy.lesson_card import LessonCard
-from gui.widgets.academy.star_rating import StarRating
+from gui.widgets.academy.rating_grid import RatingGrid
 from gui.widgets.card import Card
 from gui.widgets.eyebrow import eyebrow_label
 from gui.widgets.hero_banner import HeroButton
@@ -406,16 +408,26 @@ class AcademyPage(QWidget):
         # Bewertung
         #
 
-        rating_card = SectionCard(
-            Resources.dashboard(),
-            "Bewertung",
-            "Aus dem zuletzt ausgewerteten Kampf abgeleitet.",
+        #
+        # Sechs Bewertungskacheln statt sechs Zeilen (§6.3): jede
+        # Kachel steht für sich, und genau eine - der schwächste
+        # Bereich - hebt sich ab. RatingGrid kapselt sowohl die
+        # Kachelform als auch die Haltepunkt-Spaltenzahl (6 -> 3 -> 2),
+        # siehe on_layout_changed() weiter unten.
+        #
+
+        self.rating_grid = RatingGrid(
+            CATEGORY_ORDER,
+            CATEGORY_LABELS,
+            CATEGORY_HINTS,
         )
+
+        layout.addWidget(self.rating_grid)
 
         #
         # Erklärt, warum mehrere Bereiche unbewertet bleiben, wenn die
         # Quelle keine Tiefenauswertung liefert. Ohne diesen Satz
-        # stünden dort fünf Zeilen "noch keine Daten", und der
+        # stünden dort sechs "noch keine Daten"-Kacheln, und der
         # naheliegende Schluss wäre "die Academy ist kaputt" statt
         # "diese Quelle kann das noch nicht".
         #
@@ -431,47 +443,7 @@ class AcademyPage(QWidget):
 
         self.rating_notice.setVisible(False)
 
-        self.rating_widgets = {}
-
-        for category in CATEGORY_ORDER:
-
-            row = QHBoxLayout()
-
-            row.setSpacing(14)
-
-            label = QLabel(CATEGORY_LABELS[category])
-
-            label.setFixedWidth(110)
-
-            label.setStyleSheet(
-                f"font-size:13px;font-weight:600;color:{Colors.TEXT};"
-                "background:transparent;border:none;"
-            )
-
-            row.addWidget(label)
-
-            stars = StarRating(0, MAX_STARS)
-
-            row.addWidget(stars)
-
-            detail = QLabel("")
-
-            detail.setWordWrap(True)
-
-            detail.setStyleSheet(
-                f"font-size:12px;color:{Colors.TEXT_MUTED};"
-                "background:transparent;border:none;"
-            )
-
-            row.addWidget(detail, 1)
-
-            rating_card.addLayout(row)
-
-            self.rating_widgets[category] = (stars, detail)
-
-        rating_card.addWidget(self.rating_notice)
-
-        layout.addWidget(rating_card)
+        layout.addWidget(self.rating_notice)
 
         #
         # Nächste Lektion
@@ -604,6 +576,13 @@ class AcademyPage(QWidget):
         progress_card.addLayout(progress_row)
 
         layout.addWidget(progress_card)
+
+        #
+        # Verlauf über mehrere Raidabende (§6.3) - zeigt seinen
+        # Leerzustand, siehe gui/widgets/academy/history_card.py.
+        #
+
+        layout.addWidget(HistoryCard())
 
         layout.addStretch()
 
@@ -800,6 +779,25 @@ class AcademyPage(QWidget):
         self.service.detach()
 
         self._attached = False
+
+    def on_layout_changed(self, state):
+        """
+        Die Spaltenzahl des Bewertungsrasters (§6.3): sechs bei voller
+        Breite, drei sobald die rechte Nebenspalte zur Schublade wird
+        (< 1280 px), zwei sobald die Ansicht einspaltig wird (< 980 px).
+        Beide Schwellen bestehen bereits als Haltepunkt-Flags - eine
+        dritte, eigene Schwelle nur für dieses Raster wäre eine zweite
+        Wahrheit über dieselbe Fensterbreite.
+        """
+
+        if state.single_column:
+            self.rating_grid.set_columns(2)
+
+        elif state.drawer:
+            self.rating_grid.set_columns(3)
+
+        else:
+            self.rating_grid.set_columns(6)
 
     # --------------------------------------------------
 
@@ -1086,33 +1084,11 @@ class AcademyPage(QWidget):
         self.profile_note.setVisible(bool(profile.note))
 
         #
-        # Bewertungen
+        # Bewertungen - das Raster übernimmt Sterne, Detailtext und
+        # die Hervorhebung des schwächsten Bereichs in einem Aufruf.
         #
 
-        for category, (stars, detail) in self.rating_widgets.items():
-
-            rating = profile.rating(category)
-
-            if rating is None:
-
-                stars.setStars(0)
-
-                detail.setText("Noch keine Auswertung.")
-
-                continue
-
-            stars.setStars(rating.stars)
-
-            #
-            # Ohne Daten wird der Grund genannt statt eine Bewertung
-            # zu behaupten - null Sterne heißen "unbekannt", nicht
-            # "schlecht".
-            #
-
-            detail.setText(
-                rating.detail
-                or f"{rating.hint} - noch keine Daten."
-            )
+        self.rating_grid.apply(profile)
 
         self._apply_rating_notice(self.service.current())
 
