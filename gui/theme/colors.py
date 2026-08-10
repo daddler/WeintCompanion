@@ -135,6 +135,6 @@ class Colors:
     # -------------------------------------------------
 
     WHITE = tokens.WHITE
-    BLACK = "#000000"
+    BLACK = tokens.BLACK
 
     TRANSPARENT = "transparent"

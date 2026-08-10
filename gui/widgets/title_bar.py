@@ -361,7 +361,7 @@ class TitleBar(QFrame):
 
         gradient = QLinearGradient(0, 0, 0, self.height())
 
-        gradient.setColorAt(0.0, QColor("#0C0C10"))
+        gradient.setColorAt(0.0, QColor(tokens.SURFACE_EXTRA["titleBar"]))
         gradient.setColorAt(1.0, QColor(tokens.SURFACE["sunken"]))
 
         painter.fillRect(self.rect(), gradient)

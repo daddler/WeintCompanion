@@ -507,7 +507,7 @@ class SystemRow(QFrame):
             self,
             f"""
             QFrame#systemRow{{
-                background:#0C0C0F;
+                background:{tokens.SURFACE_EXTRA["row"]};
                 border:none;
                 border-radius:{tokens.RADIUS["md"]}px;
                 border-top:1px solid rgba(255,255,255,0.040);

@@ -89,6 +89,47 @@ TEXT = {
 
 WHITE = "#FFFFFF"
 
+BLACK = "#000000"
+
+#
+# Einzelne Flaechen, die zwischen den Stufen von SURFACE liegen. Sie
+# stehen hier und nicht im jeweiligen Widget, weil sonst genau das
+# entstuende, was das Abnahmekriterium verbietet: ein Farbwert
+# ausserhalb dieser Datei - und damit eine Flaeche, die bei einer
+# Aenderung der Palette uebersehen wird.
+#
+
+SURFACE_EXTRA = {
+    #
+    # Die Systemzeile der Uebersicht: eine Spur unter der Karte, damit
+    # sie sich als Fuss und nicht als weitere Karte liest.
+    #
+    "row": "#0C0C0F",
+
+    #
+    # Oberkante des Titelleistenverlaufs (nach `sunken` hin).
+    #
+    "titleBar": "#0C0C10",
+
+    #
+    # Flaeche eines Meldungsstreifens - identisch mit der Oberkante
+    # des Kartenverlaufs, damit ein Toast wie eine angehobene Karte
+    # wirkt.
+    #
+    "toast": "#121217",
+
+    #
+    # Der helle Punkt im Schimmer eines Skeletts.
+    #
+    "shimmer": "#1B1B21",
+
+    #
+    # Mitte des radialen Verlaufs im Startbildschirm - die einzige
+    # Flaeche, die einen Hauch des Violetts als Grundton traegt.
+    #
+    "splash": "#12101A",
+}
+
 
 # ==========================================================
 # Akzent

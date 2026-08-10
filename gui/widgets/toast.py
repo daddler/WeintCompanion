@@ -162,7 +162,7 @@ class Toast(QWidget):
 
         painter.setPen(Qt.NoPen)
 
-        painter.setBrush(QColor("#121217"))
+        painter.setBrush(QColor(tokens.SURFACE_EXTRA["toast"]))
 
         painter.drawRoundedRect(
             rect,

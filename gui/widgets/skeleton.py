@@ -136,7 +136,7 @@ class Skeleton(QWidget):
         )
 
         gradient.setColorAt(0.0, QColor(tokens.SURFACE["card"]))
-        gradient.setColorAt(0.5, QColor("#1B1B21"))
+        gradient.setColorAt(0.5, QColor(tokens.SURFACE_EXTRA["shimmer"]))
         gradient.setColorAt(1.0, QColor(tokens.SURFACE["card"]))
 
         painter.setBrush(gradient)

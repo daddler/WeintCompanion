@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QLabel, QProgressBar, QVBoxLayout, QWidget
 
 from core.resources import Resources
 from core.version import VERSION
+from gui.theme import tokens
 from gui.theme.colors import Colors
 
 
@@ -169,7 +170,7 @@ class SplashScreen(QWidget):
             rect.width() * 0.6,
         )
 
-        base.setColorAt(0, QColor("#12101a"))
+        base.setColorAt(0, QColor(tokens.SURFACE_EXTRA["splash"]))
         base.setColorAt(1, QColor(Colors.BACKGROUND))
 
         painter.setPen(Qt.NoPen)
