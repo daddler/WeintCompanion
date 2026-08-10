@@ -179,7 +179,44 @@ from PySide6.QtWidgets import QApplication
 
 from gui.main_window import MainWindow
 from gui.splash import SplashScreen
-from gui.theme.stylesheet import APP_STYLE
+from gui.theme.fonts import install_fonts
+from gui.theme.theme_manager import init_theme
+
+
+def _system_prefers_reduced_motion() -> bool:
+    """
+    Ob das Betriebssystem "weniger Bewegung" vorgibt.
+
+    Qt hat dafuer bis heute keine zugesicherte Schnittstelle: je nach
+    Version traegt `QStyleHints` eine passende Eigenschaft oder eben
+    nicht. Deshalb wird sie nachgefragt statt vorausgesetzt, und ein
+    Fehlschlag heisst schlicht "keine Vorgabe" - nicht "keine
+    Reduktion". Die ausdrueckliche Wahl des Nutzers in den
+    Einstellungen bleibt davon unberuehrt und wirkt in jedem Fall.
+    """
+
+    try:
+
+        hints = QGuiApplication.styleHints()
+
+        for name in (
+            "prefersReducedMotion",
+            "isReducedMotionPreferred",
+        ):
+
+            value = getattr(hints, name, None)
+
+            if callable(value):
+                return bool(value())
+
+            if isinstance(value, bool):
+                return value
+
+    except Exception:
+
+        pass
+
+    return False
 
 
 def main():
@@ -220,9 +257,35 @@ def main():
     )
 
     #
-    # Globales Theme laden
+    # --------------------------------------------------
+    # Schriften und Theme
+    # --------------------------------------------------
     #
-    app.setStyleSheet(APP_STYLE)
+    # Zuerst die beigelegten Schriften registrieren, dann das Theme:
+    # das Stylesheet nennt "Inter" und "JetBrains Mono" beim Namen,
+    # und Qt loest einen unbekannten Familiennamen wortlos gegen eine
+    # Systemschrift auf. Bis 1.7 war das der Normalfall - beide
+    # Familien standen im Stylesheet, aber keine lag der App bei.
+    #
+
+    install_fonts()
+
+    #
+    # Die Konfiguration wird hier nur zum Lesen der Darstellungswerte
+    # geoeffnet; ihren eigentlichen Besitzer (CompanionManager) baut
+    # erst das Hauptfenster. Config ist eine reine JSON-Datei ohne
+    # Seiteneffekte, zwei Instanzen sind daher unkritisch.
+    #
+
+    from core.config import Config
+
+    theme = init_theme(Config())
+
+    theme.set_system_motion_reduced(
+        _system_prefers_reduced_motion()
+    )
+
+    theme.apply_stylesheet()
 
     #
     # --------------------------------------------------

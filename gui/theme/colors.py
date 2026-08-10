@@ -2,11 +2,34 @@
 WeintCompanion Theme
 Farben
 
-Command-Deck-Palette (dunkles Purple/Indigo-Theme, siehe Claude-Design-
-Projekt "WoW MoP Companion App Design" -> "WeintCompanion 1b.dc.html").
+**Uebergangsmodul.** Seit 2.0 stehen alle Farbwerte in
+`gui/theme/tokens.py`; hier steht kein einziger Hex-Wert mehr, sondern
+nur noch die Zuordnung der alten Namen auf die neuen Tokens.
+
+Der Grund fuer diesen Zwischenschritt: `Colors.*` wird an mehreren
+hundert Stellen unter `gui/` gelesen. Die Datei ersatzlos zu loeschen
+haette bedeutet, saemtliche Seiten und Widgets in einem einzigen
+Schritt umzustellen - ein Umbau, bei dem ein uebersehener Aufruf erst
+zur Laufzeit auffaellt, und zwar auf der Seite, die man gerade nicht
+geoeffnet hat. Stattdessen bleibt der Name bestehen und liefert den
+neuen Wert, waehrend die Seiten nacheinander auf `theme()` umziehen.
+
+Eine Einschraenkung, die dieses Modul nicht aufloesen kann: die Werte
+hier sind **statisch**. Sie werden beim Import festgelegt und folgen
+deshalb keinem Akzentwechsel zur Laufzeit. Wer die Akzentfarbe braucht,
+liest sie ueber `gui.theme.theme_manager.theme()` - im `paintEvent`,
+nicht im Konstruktor. Was hier steht, ist die Voreinstellung
+(Bernstein) und damit fuer neutrale Flaechen richtig, fuer
+bedeutungstragende Akzente nur so lange, bis die betreffende Stelle
+umgestellt ist.
 """
 
 from dataclasses import dataclass
+
+from gui.theme import tokens
+
+
+_ACCENT = tokens.ACCENTS[tokens.ACCENT_DEFAULT]
 
 
 @dataclass(frozen=True)
@@ -16,79 +39,102 @@ class Colors:
     # Hauptfarben
     # -------------------------------------------------
 
-    BACKGROUND = "#0A0A0C"
+    BACKGROUND = tokens.SURFACE["base"]
 
-    SURFACE = "#0F0F12"
-    SURFACE_ALT = "#08080A"
-    SURFACE_LIGHT = "#17171C"
+    SURFACE = tokens.SURFACE["card"]
+    SURFACE_ALT = tokens.SURFACE["sunken"]
+    SURFACE_LIGHT = tokens.SURFACE["raised"]
 
-    CARD = "#0F0F12"
-    CARD_HOVER = "#17171C"
+    CARD = tokens.SURFACE["card"]
+    CARD_HOVER = tokens.SURFACE["raised"]
 
-    SIDEBAR = "#08080A"
-    SIDEBAR_HOVER = "#17171C"
+    SIDEBAR = tokens.SURFACE["sunken"]
+    SIDEBAR_HOVER = tokens.SURFACE["raised"]
 
     # -------------------------------------------------
     # Rahmen
     # -------------------------------------------------
 
-    BORDER = "#1E1E24"
-    BORDER_LIGHT = "#2A2A34"
-    BORDER_ACCENT = "#2A1E3D"
+    BORDER = tokens.BORDER["base"]
+    BORDER_LIGHT = tokens.BORDER["strong"]
+
+    #
+    # Frueher ein eigener violetter Rahmenton. Karten haben seit 2.0
+    # ueberhaupt keinen umlaufenden Rahmen mehr, sondern eine
+    # 1-px-Oberkante; die Akzentkarte bekommt sie in Akzentfarbe.
+    #
+
+    BORDER_ACCENT = tokens.tint(_ACCENT["base"], tokens.TINT_BORDER)
 
     # -------------------------------------------------
-    # Akzentfarben (Gradient Lila -> Indigo)
+    # Akzent
     # -------------------------------------------------
+    #
+    # PRIMARY war bis 1.7 der Violett-Indigo-Verlauf. Seit 2.0 gilt
+    # "Bernstein traegt die Bedeutung, Violett nur das Licht": der
+    # Hauptakzent ist die gewaehlte Akzentvariante, das Violett bleibt
+    # als SHEEN uebrig und ist reines Flaechenlicht.
+    #
 
-    PRIMARY = "#A855F7"
-    PRIMARY_2 = "#6366F1"
-    PRIMARY_HOVER = "#C084FC"
-    PRIMARY_PRESSED = "#9333EA"
+    PRIMARY = _ACCENT["base"]
+    PRIMARY_2 = _ACCENT["light"]
+    PRIMARY_HOVER = _ACCENT["light"]
+    PRIMARY_PRESSED = tokens.ACCENT_PRESSED[tokens.ACCENT_DEFAULT]
 
-    GOLD = "#D4A24A"
-    GOLD_LIGHT = "#E8C96D"
-    GOLD_HOVER = "#E8C460"
+    SHEEN = tokens.SHEEN_VIOLET[0]
+    SHEEN_2 = tokens.SHEEN_VIOLET[1]
 
-    DISCORD = "#8B95F5"
+    GOLD = tokens.ACCENTS["amber"]["base"]
+    GOLD_LIGHT = tokens.ACCENTS["amber"]["light"]
+    GOLD_HOVER = tokens.ACCENTS["amber"]["light"]
+
+    DISCORD = tokens.STATE["info"]
 
     # -------------------------------------------------
     # Status
     # -------------------------------------------------
 
-    SUCCESS = "#7CC06E"
-    SUCCESS_LIGHT = "#8FDA80"
+    SUCCESS = tokens.STATE["ok"]
+    SUCCESS_LIGHT = tokens.STATE_TEXT["ok"]
 
-    WARNING = "#D4A24A"
-    WARNING_LIGHT = "#E8C96D"
+    WARNING = tokens.STATE["warn"]
+    WARNING_LIGHT = tokens.STATE_TEXT["warn"]
 
-    ERROR = "#E56B6B"
-    ERROR_LIGHT = "#F18C8C"
+    ERROR = tokens.STATE["error"]
+    ERROR_LIGHT = tokens.STATE_TEXT["error"]
 
-    INFO = "#8B95F5"
-    INFO_LIGHT = "#A8B0FF"
+    INFO = tokens.STATE["info"]
+    INFO_LIGHT = tokens.STATE_TEXT["info"]
 
     # -------------------------------------------------
     # Texte
     # -------------------------------------------------
 
-    TEXT = "#E8E8EA"
-    TEXT_SECONDARY = "#A8A8B0"
-    TEXT_MUTED = "#6B6B74"
-    TEXT_FAINT = "#4A4A52"
+    TEXT = tokens.TEXT["primary"]
+    TEXT_SECONDARY = tokens.TEXT["secondary"]
+    TEXT_MUTED = tokens.TEXT["muted"]
+    TEXT_FAINT = tokens.TEXT["faint"]
+    TEXT_ON_ACCENT = tokens.TEXT["onAccent"]
 
     # -------------------------------------------------
     # Transparenzen
     # -------------------------------------------------
 
-    OVERLAY = "rgba(0,0,0,110)"
-    OVERLAY_LIGHT = "rgba(255,255,255,12)"
-    OVERLAY_BORDER = "rgba(255,255,255,24)"
+    OVERLAY = "rgba(0,0,0,0.430)"
+    OVERLAY_LIGHT = "rgba(255,255,255,0.047)"
+    OVERLAY_BORDER = "rgba(255,255,255,0.094)"
+
+    #
+    # Die 1-px-Oberkante, die seit 2.0 den Schatten ersetzt.
+    #
+
+    EDGE_TOP = tokens.EDGE_TOP
 
     # -------------------------------------------------
     # Sonstiges
     # -------------------------------------------------
 
-    WHITE = "#FFFFFF"
+    WHITE = tokens.WHITE
     BLACK = "#000000"
 
     TRANSPARENT = "transparent"

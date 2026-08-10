@@ -5,6 +5,10 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[
+        # "assets" enthaelt auch assets/fonts - Inter und JetBrains
+        # Mono liegen der App seit 2.0 bei und werden beim Start ueber
+        # QFontDatabase angemeldet. Ohne sie faellt Qt wortlos auf eine
+        # Systemschrift zurueck (siehe gui/theme/fonts.py).
         ("assets", "assets"),
         ("packaging/linux/updater.sh", "packaging/linux"),
         ["resources/icons", "resources/icons"],

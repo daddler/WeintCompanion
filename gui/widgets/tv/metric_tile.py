@@ -58,10 +58,7 @@ class MetricTile(QFrame):
         # Beschriftung
         #
 
-        self.label = eyebrow_label(
-            label,
-            letter_spacing="0.12em",
-        )
+        self.label = eyebrow_label(label)
 
         root.addWidget(self.label)
 

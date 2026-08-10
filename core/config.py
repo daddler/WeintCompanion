@@ -105,6 +105,23 @@ class Config:
             "academy_player_source": "",
             "academy_manual_for": "",
 
+            #
+            # Darstellung (WeintCompanion 2.0)
+            #
+            # Der Akzent faerbt nur die bedeutungstragenden Stellen
+            # (Navigationsindikator, Hauptknopf, Ringe, Sterne); die
+            # Bedeutungsfarben bleiben in allen Varianten gleich.
+            # Die Dichte gilt global, nicht pro Ansicht.
+            #
+            # "motion_reduced" wird zusaetzlich aus der Systemeinstellung
+            # gelesen, falls Qt sie kennt - dieser Wert hier ist die
+            # ausdrueckliche Wahl des Nutzers und gewinnt.
+            #
+            "accent": "amber",
+            "density": "comfortable",
+            "motion_reduced": False,
+            "nav_collapsed": False,
+
         }
 
         self.load()
@@ -160,6 +177,10 @@ class Config:
                     "academy_ingame_realm": "",
                     "academy_player_source": "",
                     "academy_manual_for": "",
+                    "accent": "amber",
+                    "density": "comfortable",
+                    "motion_reduced": False,
+                    "nav_collapsed": False,
 
                 }
 
