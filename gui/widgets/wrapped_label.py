@@ -25,6 +25,31 @@ from PySide6.QtCore import QRect, Qt
 from PySide6.QtWidgets import QLabel, QSizePolicy
 
 
+def enable_wrap(label: QLabel) -> QLabel:
+    """
+    Umbruch für ein Label mit **veränderlicher** Breite.
+
+    `WrappedLabel` misst gegen eine feste Breite und ist deshalb der
+    falsche Weg, sobald das Label mitwachsen soll. Hier hilft nur, Qt
+    zu sagen, dass die Höhe von der Breite abhängt: `QLabel` beherrscht
+    `heightForWidth()`, wenn `wordWrap` gesetzt ist, aber ein
+    `QVBoxLayout` fragt es nur ab, wenn die **Größenrichtlinie** das
+    ankündigt. Ohne dieses eine Flag meldet das Label die Höhe einer
+    Zeile, und die folgenden Widgets werden darüber gezeichnet - genau
+    die Überlagerung, die auf der Übersicht bei 960 px auftrat.
+    """
+
+    label.setWordWrap(True)
+
+    policy = label.sizePolicy()
+
+    policy.setHeightForWidth(True)
+
+    label.setSizePolicy(policy)
+
+    return label
+
+
 class WrappedLabel(QLabel):
 
     def __init__(self, text: str = "", width: int = 420, parent=None):

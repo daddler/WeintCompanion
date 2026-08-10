@@ -30,6 +30,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
@@ -49,6 +50,7 @@ from gui.widgets.sparkline import Sparkline
 from gui.widgets.status_dot import StatusDot
 from gui.widgets.progress_ring import ProgressRing
 from gui.widgets.academy.star_rating import Rating
+from gui.widgets.wrapped_label import enable_wrap
 
 
 def _divider() -> QFrame:
@@ -128,7 +130,7 @@ class RosterCard(Card):
 
         self.explanation.setFont(font("small"))
 
-        self.explanation.setWordWrap(True)
+        enable_wrap(self.explanation)
 
         restyle(
             self.explanation,
@@ -231,7 +233,7 @@ class LastPullCard(Card):
 
         self.result.setFont(font("small"))
 
-        self.result.setWordWrap(True)
+        enable_wrap(self.result)
 
         restyle(
             self.result,
@@ -334,7 +336,7 @@ class LastPullCard(Card):
 
         self.lesson_reason.setFont(font("small"))
 
-        self.lesson_reason.setWordWrap(True)
+        enable_wrap(self.lesson_reason)
 
         restyle(
             self.lesson_reason,
@@ -454,7 +456,7 @@ class PreparationCard(Card):
 
         self.note.setFont(font("small"))
 
-        self.note.setWordWrap(True)
+        enable_wrap(self.note)
 
         restyle(
             self.note,
@@ -753,25 +755,38 @@ class OverviewPage(Page):
         # Zweispaltige Reihe
         #
 
-        row = QHBoxLayout()
+        #
+        # Als Raster statt als Reihe: unter 980 px stellt der
+        # Haltepunkt die beiden Karten untereinander, und ein
+        # QGridLayout kann eine Karte umsetzen, ohne dass sie neu
+        # gebaut werden muesste.
+        #
 
-        row.setContentsMargins(0, 0, 0, 0)
+        self.row = QGridLayout()
 
-        row.setSpacing(20)
+        self.row.setContentsMargins(0, 0, 0, 0)
+
+        self.row.setHorizontalSpacing(20)
+
+        self.row.setVerticalSpacing(20)
 
         self.last_pull = LastPullCard(self.service)
 
         self.last_pull.academyRequested.connect(self._open_academy)
 
-        row.addWidget(self.last_pull, 1)
+        self.row.addWidget(self.last_pull, 0, 0)
 
         self.preparation = PreparationCard()
 
         self.preparation.button.clicked.connect(self._open_preparation)
 
-        row.addWidget(self.preparation)
+        self.row.addWidget(self.preparation, 0, 1)
 
-        self.addLayout(row, 1)
+        self.row.setColumnStretch(0, 1)
+
+        self._single_column = False
+
+        self.addLayout(self.row, 1)
 
         #
         # Systemzeile
@@ -818,6 +833,42 @@ class OverviewPage(Page):
         self.pageRequested.emit(PageId.PREPARATION)
 
     # --------------------------------------------------
+
+    def on_layout_changed(self, state):
+        """
+        Unter 980 px stehen die beiden Karten untereinander.
+
+        Duck-getypt vom MainWindow aufgerufen, genau wie on_enter und
+        on_leave - eine Seite, die nichts umzubauen hat, braucht die
+        Methode gar nicht.
+        """
+
+        if state.single_column == self._single_column:
+            return
+
+        self._single_column = state.single_column
+
+        self.row.removeWidget(self.preparation)
+
+        if state.single_column:
+
+            #
+            # Untereinander: die Vorbereitungskarte gibt ihre feste
+            # Breite auf, sonst stuende sie schmal und linksbuendig
+            # unter einer Karte vollen Ausmasses.
+            #
+
+            self.preparation.setMinimumWidth(0)
+
+            self.preparation.setMaximumWidth(16777215)
+
+            self.row.addWidget(self.preparation, 1, 0)
+
+        else:
+
+            self.preparation.setFixedWidth(300)
+
+            self.row.addWidget(self.preparation, 0, 1)
 
     def refresh(self):
 

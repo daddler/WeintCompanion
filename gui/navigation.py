@@ -156,7 +156,17 @@ def build_page_specs() -> tuple[PageSpec, ...]:
             group=GROUP_RAID,
             icon="dashboard",
             page_factory=OverviewPage,
-            scroll=False,
+            #
+            # Mit Scrollbereich. Bei der Entwurfsgröße passt die
+            # Übersicht ohne Scrollbalken - bei 960 x 640 aber nicht,
+            # und dort ist Scrollen die richtige Antwort: die vier
+            # Blöcke haben eine Mindesthöhe, unter die sie nicht
+            # gestaucht werden dürfen, ohne unlesbar zu werden.
+            #
+            # Die Scrollfreiheit ist ausdrücklich nur für WeintTV
+            # gefordert (§8), wo sie den Zweck der Ansicht ausmacht.
+            #
+            scroll=True,
             attribute="overview",
         ),
 
