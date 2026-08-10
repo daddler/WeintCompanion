@@ -27,8 +27,28 @@ from gui.theme.theme_manager import ThemeManager
 
 @pytest.fixture
 def theme():
+    """
+    Ein eigener ThemeManager je Test - nicht das Singleton aus
+    `theme()`, damit ein Test die Einstellungen der Anwendung nicht
+    verstellt.
 
-    return ThemeManager()
+    `ThemeManager` ist ein QObject, und hier steht ausdrücklich
+    **kein** `deleteLater()`. Das war der erste Versuch und hat einen
+    Absturz erzeugt, der nicht einmal in dieser Datei auftrat:
+    `deleteLater()` stellt die Löschung nur in eine Warteschlange, die
+    eine laufende Ereignisschleife abarbeitet. In diesen Tests gibt es
+    keine - die Löschung blieb also liegen, bis ein *anderer* Test
+    (die Teardown-Vorrichtung von `test_raid_data_service.py`)
+    `processEvents()` aufrief und das fremde Objekt mitten in seinem
+    eigenen Abbau zerstörte. Der Segfault erschien dadurch in einer
+    Datei, die damit nichts zu tun hat, und nur im Gesamtlauf.
+
+    Ohne `deleteLater()` räumt CPythons Referenzzählung das Objekt
+    sofort und im Hauptthread ab - deterministisch und genau dort, wo
+    es entstanden ist.
+    """
+
+    yield ThemeManager()
 
 
 def test_every_motion_token_has_a_duration_and_a_curve():
