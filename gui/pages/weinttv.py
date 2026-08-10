@@ -22,12 +22,13 @@ Haken ruft MainWindow.change_page() auf.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -219,6 +220,25 @@ class WeintTvPage(QWidget):
         self.feed_chip = TimerChip("KEINE DATEN", "neutral")
 
         header.addWidget(self.feed_chip)
+
+        #
+        # Overlay (§6.6): ein sehr kleines, immer sichtbares Fenster
+        # mit denselben fünf Werten neben dem Spiel. Der Knopf sitzt
+        # hier und nicht in den Einstellungen, weil er genau in dem
+        # Moment gebraucht wird, in dem WeintTV ohnehin offen ist.
+        #
+
+        self.overlay_button = QPushButton("Overlay")
+
+        self.overlay_button.setObjectName("secondary")
+
+        self.overlay_button.setCursor(Qt.PointingHandCursor)
+
+        self.overlay_button.clicked.connect(self._toggle_overlay)
+
+        header.addWidget(self.overlay_button)
+
+        self._overlay_window = None
 
         root.addLayout(header)
 
@@ -1124,6 +1144,33 @@ class WeintTvPage(QWidget):
         self.service.detach()
 
         self._attached = False
+
+    # --------------------------------------------------
+    # Overlay
+    # --------------------------------------------------
+    #
+    # Bewusst nicht an on_leave() gekoppelt: der ganze Zweck des
+    # Overlays ist, weiter sichtbar zu bleiben, während man diese
+    # Seite verlässt - es hat seine eigene Anmeldung beim Service
+    # (showEvent/hideEvent, siehe gui/overlay/overlay_window.py).
+
+    def _toggle_overlay(self):
+
+        if self._overlay_window is None:
+
+            from gui.overlay.overlay_window import OverlayWindow
+
+            self._overlay_window = OverlayWindow(self.manager)
+
+        if self._overlay_window.isVisible():
+
+            self._overlay_window.hide()
+
+        else:
+
+            self._overlay_window.show()
+
+            self._overlay_window.raise_()
 
     # --------------------------------------------------
 
