@@ -25,8 +25,8 @@ leicht zu übersehen:
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QColor, QLinearGradient, QPainter
+from PySide6.QtCore import QPoint, QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
 
 from core.version import VERSION
@@ -37,6 +37,19 @@ from gui.theme.restyle import restyle
 from gui.theme.theme_manager import theme
 
 
+#
+# Die drei Fensterzeichen.
+#
+
+GLYPH_MINIMISE = "minimise"
+
+GLYPH_MAXIMISE = "maximise"
+
+GLYPH_RESTORE = "restore"
+
+GLYPH_CLOSE = "close"
+
+
 class WindowButton(QLabel):
     """
     Einer der drei Fensterknöpfe (28 x 24 px).
@@ -44,13 +57,23 @@ class WindowButton(QLabel):
     Als QLabel statt QPushButton, damit die globale Knopfregel des
     Stylesheets (Akzentverlauf, 40 px Höhe) hier nicht greift - ein
     bernsteinfarbener Schließen-Knopf wäre grotesk.
+
+    **Das Zeichen wird gemalt, nicht gesetzt.** Der erste Entwurf
+    benutzte dafür Textzeichen ("✕", "❐", "–"), und das war aus
+    demselben Grund falsch, aus dem die Status-Emoji verschwunden
+    sind: keines dieser Zeichen ist in der beigelegten JetBrains Mono
+    enthalten (nachgeprüft über `QRawFont.supportsCharacter`). Qt hätte
+    sie also stillschweigend aus irgendeiner Systemschrift geholt -
+    auf jedem Rechner einer anderen, in anderer Strichstärke und
+    anderer optischer Größe. Zwei gemalte Linien sind überall
+    dieselben zwei Linien.
     """
 
     clicked = Signal()
 
     def __init__(self, glyph: str, danger: bool = False, parent=None):
 
-        super().__init__(glyph, parent)
+        super().__init__(parent)
 
         self.setObjectName("windowButton")
 
@@ -58,15 +81,112 @@ class WindowButton(QLabel):
 
         self.setFixedSize(28, 24)
 
-        self.setAlignment(Qt.AlignCenter)
-
         self.setCursor(Qt.ArrowCursor)
 
         self._danger = danger
 
-        self.setFont(font("mono"))
+        self._glyph = glyph
+
+        self._hover = False
 
         self._apply(False)
+
+    # --------------------------------------------------
+
+    def setGlyph(self, glyph: str):
+
+        if glyph == self._glyph:
+            return
+
+        self._glyph = glyph
+
+        self.update()
+
+    def paintEvent(self, event):
+
+        #
+        # Erst die Fläche des Stylesheets, dann das Zeichen darauf.
+        #
+
+        super().paintEvent(event)
+
+        painter = QPainter(self)
+
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        color = QColor(
+            tokens.WHITE if self._hover else tokens.TEXT["muted"]
+        )
+
+        pen = QPen(color, 1.2)
+
+        pen.setCapStyle(Qt.RoundCap)
+
+        painter.setPen(pen)
+
+        painter.setBrush(Qt.NoBrush)
+
+        centre_x = self.width() / 2.0
+
+        centre_y = self.height() / 2.0
+
+        size = 4.5
+
+        if self._glyph == GLYPH_MINIMISE:
+
+            painter.drawLine(
+                QPointF(centre_x - size, centre_y),
+                QPointF(centre_x + size, centre_y),
+            )
+
+        elif self._glyph == GLYPH_MAXIMISE:
+
+            painter.drawRect(
+                QRectF(
+                    centre_x - size,
+                    centre_y - size,
+                    size * 2,
+                    size * 2,
+                )
+            )
+
+        elif self._glyph == GLYPH_RESTORE:
+
+            #
+            # Zwei versetzte Rechtecke - das hintere angeschnitten,
+            # damit es als "zurück in die kleinere Größe" lesbar ist.
+            #
+
+            painter.drawRect(
+                QRectF(
+                    centre_x - size,
+                    centre_y - size + 2,
+                    size * 2 - 2,
+                    size * 2 - 2,
+                )
+            )
+
+            painter.drawPolyline(
+                [
+                    QPointF(centre_x - size + 2, centre_y - size),
+                    QPointF(centre_x + size, centre_y - size),
+                    QPointF(centre_x + size, centre_y + size - 2),
+                ]
+            )
+
+        elif self._glyph == GLYPH_CLOSE:
+
+            painter.drawLine(
+                QPointF(centre_x - size, centre_y - size),
+                QPointF(centre_x + size, centre_y + size),
+            )
+
+            painter.drawLine(
+                QPointF(centre_x + size, centre_y - size),
+                QPointF(centre_x - size, centre_y + size),
+            )
+
+        painter.end()
 
     def _apply(self, hover: bool):
 
@@ -100,10 +220,12 @@ class WindowButton(QLabel):
 
     def enterEvent(self, event):
         super().enterEvent(event)
+        self._hover = True
         self._apply(True)
 
     def leaveEvent(self, event):
         super().leaveEvent(event)
+        self._hover = False
         self._apply(False)
 
     def mousePressEvent(self, event):
@@ -172,19 +294,19 @@ class TitleBar(QFrame):
 
         root.addStretch(1)
 
-        self.minimise = WindowButton("–")
+        self.minimise = WindowButton(GLYPH_MINIMISE)
 
         self.minimise.clicked.connect(self._window.showMinimized)
 
         root.addWidget(self.minimise)
 
-        self.maximise = WindowButton("□")
+        self.maximise = WindowButton(GLYPH_MAXIMISE)
 
         self.maximise.clicked.connect(self.toggle_maximised)
 
         root.addWidget(self.maximise)
 
-        self.close_button = WindowButton("✕", danger=True)
+        self.close_button = WindowButton(GLYPH_CLOSE, danger=True)
 
         self.close_button.clicked.connect(self._window.close)
 
@@ -263,13 +385,13 @@ class TitleBar(QFrame):
 
             self._window.showNormal()
 
-            self.maximise.setText("□")
+            self.maximise.setGlyph(GLYPH_MAXIMISE)
 
             return
 
         self._window.showMaximized()
 
-        self.maximise.setText("❐")
+        self.maximise.setGlyph(GLYPH_RESTORE)
 
     def _is_drag_area(self, position) -> bool:
         """
@@ -329,7 +451,7 @@ class TitleBar(QFrame):
 
             self._window.showNormal()
 
-            self.maximise.setText("□")
+            self.maximise.setGlyph(GLYPH_MAXIMISE)
 
             width = self._window.width()
 

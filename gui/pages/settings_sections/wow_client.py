@@ -15,6 +15,7 @@ from core.platform import is_linux
 from gui.theme.colors import Colors
 from gui.widgets.hero_banner import HeroButton
 from gui.widgets.segmented_control import SegmentedControl
+from gui.widgets.status_dot import StatusDot
 
 from ._common import SectionContent
 
@@ -176,17 +177,41 @@ class WowClientSection(SectionContent):
 
         layout.addLayout(button_row)
 
+        #
+        # Die Bestaetigung trug bis 1.7 einen Haken als Textzeichen
+        # ("\u2713"). Das ist genau die Bauart, die 2.0 abschafft: das
+        # Zeichen fehlt in der beigelegten Schrift, kaeme also aus
+        # irgendeiner Systemschrift, und es traegt eine Bedeutung
+        # ("hat geklappt"), die zu einem StatusDot gehoert.
+        #
+
+        saved_row = QHBoxLayout()
+
+        saved_row.setContentsMargins(0, 0, 0, 0)
+
+        saved_row.setSpacing(8)
+
+        saved_row.addStretch(1)
+
+        self.saved_dot = StatusDot("ok")
+
+        saved_row.addWidget(self.saved_dot)
+
         self.saved_label = QLabel("")
 
-        self.saved_label.setAlignment(Qt.AlignRight)
-
         self.saved_label.setStyleSheet(
-            f"font-size:12px;font-weight:600;color:{Colors.SUCCESS};"
+            f"font-size:12px;font-weight:600;color:{Colors.SUCCESS_LIGHT};"
         )
 
-        self.saved_label.hide()
+        saved_row.addWidget(self.saved_label)
 
-        layout.addWidget(self.saved_label)
+        self.saved_row_widget = QWidget()
+
+        self.saved_row_widget.setLayout(saved_row)
+
+        self.saved_row_widget.hide()
+
+        layout.addWidget(self.saved_row_widget)
 
         self.addRow(self.linux_card, divider=False)
 
@@ -259,13 +284,13 @@ class WowClientSection(SectionContent):
             "Battle.net-Start-Konfiguration gespeichert."
         )
 
-        self.saved_label.setText("✓ Einstellungen gespeichert")
+        self.saved_label.setText("Einstellungen gespeichert")
 
-        self.saved_label.show()
+        self.saved_row_widget.show()
 
         QTimer.singleShot(
             3000,
-            self.saved_label.hide,
+            self.saved_row_widget.hide,
         )
 
     # --------------------------------------------------
