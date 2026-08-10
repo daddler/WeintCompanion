@@ -65,6 +65,7 @@ from gui.widgets.tv.meter_bar import MeterBar
 from gui.widgets.tv.meter_row_list import MeterRowData, MeterRowList
 from gui.widgets.tv.metric_tile import MetricTile
 from gui.widgets.bar_table import BarTable, format_per_second
+from gui.widgets.tv.live_header import LiveHeader
 from gui.widgets.tv.replay_bar import ReplayBar
 from gui.widgets.tv.timer_chip import TimerChip
 
@@ -153,9 +154,16 @@ class WeintTvPage(QWidget):
 
         root = QVBoxLayout(self)
 
-        root.setContentsMargins(32, 28, 32, 28)
+        #
+        # Inhaltsrand nach §6.2: 24 px oben, 32 px seitlich. Der
+        # Abstand zwischen den Bloecken ist hier enger als auf den
+        # uebrigen Seiten - diese Ansicht lebt von Dichte, und jeder
+        # eingesparte Abstand ist eine weitere Zeile Rangliste.
+        #
 
-        root.setSpacing(20)
+        root.setContentsMargins(32, 24, 32, 24)
+
+        root.setSpacing(14)
 
         #
         # --------------------------------------------------
@@ -163,25 +171,39 @@ class WeintTvPage(QWidget):
         # --------------------------------------------------
         #
 
+        #
+        # Kein eigener Seitentitel mehr.
+        #
+        # Bis 1.7 stand hier "Live-Dashboard" in 28 px über einer
+        # Rubrik - zusammen mit dem Abstand rund 70 px, die nichts
+        # sagten, was der Bildschirm nicht ohnehin zeigt. Der Entwurf
+        # macht den **Bossnamen** zum Titel (§6.2); er steht im
+        # Kopfblock, zusammen mit dem Zustand. Die 70 px gehen an die
+        # Ranglisten, wo jede einzelne Zeile eine Person mehr bedeutet.
+        #
+
+        #
+        # Reiter und Zustandschips teilen sich **eine** Zeile. Bis 1.7
+        # standen sie in zwei getrennten Zeilen uebereinander, beide
+        # fast leer - zusammen rund 90 px fuer zwei Bedienelemente, die
+        # nebeneinander passen.
+        #
+
         header = QHBoxLayout()
 
-        title_col = QVBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
 
-        title_col.setSpacing(4)
+        header.setSpacing(12)
 
-        eyebrow = QLabel("WEINTTV · LIVE RAID")
+        self.tabs = SegmentedControl([
+            ("Live", TAB_LIVE),
+            ("Analyse", TAB_ANALYSIS),
+            ("Verlauf", TAB_HISTORY),
+        ])
 
-        eyebrow.setObjectName("eyebrow")
+        self.tabs.valueChanged.connect(self._show_tab)
 
-        title_col.addWidget(eyebrow)
-
-        title = QLabel("Live-Dashboard")
-
-        title.setObjectName("title")
-
-        title_col.addWidget(title)
-
-        header.addLayout(title_col)
+        header.addWidget(self.tabs)
 
         header.addStretch()
 
@@ -202,24 +224,23 @@ class WeintTvPage(QWidget):
 
         #
         # --------------------------------------------------
-        # Live/Archiv-Umschalter
-        # --------------------------------------------------
-        #
-        # Geteilt mit der Academy über denselben RaidDataService -
-        # ein Wechsel hier wirkt auch dort, siehe
-        # gui/widgets/tv/archive_picker.py.
-        #
-
-        root.addWidget(ArchivePicker(self.service))
-
-        #
-        # --------------------------------------------------
         # Wiedergabe-Steuerung
         # --------------------------------------------------
         #
-        # Blendet sich selbst ein, sobald ein Pull abgespielt wird -
-        # ebenfalls über denselben Service, also auch hier ohne
-        # Möglichkeit, gegenüber der Academy auseinanderzulaufen.
+        # Der Archiv-Wähler ist seit 2.0 **nicht** mehr hier: Archiv
+        # ist ein eigener Bereich in der Navigation (siehe
+        # gui/pages/archive.py), und der Entwurf hält die Live-Ansicht
+        # frei von allem, was nicht zum laufenden Pull gehört - die
+        # rund 60 px gehen an die Ranglisten.
+        #
+        # Am geteilten Zustand ändert das nichts: er liegt weiterhin
+        # global auf dem RaidDataService, WeintTV und die Academy
+        # lesen denselben Snapshot, und ein im Archiv gewählter Pull
+        # erscheint hier unverändert.
+        #
+        # Die Wiedergabeleiste bleibt, blendet sich aber nur ein, wenn
+        # tatsächlich abgespielt wird - man will beim Zusehen steuern
+        # können, ohne den Bereich zu wechseln.
         #
 
         root.addWidget(ReplayBar(self.service))
@@ -239,18 +260,6 @@ class WeintTvPage(QWidget):
         # Bereichsumschalter
         # --------------------------------------------------
         #
-
-        self.tabs = SegmentedControl([
-            ("Live", TAB_LIVE),
-            ("Analyse", TAB_ANALYSIS),
-            ("Verlauf", TAB_HISTORY),
-        ])
-
-        self.tabs.valueChanged.connect(
-            self._show_tab
-        )
-
-        root.addWidget(self.tabs)
 
         self.stack = QStackedWidget()
 
@@ -362,7 +371,26 @@ class WeintTvPage(QWidget):
         layout.setSpacing(16)
 
         #
-        # Boss
+        # Kopfblock: 96 px für Boss, Zustand, Balken und Pull-Uhr.
+        #
+        # Bis 1.7 standen hier eine Boss-Karte mit Symbol, Titel und
+        # Untertitel und darunter vier Kennzahlkacheln - zusammen über
+        # 300 px, bevor die erste Ranglistenzeile begann. Genau das war
+        # der Grund, warum dort nur fünf Plätze passten. Die Kennzahlen
+        # sind nicht verschwunden, sie stehen als Chips neben dem
+        # Bossnamen: eine Zahl, die man im Vorbeisehen braucht,
+        # verlangt keine eigene Kachel mit Rubrik und Fußzeile.
+        #
+
+        self.live_header = LiveHeader()
+
+        layout.addWidget(self.live_header)
+
+        #
+        # Der alte Aufbau bleibt vorerst als verborgener Zweig
+        # bestehen, damit die vielen Aktualisierungsstellen weiter
+        # gültige Widgets vorfinden. Er wird mit dem Umbau der
+        # Analyse- und Verlaufsreiter entfernt.
         #
 
         self.boss_card = SectionCard(
@@ -370,6 +398,8 @@ class WeintTvPage(QWidget):
             "Boss",
             "",
         )
+
+        self.boss_card.setVisible(False)
 
         boss_head = QHBoxLayout()
 
@@ -437,7 +467,9 @@ class WeintTvPage(QWidget):
         layout.addWidget(self.boss_card)
 
         #
-        # Kennzahlen
+        # Kennzahlen - seit 2.0 als Chips im Kopfblock. Die Kacheln
+        # bleiben als verborgene Widgets bestehen, solange die
+        # Aktualisierung sie noch beschriftet.
         #
 
         tiles = QGridLayout()
@@ -463,6 +495,8 @@ class WeintTvPage(QWidget):
             tiles.addWidget(tile, 0, column)
 
             tiles.setColumnStretch(column, 1)
+
+            tile.setVisible(False)
 
         layout.addLayout(tiles)
 
@@ -492,29 +526,22 @@ class WeintTvPage(QWidget):
         # 25 x (24 + 2) = 650 px.
         #
 
-        damage_card = SectionCard(
-            Resources.game(),
-            "Schaden",
-            "Schaden pro Sekunde im laufenden Pull.",
-        )
+        #
+        # Ohne SectionCard-Hülle. Die trug Symbol, Titel und
+        # Untertitel - also rund 90 px, die genau das wiederholten,
+        # was die Kopfzeile der Tabelle ohnehin sagt ("SCHADEN" plus
+        # Raidsumme). Der Entwurf setzt die Listen deshalb direkt auf
+        # die Inhaltsfläche: die Klassenfarbe der Balken trägt die
+        # Gliederung, dafür braucht es keinen Kasten.
+        #
 
         self.damage_list = BarTable("SCHADEN", rows=25)
 
-        damage_card.addWidget(self.damage_list)
-
-        rankings.addWidget(damage_card, 1)
-
-        healing_card = SectionCard(
-            Resources.backup(),
-            "Heilung",
-            "Heilung pro Sekunde im laufenden Pull.",
-        )
+        rankings.addWidget(self.damage_list, 1)
 
         self.healing_list = BarTable("HEILUNG", rows=25)
 
-        healing_card.addWidget(self.healing_list)
-
-        rankings.addWidget(healing_card, 1)
+        rankings.addWidget(self.healing_list, 1)
 
         layout.addLayout(rankings)
 
@@ -1279,6 +1306,22 @@ class WeintTvPage(QWidget):
             f"{len(snapshot.tanks)} Tanks"
             if snapshot.has_data
             else "kein Raid erkannt"
+        )
+
+        #
+        # Kopfblock
+        #
+
+        self.live_header.apply(snapshot)
+
+        history = self.service.history()
+
+        self.live_header.set_best_attempt(
+            min(
+                (h.boss_percent for h in history
+                 if getattr(h, "boss_percent", None) is not None),
+                default=None,
+            )
         )
 
         #
