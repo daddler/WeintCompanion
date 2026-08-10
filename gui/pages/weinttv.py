@@ -64,7 +64,7 @@ from gui.widgets.tv.entry_list import EntryData, EntryList
 from gui.widgets.tv.meter_bar import MeterBar
 from gui.widgets.tv.meter_row_list import MeterRowData, MeterRowList
 from gui.widgets.tv.metric_tile import MetricTile
-from gui.widgets.tv.ranking_list import RankingList, format_per_second
+from gui.widgets.bar_table import BarTable, format_per_second
 from gui.widgets.tv.replay_bar import ReplayBar
 from gui.widgets.tv.timer_chip import TimerChip
 
@@ -474,13 +474,31 @@ class WeintTvPage(QWidget):
 
         rankings.setSpacing(16)
 
+        #
+        # Die Ranglisten zeigen seit 2.0 den **ganzen** Raid statt der
+        # besten fünf.
+        #
+        # Bis 1.7 ging das nicht: eine Zeile bestand aus fünf Widgets
+        # (Platz, Name, Spezialisierung, Wert und darunter ein eigener
+        # Balken) und brauchte mit ihren Abständen rund 40 px. 25 davon
+        # sind 1.000 px und passen in kein Fenster, das 900 px hoch ist -
+        # deshalb hörte die Liste nach Platz fünf auf. Für zwanzig von
+        # fünfundzwanzig Leuten beantwortete sie damit die einzige
+        # Frage nicht, die sie haben: wo stehe ich.
+        #
+        # `BarRow` legt den Balken in den Zeilenhintergrund statt unter
+        # die Zeile und malt den Text selbst. Damit kommt eine Zeile mit
+        # 24 px aus, und die Rechnung des Entwurfs geht auf:
+        # 25 x (24 + 2) = 650 px.
+        #
+
         damage_card = SectionCard(
             Resources.game(),
-            "Top Schaden",
+            "Schaden",
             "Schaden pro Sekunde im laufenden Pull.",
         )
 
-        self.damage_list = RankingList(limit=5)
+        self.damage_list = BarTable("SCHADEN", rows=25)
 
         damage_card.addWidget(self.damage_list)
 
@@ -488,11 +506,11 @@ class WeintTvPage(QWidget):
 
         healing_card = SectionCard(
             Resources.backup(),
-            "Top Heilung",
+            "Heilung",
             "Heilung pro Sekunde im laufenden Pull.",
         )
 
-        self.healing_list = RankingList(limit=5)
+        self.healing_list = BarTable("HEILUNG", rows=25)
 
         healing_card.addWidget(self.healing_list)
 
@@ -1267,9 +1285,58 @@ class WeintTvPage(QWidget):
         # Rankings
         #
 
-        self.damage_list.setEntries(snapshot.top_damage)
+        #
+        # Die eigene Zeile wird hervorgehoben, und wer gefallen ist,
+        # trägt statt seiner Spezialisierung den Todeszeitpunkt.
+        # Beides kommt aus dem Snapshot, den beide Listen ohnehin
+        # bekommen - eine zweite Quelle für "wer bin ich" gäbe es hier
+        # nicht (siehe analyzer/names.py).
+        #
 
-        self.healing_list.setEntries(snapshot.top_healing)
+        me = self.manager.academy.player_name()
+
+        deaths = {
+            death.actor_name: int(death.at_seconds)
+            for death in snapshot.deaths
+            if death.at_seconds >= 0
+        }
+
+        #
+        # Während einer laufenden Wiedergabe (4 Hz) wird nicht
+        # animiert: ein Balken mit 220 ms Laufzeit wäre dauerhaft
+        # unterwegs und nie am Ziel. Gefragt wird nach `playing` und
+        # nicht nach dem Modus - eine angehaltene Wiedergabe darf
+        # ihren Balken durchaus laufen lassen, etwa beim Springen mit
+        # dem Regler.
+        #
+
+        animate = not self.service.replay_state().playing
+
+        self.damage_list.set_entries(
+            snapshot.top_damage,
+            me=me,
+            deaths=deaths,
+            animate=animate,
+        )
+
+        self.damage_list.setTotal(
+            f"RAID {format_per_second(sum(e.value for e in snapshot.top_damage))} DPS"
+            if snapshot.top_damage
+            else ""
+        )
+
+        self.healing_list.set_entries(
+            snapshot.top_healing,
+            me=me,
+            deaths=deaths,
+            animate=animate,
+        )
+
+        self.healing_list.setTotal(
+            f"RAID {format_per_second(sum(e.value for e in snapshot.top_healing))} HPS"
+            if snapshot.top_healing
+            else ""
+        )
 
         #
         # Tanks
