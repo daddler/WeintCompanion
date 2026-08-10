@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -12,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.platform import is_linux
+from core.wow_folder import resolve_classic_folder
 from gui.theme.colors import Colors
 from gui.widgets.hero_banner import HeroButton
 from gui.widgets.segmented_control import SegmentedControl
@@ -305,19 +304,9 @@ class WowClientSection(SectionContent):
         if not folder:
             return
 
-        folder = Path(folder)
+        folder = resolve_classic_folder(folder)
 
-        if (
-            folder.name == "World of Warcraft"
-            and (folder / "_classic_").exists()
-        ):
-            folder = folder / "_classic_"
-
-        if not (
-            (folder / "Interface").exists()
-            and (folder / "Interface" / "AddOns").exists()
-            and (folder / "WTF").exists()
-        ):
+        if folder is None:
 
             QMessageBox.warning(
                 self,

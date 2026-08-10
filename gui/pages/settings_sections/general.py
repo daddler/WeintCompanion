@@ -184,6 +184,53 @@ class GeneralSection(SectionContent):
         self.addRow(tour_row)
 
         #
+        # Einrichtung erneut öffnen (§6.6) - genau wie die
+        # Willkommens-Tour jederzeit von Hand erreichbar, unabhängig
+        # davon, ob sie beim ersten Start schon einmal lief.
+        #
+
+        setup_row = QWidget()
+
+        setup_layout = QHBoxLayout(setup_row)
+
+        setup_layout.setContentsMargins(0, 0, 0, 0)
+        setup_layout.setSpacing(20)
+
+        setup_text_col = QVBoxLayout()
+
+        setup_text_col.setSpacing(4)
+
+        setup_label = QLabel("Einrichtung")
+
+        setup_label.setStyleSheet(
+            f"font-size:14px;font-weight:600;color:{Colors.WHITE};"
+        )
+
+        setup_text_col.addWidget(setup_label)
+
+        setup_desc = QLabel(
+            "WoW-Ordner, Addon, Discord und Aussehen in vier Schritten."
+        )
+
+        setup_desc.setWordWrap(True)
+
+        setup_desc.setStyleSheet(
+            f"font-size:13px;color:{Colors.TEXT_MUTED};"
+        )
+
+        setup_text_col.addWidget(setup_desc)
+
+        setup_layout.addLayout(setup_text_col, 1)
+
+        self.setup_button = HeroButton("Einrichtung starten", primary=False)
+
+        self.setup_button.clicked.connect(self._show_setup_wizard)
+
+        setup_layout.addWidget(self.setup_button)
+
+        self.addRow(setup_row)
+
+        #
         # Telemetrie senden (kein Backend - deaktiviert)
         #
 
@@ -318,5 +365,13 @@ class GeneralSection(SectionContent):
         # Häkchen im Dialog selbst gesetzt haben - Schalter hier
         # synchron halten.
         #
+
+        self.refresh()
+
+    def _show_setup_wizard(self):
+
+        from gui.dialogs.setup_wizard import SetupWizard
+
+        SetupWizard(self.manager, self).exec()
 
         self.refresh()
