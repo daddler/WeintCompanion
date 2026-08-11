@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.paths import Paths
+from core.platform import open_folder
 
 from gui.navigation import PageId
 from gui.pages._page import Page
@@ -646,6 +647,24 @@ class AddonPage(Page):
             self.install_or_update
         )
 
+        #
+        # "Addon-Ordner öffnen" gab es bis 1.7 als Schnellzugriff auf
+        # dem Dashboard. Mit dem Dashboard ist der Knopf verschwunden;
+        # er gehört auf diese Seite, weil hier die Installation selbst
+        # steht. Position 1: hinter "Neu installieren", vor dem
+        # Dehnraum, damit der Hauptknopf rechts stehen bleibt.
+        #
+
+        self.open_folder_button = QPushButton("Ordner öffnen")
+
+        self.open_folder_button.setObjectName("ghost")
+
+        self.open_folder_button.setCursor(Qt.PointingHandCursor)
+
+        self.open_folder_button.clicked.connect(self.open_addon_folder)
+
+        self.addon_card.footer.insertWidget(1, self.open_folder_button)
+
         self.addon_card.primary_button.clicked.connect(
             self.install_or_update
         )
@@ -745,6 +764,13 @@ class AddonPage(Page):
             self.addon_card.primary_button.setEnabled(False)
 
             self.addon_card.secondary_button.setEnabled(True)
+
+        #
+        # Ohne Installation gibt es keinen Ordner zu öffnen - derselbe
+        # Maßstab wie bei "Neu installieren".
+        #
+
+        self.open_folder_button.setEnabled(state.addon_found)
 
         #
         # WeintCompanion
@@ -906,6 +932,24 @@ class AddonPage(Page):
         self.refresh()
 
         self.manager.logger.success("GitHub erfolgreich geprüft.")
+
+    # --------------------------------------------------
+    # Addon-Ordner
+    # --------------------------------------------------
+
+    def open_addon_folder(self):
+
+        state = self.manager.state
+
+        if not state.addon_found:
+
+            self.manager.logger.error(
+                "Addon-Ordner nicht gefunden."
+            )
+
+            return
+
+        open_folder(state.addon_path)
 
     # --------------------------------------------------
     # Installation / Update

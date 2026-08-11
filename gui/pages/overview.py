@@ -45,6 +45,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.backend_config import TARGET_URL, roster_target
+from core.platform import is_linux
 from gui.pages._page import Page
 from gui.theme import tokens
 from gui.theme.fonts import font
@@ -919,24 +920,44 @@ class OverviewPage(Page):
     # --------------------------------------------------
 
     def _launch_wow(self):
+        """
+        WoW über Battle.net starten - derselbe Weg wie bis 1.7.
 
-        launcher = getattr(self.manager, "launcher", None)
+        `manager.start_wow()` und nicht `manager.launcher`: der
+        `Launcher` startet eine *Datei* (er gehört dem Selbstupdate und
+        verlangt einen Pfad), Battle.net startet der
+        `BattleNetLauncher`. Der Aufruf `launcher.launch()` ohne
+        Argument warf deshalb nur einen `TypeError`, den das
+        `except Exception` darunter verschluckt hat - der Knopf ist
+        stillschweigend immer in den Einstellungen gelandet, statt das
+        Spiel zu starten.
+        """
 
-        if launcher is None:
-            return
+        #
+        # Unter Linux ist oft noch kein Startbefehl hinterlegt - dann
+        # ist der richtige nächste Schritt die Einstellung, nicht eine
+        # Fehlermeldung.
+        #
 
-        try:
-            launcher.launch()
+        if (
+            is_linux()
+            and not self.manager.config.get_linux_launch_command()
+        ):
 
-        except Exception:
-
-            #
-            # Unter Linux ist oft noch kein Startbefehl hinterlegt -
-            # dann ist der richtige nächste Schritt die Einstellung,
-            # nicht eine Fehlermeldung.
-            #
+            self.manager.logger.warning(
+                "Kein Battle.net-Start-Befehl hinterlegt - bitte "
+                "zuerst in den Einstellungen (WoW-Client) einrichten."
+            )
 
             self.openSettingsSection.emit("wow_client")
+
+            return
+
+        #
+        # Fehler meldet start_wow() selbst ins Protokoll.
+        #
+
+        self.manager.start_wow()
 
     def _open_discord_roster(self):
         """
