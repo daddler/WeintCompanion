@@ -2,7 +2,39 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
-## 2.0.4
+## 2.0.5
+
+**Nach dem Update auf 2.0.3 startete die App unter Windows nicht
+mehr.** Der Ladebalken blieb bei "Übersicht wird gezeichnet …"
+stehen, das Fenster kam nie — kein Absturz, keine Meldung, kein
+Protokolleintrag. Die Ursache war eine Verkettung aus drei
+Kleinigkeiten, von denen jede für sich harmlos aussah.
+
+Das "Was ist neu"-Fenster erscheint nach jedem Update genau einmal.
+Angemeldet wurde es bisher im Konstruktor des Hauptfensters, mit dem
+Zusatz "gleich, aber nicht sofort" — in der Absicht, dass das
+Fenster zuerst sichtbar wird. Genau das ist nicht passiert: der
+Startbildschirm zeichnet seinen Balken weiter, indem er Qt bittet,
+alles Anstehende zu erledigen, und dazu gehörte diese Anmeldung. Der
+Dialog ging also auf, **bevor** das Fenster gezeigt wurde, und
+wartete dann auf eine Antwort. Weil der Startbildschirm immer im
+Vordergrund liegt und erst nach dem Fenster geschlossen wird, lag
+der Dialog unsichtbar darunter. Für den Nutzer war die App damit
+hängengeblieben — dabei wartete sie nur auf einen Klick, den
+niemand sehen konnte.
+
+Der Balken zeichnet sich jetzt selbst, statt Qt um das Abarbeiten
+von allem Anstehenden zu bitten; ein Ladebalken soll zeichnen, nicht
+Arbeit erledigen. Das Start-Fenster meldet sich erst, wenn das
+Hauptfenster wirklich sichtbar ist — die Bedingung hängt damit an
+der Sichtbarkeit selbst und nicht mehr an einer Zeitannahme. Der
+Startbildschirm ist geschlossen, bevor irgendein Dialog erscheinen
+kann, und der Dialog holt sich zusätzlich nach vorn.
+
+*Wer noch auf 2.0.3 festhängt:* einmal Escape drücken (oder mit
+Alt+Tab zum unsichtbaren Fenster wechseln und es schließen) — die
+App startet dann normal weiter. Die neue Fassung lässt sich danach
+wie gewohnt einspielen.
 
 **"Aufstellung im Discord" öffnete unter Linux weiterhin den
 Browser** — und dort eine Adresse, die es nirgends gibt:

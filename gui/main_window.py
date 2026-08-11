@@ -378,18 +378,11 @@ class MainWindow(QMainWindow):
         self.change_page(PageId.OVERVIEW)
 
         #
-        # "Was ist neu"-Popup, danach ggf. der Discord-Verknüpfungs-
-        # Hinweis - beide unabhängig vom asynchronen CompanionManager-
-        # Init (siehe CLAUDE.md: initialize() läuft über einen eigenen
-        # QTimer.singleShot), da beide nur lokal vorhandene Daten
-        # brauchen (gebündeltes CHANGELOG.md bzw. discord_account.json)
-        # und nicht auf full_refresh() warten müssen. singleShot(0, ...)
-        # statt eines direkten Aufrufs, damit das Fenster zuerst
-        # sichtbar wird, bevor der erste modale Dialog erscheint. Die
-        # beiden exec()-Aufrufe laufen nacheinander, nie gleichzeitig.
+        # Die Start-Popups werden hier NICHT angestoßen, sondern erst
+        # aus showEvent() heraus - siehe _queue_startup_popups().
         #
 
-        QTimer.singleShot(0, self._show_startup_popups)
+        self._startup_popups_queued = False
 
     # --------------------------------------------------
     # Meldungen
@@ -1048,7 +1041,62 @@ class MainWindow(QMainWindow):
     # Start-Popups
     # --------------------------------------------------
 
+    def showEvent(self, event):
+        """
+        Der einzige Ort, an dem die Start-Popups angestoßen werden.
+
+        **Warum an der Sichtbarkeit und nicht am Konstruktor.** Bis
+        2.0.4 stand im Konstruktor ein `QTimer.singleShot(0,
+        self._show_startup_popups)`. Der Kommentar dort sagte, das
+        geschehe, "damit das Fenster zuerst sichtbar wird" - und
+        genau das hat es nicht getan. app.py baut das Fenster hinter
+        dem Startbildschirm und ruft zwischen Bau und `show()` ein
+        `processEvents()` auf, um den Ladebalken weiterzuzeichnen.
+        Ein 0-ms-Timer feuert dort sofort: der modale Dialog ging
+        also auf, **bevor** das Fenster überhaupt gezeigt wurde, und
+        `exec()` blieb in seiner eigenen Ereignisschleife stehen.
+        Unter Windows lag er dabei unter dem Startbildschirm, der als
+        `WindowStaysOnTopHint` darüber liegt und mangels
+        `splash.close()` nie verschwand: die App hing sichtbar bei
+        "Übersicht wird gezeichnet …", während der Dialog unsichtbar
+        auf eine Antwort wartete.
+
+        Ein Timer im Konstruktor sagt "später". Gebraucht wird aber
+        "wenn das Fenster steht" - und das weiß nur das Fenster
+        selbst. Deshalb hängt der Anstoß jetzt an `showEvent`. app.py
+        schließt den Startbildschirm, bevor es die Kontrolle an die
+        Ereignisschleife zurückgibt, und ruft aus `_stage()` keine
+        Ereignisschleife mehr auf - beides zusammen macht diesen
+        Zustand unmöglich statt nur unwahrscheinlich.
+        """
+
+        super().showEvent(event)
+
+        self._queue_startup_popups()
+
+    def _queue_startup_popups(self):
+        """
+        Genau einmal je Fensterleben - `showEvent` feuert auch nach
+        jedem Wiederherstellen aus dem Tray.
+        """
+
+        if self._startup_popups_queued:
+            return
+
+        self._startup_popups_queued = True
+
+        QTimer.singleShot(0, self._show_startup_popups)
+
     def _show_startup_popups(self):
+        """
+        "Was ist neu", danach ggf. der Discord-Verknüpfungshinweis -
+        beide unabhängig vom asynchronen CompanionManager-Init (siehe
+        CLAUDE.md: `initialize()` läuft über einen eigenen
+        `QTimer.singleShot`), da beide nur lokal vorhandene Daten
+        brauchen (gebündeltes CHANGELOG.md bzw. discord_account.json)
+        und nicht auf `full_refresh()` warten müssen. Die beiden
+        `exec()`-Aufrufe laufen nacheinander, nie gleichzeitig.
+        """
 
         show_whats_new_if_needed(self.manager, self)
 

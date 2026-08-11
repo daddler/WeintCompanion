@@ -250,6 +250,27 @@ class WhatsNewDialog(QDialog):
 
     # --------------------------------------------------
 
+    def showEvent(self, event):
+        """
+        Nach vorn holen.
+
+        Ein modaler Dialog, den man nicht sieht, ist kein Dialog
+        mehr, sondern ein hängendes Programm: `exec()` wartet in
+        einer eigenen Ereignisschleife, und der Nutzer sieht nur ein
+        Fenster, das nicht weitergeht. Genau so lief der 2.0.3-Start
+        unter Windows. Die Ursache ist inzwischen beseitigt (siehe
+        `MainWindow.showEvent`), aber dieser Dialog erscheint bei
+        jedem Update genau einmal - und wenn er dann einmal hinter
+        etwas liegt, ist die App für den Nutzer kaputt. Zwei Zeilen
+        Versicherung sind das wert.
+        """
+
+        super().showEvent(event)
+
+        self.raise_()
+
+        self.activateWindow()
+
     @property
     def dont_show_again(self) -> bool:
         return self._dont_show_again

@@ -310,17 +310,41 @@ def main():
     splash.show()
 
     #
-    # Ohne processEvents() zeichnet Qt den Startbildschirm erst, wenn
-    # die Ereignisschleife läuft - also NACH dem Bau des Fensters. Der
-    # Balken stünde dann die ganze Zeit auf seinem letzten Wert und
-    # wäre genau das, wonach er aussieht: Zierrat.
+    # Genau ein processEvents(), und zwar hier: das Fenster muss vom
+    # System einmal angelegt und zugeordnet werden, sonst hat es
+    # keine Fläche, auf der repaint() etwas ausrichten könnte. Zu
+    # diesem Zeitpunkt ist es gefahrlos - es gibt noch kein
+    # MainWindow, also auch nichts, was in dieser Schleife
+    # dazwischenkommen könnte.
+    #
+
+    app.processEvents()
+
+    #
+    # Danach zeichnet der Startbildschirm sich SELBST neu, statt die
+    # Ereignisschleife zu bemühen.
+    #
+    # Bis 2.0.4 stand hier ein `app.processEvents()` je Schritt, und
+    # das war der Grund, warum die App unter Windows nach dem Update
+    # auf 2.0.3 bei "Übersicht wird gezeichnet …" stehenblieb:
+    # MainWindow legte im Konstruktor einen 0-ms-Timer für die
+    # Start-Popups an, dieser feuerte im nächsten processEvents()
+    # (also VOR window.show()), und der modale Dialog blieb in
+    # seiner eigenen Ereignisschleife stehen - unter dem
+    # Startbildschirm, der als `WindowStaysOnTopHint` darüber liegt
+    # und nie geschlossen wurde.
+    #
+    # `repaint()` malt synchron und führt dabei nichts anderes aus.
+    # Ein Ladebalken soll zeichnen, nicht Arbeit erledigen; alles,
+    # was hier fahrlässig laufen könnte, hat einen eigenen richtigen
+    # Zeitpunkt.
     #
 
     def _stage(value: float, text: str):
 
         splash.setStage(value, text)
 
-        app.processEvents()
+        splash.repaint()
 
     _stage(0.3, "Darstellung wird vorbereitet …")
 
@@ -338,8 +362,6 @@ def main():
 
         window.show()
 
-        _stage(1.0, "Bereit")
-
         #
         # Einzelbericht (openSUSE/Wayland, 07/2026): Prozess läuft
         # sichtbar (RAM/CPU), aber kein Fenster erscheint - obwohl das
@@ -354,11 +376,23 @@ def main():
         window.raise_()
         window.activateWindow()
 
+        _stage(1.0, "Bereit")
+
         print(
             f"[WeintCompanion] Fenster sichtbar: {window.isVisible()}"
         )
 
+        #
+        # Der Startbildschirm liegt immer oben. Er muss deshalb weg
+        # sein, BEVOR diese Funktion die Kontrolle an die
+        # Ereignisschleife zurückgibt - dort wartet das erste
+        # Start-Popup, und ein modaler Dialog unter einem
+        # "immer oben"-Fenster ist ein Programm, das hängt.
+        #
+
         splash.close()
+
+        splash.deleteLater()
 
     QTimer.singleShot(1500, _show_main_window)
 
