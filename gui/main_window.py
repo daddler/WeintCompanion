@@ -318,20 +318,6 @@ class MainWindow(QMainWindow):
 
         self.toasts = ToastHost(self)
 
-    # --------------------------------------------------
-
-    def notify(self, text: str, variant: str = "ok", action: str = ""):
-        """
-        Eine Meldung unten rechts einblenden.
-
-        Der Weg für alles, was bisher ein Dialog gewesen wäre.
-        Fehlermeldungen (`variant="error"`) bleiben stehen, bis sie
-        weggeklickt werden - eine Fehlermeldung, die von selbst geht,
-        ist eine, die niemand gelesen hat.
-        """
-
-        return self.toasts.post(text, variant, action)
-
         #
         # Navigation
         #
@@ -362,6 +348,22 @@ class MainWindow(QMainWindow):
         #
 
         QTimer.singleShot(0, self._show_startup_popups)
+
+    # --------------------------------------------------
+    # Meldungen
+    # --------------------------------------------------
+
+    def notify(self, text: str, variant: str = "ok", action: str = ""):
+        """
+        Eine Meldung unten rechts einblenden.
+
+        Der Weg für alles, was bisher ein Dialog gewesen wäre.
+        Fehlermeldungen (`variant="error"`) bleiben stehen, bis sie
+        weggeklickt werden - eine Fehlermeldung, die von selbst geht,
+        ist eine, die niemand gelesen hat.
+        """
+
+        return self.toasts.post(text, variant, action)
 
     # --------------------------------------------------
     # Scroll Wrapper
@@ -611,6 +613,29 @@ class MainWindow(QMainWindow):
 
             return
 
+        #
+        # Zuerst die Animation des vorigen Seitenwechsels beenden.
+        # Klickt jemand schnell durch die Navigation, liefen sonst
+        # zwei Gruppen gleichzeitig auf `pos` derselben Seite - und
+        # die ältere setzte den Versatz noch einmal, nachdem die
+        # neuere ihn schon zurückgenommen hatte.
+        #
+
+        previous = self._page_animation
+
+        self._page_animation = None
+
+        if previous is not None:
+
+            try:
+                previous.stop()
+
+            except RuntimeError:
+                #
+                # Bereits von Qt gelöscht (DeleteWhenStopped, s.u.).
+                #
+                pass
+
         effect = QGraphicsOpacityEffect(widget)
 
         widget.setGraphicsEffect(effect)
@@ -652,11 +677,25 @@ class MainWindow(QMainWindow):
         # vier Bildern je Sekunde ist das dauerhaft teuer.
         #
 
-        group.finished.connect(
-            lambda: widget.setGraphicsEffect(None)
-        )
+        def finished():
 
-        group.start()
+            widget.setGraphicsEffect(None)
+
+            self._page_animation = None
+
+        group.finished.connect(finished)
+
+        #
+        # `DeleteWhenStopped`, weil die Gruppe sonst als Kind des
+        # Fensters liegen bleibt - eine je Seitenwechsel, für die
+        # gesamte Laufzeit des Programms, jede mit zwei
+        # Unteranimationen. Nachgemessen: 40 Wechsel, 40 Gruppen.
+        # Deshalb muss `finished()` die Referenz auch räumen: nach
+        # dem Löschen wäre `self._page_animation` ein Zeiger auf ein
+        # nicht mehr vorhandenes C++-Objekt.
+        #
+
+        group.start(QParallelAnimationGroup.DeleteWhenStopped)
 
         self._page_animation = group
 

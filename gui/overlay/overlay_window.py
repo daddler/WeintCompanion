@@ -29,6 +29,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 from gui.theme import tokens
 from gui.theme.fonts import font
 from gui.theme.restyle import restyle
+from gui.theme.theme_manager import theme
 from gui.widgets.chip import Chip
 from gui.widgets.eyebrow import eyebrow_label
 
@@ -220,20 +221,32 @@ class OverlayWindow(QWidget):
 
         self.service.snapshotChanged.connect(self._on_snapshot)
 
+        #
+        # Die Verbindung wird **hier** hergestellt und nicht in
+        # `_apply_rank_color()`. Stünde sie dort, würde jeder
+        # Akzentwechsel den Handler ausführen, der sich dabei ein
+        # weiteres Mal verbindet - die Zahl der Verbindungen verdoppelt
+        # sich dann bei jedem Wechsel (nachgemessen: 1, 2, 4, 8, 16).
+        # Sichtbar wäre das erst spät und als reine Trägheit, nie als
+        # Fehler.
+        #
+
+        theme().accent_changed.connect(self._on_accent_changed)
+
         self._apply_rank_color()
 
     # --------------------------------------------------
 
-    def _apply_rank_color(self):
+    def _on_accent_changed(self, _name: str):
 
-        from gui.theme.theme_manager import theme
+        self._apply_rank_color()
+
+    def _apply_rank_color(self):
 
         restyle(
             self.rank_label,
             f"color:{theme().accent_light()};background:transparent;",
         )
-
-        theme().accent_changed.connect(lambda _n: self._apply_rank_color())
 
     # --------------------------------------------------
 

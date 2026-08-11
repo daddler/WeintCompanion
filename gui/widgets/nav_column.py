@@ -630,8 +630,20 @@ class NavColumn(QFrame):
 
             return
 
-        if self._width_animation is not None:
-            self._width_animation.stop()
+        previous = self._width_animation
+
+        self._width_animation = None
+
+        if previous is not None:
+
+            try:
+                previous.stop()
+
+            except RuntimeError:
+                #
+                # Von Qt bereits gelöscht (DeleteWhenStopped, s.u.).
+                #
+                pass
 
         start = self.width()
 
@@ -672,9 +684,20 @@ class NavColumn(QFrame):
 
             self._reposition_indicator()
 
+            self._width_animation = None
+
         animation.finished.connect(done)
 
-        animation.start()
+        #
+        # `DeleteWhenStopped`: die Animation gehört sonst als Kind der
+        # Spalte und bliebe nach jedem Ein- und Ausklappen liegen,
+        # samt der Schließung `done`. Deshalb räumt `done()` oben auch
+        # die Referenz - nach dem Löschen zeigte sie auf ein nicht
+        # mehr vorhandenes C++-Objekt, und der nächste Aufruf würde
+        # darauf `stop()` rufen (dafür der Schutz weiter oben).
+        #
+
+        animation.start(QPropertyAnimation.DeleteWhenStopped)
 
         self._width_animation = animation
 

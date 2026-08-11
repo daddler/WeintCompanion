@@ -169,10 +169,28 @@ class BarRow(QWidget):
 
         from PySide6.QtCore import QEasingCurve, QVariantAnimation
 
-        if self._animation is not None:
-            self._animation.stop()
+        #
+        # **Eine** Animation je Zeile, wiederverwendet - nicht je
+        # Aktualisierung eine neue. Ein `QVariantAnimation(self)`
+        # gehört seinem Elternobjekt: die alte, gestoppte Animation
+        # bliebe an der Zeile hängen, samt ihrer Verbindung auf
+        # `_on_step`. Nachgemessen sammelten sich so nach 200
+        # Aktualisierungen 199 Objekte an einer einzigen Zeile.
+        # Sichtbar wäre das nie als Fehler - eine gestoppte Animation
+        # meldet nichts mehr - sondern nur als Speicher, der während
+        # einer Wiedergabe (4 Bilder je Sekunde, 25 Zeilen je Tabelle)
+        # unbegrenzt wächst.
+        #
 
-        animation = QVariantAnimation(self)
+        if self._animation is None:
+
+            self._animation = QVariantAnimation(self)
+
+            self._animation.valueChanged.connect(self._on_step)
+
+        animation = self._animation
+
+        animation.stop()
 
         animation.setDuration(ms)
 
@@ -182,11 +200,7 @@ class BarRow(QWidget):
 
         animation.setEndValue(float(target))
 
-        animation.valueChanged.connect(self._on_step)
-
         animation.start()
-
-        self._animation = animation
 
     def _on_step(self, value):
 
