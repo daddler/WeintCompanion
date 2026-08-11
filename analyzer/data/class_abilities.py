@@ -269,12 +269,14 @@ _BARKSKIN = _cd("Barkskin", "Baumrinde", (22812,), 60, CD_DEFENSIVE)
 
 _SURVIVAL_INSTINCTS = _cd(
     "Survival Instincts", "Überlebensinstinkte", (61336,), 180, CD_DEFENSIVE,
+    aliases=("Ueberlebensinstinkte",),
 )
 
 _REBIRTH = _cd("Rebirth", "Wiedergeburt", (20484,), 600, CD_RAID, True)
 
 _STAMPEDING_ROAR = _cd(
     "Stampeding Roar", "Stampfendes Gebrüll", (77764, 106898), 120, CD_RAID,
+    aliases=("Stampfendes Gebruell",),
 )
 
 _DETERRENCE = _cd(
@@ -302,14 +304,17 @@ _ALTER_TIME = _cd(
 
 _FORTIFYING_BREW = _cd(
     "Fortifying Brew", "Stärkendes Gebräu", (115203,), 180, CD_DEFENSIVE,
+    aliases=("Staerkendes Gebraeu",),
 )
 
 _DAMPEN_HARM = _cd(
     "Dampen Harm", "Schaden dämpfen", (122278,), 120, CD_DEFENSIVE, True,
+    aliases=("Schaden mindern",),
 )
 
 _DIFFUSE_MAGIC = _cd(
     "Diffuse Magic", "Magiediffusion", (122783,), 90, CD_DEFENSIVE, True,
+    aliases=("Magie zerstreuen",),
 )
 
 _RING_OF_PEACE = _cd(
@@ -318,6 +323,7 @@ _RING_OF_PEACE = _cd(
 
 _DIVINE_PROTECTION = _cd(
     "Divine Protection", "Göttlicher Schutz", (498,), 60, CD_DEFENSIVE,
+    aliases=("Goettlicher Schutz",),
 )
 
 _DIVINE_SHIELD = _cd(
@@ -326,6 +332,7 @@ _DIVINE_SHIELD = _cd(
 
 _DEVOTION_AURA = _cd(
     "Devotion Aura", "Aura der Hingabe", (31821,), 180, CD_RAID,
+    aliases=("Aura Mastery", "Aurameisterschaft",),
 )
 
 _HAND_OF_SACRIFICE = _cd(
@@ -352,6 +359,7 @@ _AVENGING_WRATH = _cd(
 # als eine fehlende Zeile, weil nichts daran auffällt.
 _DIVINE_FAVOR = _cd(
     "Divine Favor", "Göttliche Gunst", (31842,), 180, CD_HEAL, True,
+    aliases=("Goettliche Gunst",),
 )
 
 _DESPERATE_PRAYER = _cd(
@@ -424,6 +432,7 @@ _ASTRAL_SHIFT = _cd(
 
 _HEALING_TIDE = _cd(
     "Healing Tide Totem", "Totem der Heilungsflut", (108280,), 180, CD_HEAL,
+    aliases=("Totem der heilenden Flut",),
 )
 
 _SPIRIT_LINK = _cd(
@@ -467,7 +476,9 @@ _COLOSSUS_SMASH = _dot(
     "Colossus Smash", "Kolossales Schmettern", (86346,), 30.0,
 )
 
-_RECKLESSNESS = _cd("Recklessness", "Tollkühnheit", (1719,), 180)
+_RECKLESSNESS = _cd("Recklessness", "Tollkühnheit", (1719,), 180,
+    aliases=("Tollkuehnheit",),
+)
 
 _AVATAR = _cd("Avatar", "Avatar", (107574,), 180, CD_PERSONAL, True)
 
@@ -475,6 +486,7 @@ _BLOODBATH = _cd("Bloodbath", "Blutbad", (12292,), 60, CD_PERSONAL, True)
 
 _SKULL_BANNER = _cd(
     "Skull Banner", "Schädelbanner", (114207,), 180, CD_RAID, True,
+    aliases=("Schaedelbanner",),
 )
 
 _RALLYING_CRY = _cd(
@@ -542,7 +554,9 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _dot("Blood Plague", "Blutseuche", (55078,), 90.0),
         ),
         cooldowns=(
-            _cd("Pillar of Frost", "Säule des Frosts", (51271,), 60),
+            _cd("Pillar of Frost", "Säule des Frosts", (51271,), 60,
+    aliases=("Saeule des Frosts",),
+),
             _cd(
                 "Empower Rune Weapon", "Runenwaffe stärken",
                 (47568,), 300,
@@ -562,11 +576,14 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
         ),
         cooldowns=(
             _cd("Unholy Frenzy", "Unheilige Raserei", (49016,), 180),
-            _cd("Summon Gargoyle", "Gargoyle beschwören", (49206,), 180),
+            _cd("Summon Gargoyle", "Gargoyle beschwören", (49206,), 180,
+    aliases=("Gargoyle beschwoeren",),
+),
             _cd(
                 "Dark Transformation", "Dunkle Wandlung",
                 (63560,), 30,
-            ),
+    aliases=("Dunkle Verwandlung",),
+),
             _ARMY_OF_THE_DEAD,
             _ANTI_MAGIC_SHELL,
             _ICEBOUND_FORTITUDE,
@@ -594,7 +611,8 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _cd(
                 "Incarnation: Chosen of Elune", "Inkarnation: Elunes Auserwählte",
                 (102560,), 180, CD_PERSONAL, True,
-            ),
+    aliases=("Incarnation", "Inkarnation",),
+),
             _cd(
                 "Nature's Vigil", "Wachsamkeit der Natur",
                 (124974,), 90, CD_PERSONAL, True,
@@ -621,7 +639,8 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _cd(
                 "Incarnation: King of the Jungle", "Inkarnation: König des Dschungels",
                 (102543,), 180, CD_PERSONAL, True,
-            ),
+    aliases=("Incarnation", "Inkarnation",),
+),
             _cd(
                 "Nature's Vigil", "Wachsamkeit der Natur",
                 (124974,), 90, CD_PERSONAL, True,
@@ -658,7 +677,8 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _cd(
                 "Incarnation: Son of Ursoc", "Inkarnation: Sohn von Ursoc",
                 (102558,), 180, CD_PERSONAL, True,
-            ),
+    aliases=("Incarnation", "Inkarnation",),
+),
             _STAMPEDING_ROAR,
             _REBIRTH,
         ),
@@ -704,7 +724,9 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _SERPENT_STING,
         ),
         cooldowns=(
-            _cd("Bestial Wrath", "Zorn des Wildtiers", (19574,), 60),
+            _cd("Bestial Wrath", "Zorn des Wildtiers", (19574,), 60,
+    aliases=("Animalischer Zorn",),
+),
             _cd("Rapid Fire", "Schnellfeuer", (3045,), 300),
             _STAMPEDE,
             _cd(
@@ -795,7 +817,9 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _dot("Living Bomb", "Lebende Bombe", (44457,), 80.0, True),
         ),
         cooldowns=(
-            _cd("Combustion", "Einäschern", (11129,), 45),
+            _cd("Combustion", "Einäschern", (11129,), 45,
+    aliases=("Verbrennung",),
+),
             _MIRROR_IMAGE,
             _ALTER_TIME,
             _ICE_BLOCK,
@@ -831,7 +855,9 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
         auras=(
             _buff("Shuffle", "Beinarbeit", (115307,), 90.0),
             _buff("Elusive Brew", "Flüchtiges Gebräu", (115308,), 25.0),
-            _buff("Guard", "Schutz", (115295,), 40.0),
+            _buff("Guard", "Schutz", (115295,), 40.0,
+    aliases=("Schutzwache",),
+),
         ),
         cooldowns=(
             _cd("Guard", "Schutz", (115295,), 30, CD_DEFENSIVE),
@@ -860,7 +886,9 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             ),
         ),
         cooldowns=(
-            _cd("Revival", "Belebung", (115310,), 180, CD_HEAL),
+            _cd("Revival", "Belebung", (115310,), 180, CD_HEAL,
+    aliases=("Neubelebung",),
+),
             _cd("Life Cocoon", "Lebenskokon", (116849,), 120, CD_HEAL),
             _cd(
                 "Thunder Focus Tea", "Tee der Donnerfokussierung",
@@ -881,12 +909,15 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
         ),
         cooldowns=(
             _cd("Tigereye Brew", "Tigeraugengebräu", (116740,), 60),
-            _cd("Energizing Brew", "Belebendes Gebräu", (115288,), 60),
+            _cd("Energizing Brew", "Belebendes Gebräu", (115288,), 60,
+    aliases=("Energetisierendes Gebraeu", "Energetisierendes Gebräu",),
+),
             _cd(
                 "Invoke Xuen, the White Tiger",
                 "Xuen den Weißen Tiger beschwören",
                 (123904,), 180, CD_PERSONAL, True,
-            ),
+    aliases=("Xuen den weißen Tiger herbeirufen",),
+),
             _cd(
                 "Touch of Karma", "Karmaberührung",
                 (122470, 124280), 90, CD_DEFENSIVE,
@@ -954,7 +985,8 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _cd(
                 "Ardent Defender", "Unermüdlicher Verteidiger",
                 (31850,), 180, CD_DEFENSIVE,
-            ),
+    aliases=("Gluehender Verteidiger", "Glühender Verteidiger",),
+),
             _cd(
                 "Guardian of Ancient Kings",
                 "Wächter der Uralten Könige",
@@ -1019,7 +1051,9 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
                 (33206,), 180, CD_HEAL,
             ),
             _cd("Spirit Shell", "Geisterhülle", (109964,), 60, CD_HEAL, True),
-            _cd("Divine Hymn", "Gotteshymne", (64843, 64844), 180, CD_HEAL),
+            _cd("Divine Hymn", "Gotteshymne", (64843, 64844), 180, CD_HEAL,
+    aliases=("Goettliche Hymne", "Göttliche Hymne",),
+),
             _POWER_INFUSION,
             _SHADOWFIEND,
             _MINDBENDER,
@@ -1154,7 +1188,8 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _cd(
                 "Ascendance", "Aszendenz",
                 (114050, 114049), 180, CD_PERSONAL, True,
-            ),
+    aliases=("Aufstieg",),
+),
             _ELEMENTAL_MASTERY,
             _FIRE_ELEMENTAL,
             _HEALING_TIDE,
@@ -1173,11 +1208,14 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _buff("Maelstrom Weapon", "Mahlstromwaffe", (53817,), 0.0, True),
         ),
         cooldowns=(
-            _cd("Feral Spirit", "Wildgeist", (51533,), 120),
+            _cd("Feral Spirit", "Wildgeist", (51533,), 120,
+    aliases=("Wilder Geist",),
+),
             _cd(
                 "Ascendance", "Aszendenz",
                 (114051, 114049), 180, CD_PERSONAL, True,
-            ),
+    aliases=("Aufstieg",),
+),
             _ELEMENTAL_MASTERY,
             _FIRE_ELEMENTAL,
             _HEALING_TIDE,
@@ -1205,7 +1243,8 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _cd(
                 "Ascendance", "Aszendenz",
                 (114052, 114049), 180, CD_HEAL, True,
-            ),
+    aliases=("Aufstieg",),
+),
             _cd(
                 "Spiritwalker's Grace", "Anmut des Geisterwandlers",
                 (79206,), 120, CD_HEAL,
@@ -1236,7 +1275,8 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _cd(
                 "Dark Soul: Misery", "Finstere Seele: Elend",
                 (113860,), 120,
-            ),
+    aliases=("Dunkle Seele: Elend",),
+),
             _SUMMON_DOOMGUARD,
             _SUMMON_INFERNAL,
             _UNENDING_RESOLVE,
@@ -1257,7 +1297,8 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _cd(
                 "Dark Soul: Knowledge", "Finstere Seele: Wissen",
                 (113861,), 120,
-            ),
+    aliases=("Dunkle Seele: Wissen",),
+),
             _SUMMON_DOOMGUARD,
             _SUMMON_INFERNAL,
             _UNENDING_RESOLVE,
@@ -1275,7 +1316,8 @@ SPEC_ABILITIES: tuple[SpecAbilities, ...] = (
             _cd(
                 "Dark Soul: Instability", "Finstere Seele: Instabilität",
                 (113858,), 120,
-            ),
+    aliases=("Dunkle Seele: Instabilitaet", "Dunkle Seele: Instabilität",),
+),
             _SUMMON_DOOMGUARD,
             _SUMMON_INFERNAL,
             _UNENDING_RESOLVE,

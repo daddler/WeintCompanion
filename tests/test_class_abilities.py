@@ -375,3 +375,159 @@ def test_no_spell_id_is_shared_by_two_different_abilities():
                 owners.setdefault(spell_id, row.english)
 
     assert clashes == []
+
+
+# --------------------------------------------------
+# Zwei Schreibweisen desselben deutschen Namens
+# --------------------------------------------------
+#
+# Es gibt für viele MoP-Fähigkeiten zwei deutsche Namen im Umlauf, und
+# ohne Client lässt sich nicht entscheiden, welcher der des Spiels ist.
+# Ein Abgleich dieser Tabelle mit dem Katalog des Bots
+# (services/warcraftlogs_spells.py) hat gezeigt, dass die beiden
+# unabhängig gepflegten Listen sich bei rund zwanzig Fähigkeiten
+# unterscheiden: Seelenruhe/Gelassenheit, Aufstieg/Aszendenz,
+# Dunkle Seele/Finstere Seele, ...
+#
+# Über den Namen gematcht ist jede davon eine dauerhaft unerkannte
+# Zeile - und in der Oberfläche nicht davon zu unterscheiden, dass die
+# Fähigkeit nie gewirkt wurde. Die Antwort ist additiv: beide
+# Schreibweisen zählen, `aliases` existiert genau dafür. Der
+# ANZEIGEname bleibt davon unberührt.
+
+BOTH_SPELLINGS = [
+    ("Seelenruhe", "Gelassenheit", "Tranquility"),
+    ("Aufstieg", "Aszendenz", "Ascendance"),
+    ("Dunkle Seele: Elend", "Finstere Seele: Elend", "Dark Soul: Misery"),
+    ("Dunkle Seele: Wissen", "Finstere Seele: Wissen", "Dark Soul: Knowledge"),
+    ("Dunkle Verwandlung", "Dunkle Wandlung", "Dark Transformation"),
+    ("Verbrennung", "Einäschern", "Combustion"),
+    ("Neubelebung", "Belebung", "Revival"),
+    ("Magie zerstreuen", "Magiediffusion", "Diffuse Magic"),
+    ("Schaden mindern", "Schaden dämpfen", "Dampen Harm"),
+    ("Wilder Geist", "Wildgeist", "Feral Spirit"),
+    ("Göttliche Hymne", "Gotteshymne", "Divine Hymn"),
+    ("Glühender Verteidiger", "Unermüdlicher Verteidiger", "Ardent Defender"),
+    ("Animalischer Zorn", "Zorn des Wildtiers", "Bestial Wrath"),
+    ("Energetisierendes Gebräu", "Belebendes Gebräu", "Energizing Brew"),
+    ("Schutzwache", "Schutz", "Guard"),
+    ("Totem der heilenden Flut", "Totem der Heilungsflut", "Healing Tide Totem"),
+]
+
+
+def _find_anywhere(name: str):
+    """
+    Die Fähigkeit über alle Spezialisierungen suchen - der Test fragt
+    "kennt die Tabelle den Namen", nicht "gehört er zu dieser Spec".
+    """
+
+    for abilities in class_abilities.SPEC_ABILITIES:
+
+        found = class_abilities.match(abilities, name)
+
+        if found is not None:
+            return found
+
+    return None
+
+
+@pytest.mark.parametrize("first,second,english", BOTH_SPELLINGS)
+def test_both_german_spellings_find_the_same_ability(first, second, english):
+
+    one = _find_anywhere(first)
+    other = _find_anywhere(second)
+
+    assert one is not None, first
+    assert other is not None, second
+
+    assert one.english == english
+    assert other.english == english
+
+
+def test_the_three_incarnations_do_not_match_each_other():
+    """
+    Der Bot führt "Incarnation" als einen Eintrag über drei IDs, diese
+    Tabelle als drei Fähigkeiten. Beim Übernehmen seiner Schreibweisen
+    dürfen deshalb nur die gemeinsamen Namen wandern - die spec-eigenen
+    nicht, sonst bekäme ein Wächter-Druide die Zeile des Feral.
+    """
+
+    expected = {
+        "Inkarnation: König des Dschungels": "Incarnation: King of the Jungle",
+        "Inkarnation: Sohn von Ursoc": "Incarnation: Son of Ursoc",
+        "Inkarnation: Elunes Auserwählte": "Incarnation: Chosen of Elune",
+    }
+
+    for german, english in expected.items():
+
+        found = _find_anywhere(german)
+
+        assert found is not None, german
+        assert found.english == english
+
+
+def test_a_name_is_never_ambiguous_within_one_specialization():
+    """
+    `match()` sucht **innerhalb einer Spezialisierung**. Genau dort
+    darf ein Name nicht zwei Fähigkeiten gehören - sonst entscheidet
+    die Reihenfolge der Tabelle, welche Zeile ein Bericht trifft.
+
+    Über Spezialisierungen hinweg ist ein geteilter Name dagegen
+    richtig und beabsichtigt: "Inkarnation" heißt beim Wilden Kampf
+    "König des Dschungels", beim Wächter "Sohn von Ursoc" und beim
+    Gleichgewicht "Elunes Auserwählte". Ein Bericht, der nur
+    "Inkarnation" meldet, muss in jeder dieser Specs die dortige
+    Fähigkeit finden - deshalb ist die Prüfung hier je Spec und nicht
+    über die ganze Tabelle.
+    """
+
+    for abilities in class_abilities.SPEC_ABILITIES:
+
+        owner: dict[str, str] = {}
+
+        for ability in tuple(abilities.auras) + tuple(abilities.cooldowns):
+
+            for name in (
+                ability.german,
+                ability.english,
+                *tuple(ability.aliases or ()),
+            ):
+
+                if not name:
+                    continue
+
+                key = name.strip().lower()
+
+                assert owner.get(key, ability.english) == ability.english, (
+                    f"{abilities.class_name}/{abilities.spec}: {name}"
+                )
+
+                owner[key] = ability.english
+
+
+def test_the_shared_incarnation_name_resolves_per_specialization():
+    """
+    Die Gegenprobe zur Regel darüber: derselbe blanke Name, drei
+    verschiedene richtige Antworten.
+    """
+
+    expected = {
+        "Wilder Kampf": "Incarnation: King of the Jungle",
+        "Wächter": "Incarnation: Son of Ursoc",
+        "Gleichgewicht": "Incarnation: Chosen of Elune",
+    }
+
+    for abilities in class_abilities.SPEC_ABILITIES:
+
+        if abilities.class_name != "Druid":
+            continue
+
+        wanted = expected.get(abilities.spec)
+
+        if wanted is None:
+            continue
+
+        found = class_abilities.match(abilities, "Inkarnation")
+
+        assert found is not None, abilities.spec
+        assert found.english == wanted
