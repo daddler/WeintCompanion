@@ -2,6 +2,43 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.0.4
+
+**"Aufstellung im Discord" öffnete unter Linux weiterhin den
+Browser** — und dort eine Adresse, die es nirgends gibt:
+`http://discord//-/channels/1311…`. Der Fehler saß nicht im Link,
+sondern in der Frage, die die App gestellt hat. Sie hat `xdg-open`
+mit `discord://…` aufgerufen und dessen Rückgabewert als Antwort
+darauf gelesen, ob es für dieses Schema überhaupt ein Programm gibt.
+Das ist er nicht: ist nichts eingetragen, reicht xdg-open die Adresse
+an den Standard-Browser weiter und meldet trotzdem Erfolg. Der
+Browser kennt das Schema nicht und macht eine http-Adresse daraus.
+
+Die App fragt jetzt vorher, statt hinterher zu hoffen. Ist für
+`discord://` ein Programm eingetragen, wird dessen Startzeile
+gelesen und nur dann benutzt, wenn dort wirklich ein Discord-Client
+steht — Firefox legt für ein einmal bestätigtes "Anwendung wählen"
+einen Eintrag namens *Discord* an, der in Wahrheit Firefox startet,
+und genau der hat den kaputten Link erzeugt. Ist nichts eingetragen,
+wird die Anwendung selbst gesucht: ein Programm im Suchpfad,
+Flatpak, Snap, ein Menüeintrag, eine AppImage in den üblichen Ordnern
+— auch in dem, aus dem WeintCompanion selbst gestartet wurde.
+Vesktop, WebCord und die anderen inoffiziellen Clients zählen dabei
+mit; wer einen davon benutzt, soll nicht zugunsten des Browsers
+übergangen werden.
+
+Läuft Discord bereits, springt das offene Fenster in den
+Anmelde-Beitrag, statt ein zweites zu öffnen. Findet sich keine
+Anwendung, übernimmt weiterhin der Browser — dann aber mit der
+`https`-Adresse, die dort auch funktioniert, statt mit dem Schema,
+mit dem er nichts anfangen kann.
+
+Unter Windows und macOS bleibt es beim Weg des Systems, denn dort
+meldet der Öffner einen fehlenden Eintrag auch wirklich. Neu ist,
+dass auch dort anschließend nach der Installation gesucht wird
+(`%LOCALAPPDATA%\Discord`, `/Applications`), damit eine vorhandene
+Anwendung ohne Schema-Zuordnung nicht doch im Browser endet.
+
 ## 2.0.3
 
 **Ein gelöschter Testraid stand nach jedem Neustart wieder als

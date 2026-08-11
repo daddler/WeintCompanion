@@ -29,10 +29,14 @@ steht. `open_url()` nimmt deshalb ein optionales `app_url`
 blind geschehen: wer Discord nur im Browser nutzt, hat für dieses
 Schema kein Programm, und ein stillschweigend verpuffter Aufruf wäre
 genau der tote Knopf, gegen den diese Datei geschrieben wurde.
-Deshalb wird das Schema nicht über `webbrowser` geöffnet (das meldet
-den Fehlschlag nicht), sondern über den Öffner des Systems, dessen
-Rückgabewert wir lesen können - und bei Misserfolg geht es im
-Browser weiter.
+
+Der erste Versuch, das zu prüfen, war `xdg-open` samt Rückgabewert -
+und der war falsch. Ohne Eintrag für `x-scheme-handler/discord`
+reicht xdg-open die Adresse an den **Browser** weiter und meldet
+trotzdem 0; der Browser macht aus `discord://-/channels/…` dann
+`http://discord//-/channels/…`. Wohin ein Discord-Link geht, wird
+deshalb nicht mehr hier entschieden, sondern in
+`core/discord_app.py`, und zwar vorher statt hinterher.
 """
 
 from __future__ import annotations
@@ -41,6 +45,7 @@ import os
 import subprocess
 import webbrowser
 
+from core import discord_app
 from core.runtime import Runtime
 
 
@@ -58,7 +63,11 @@ def open_app_link(url: str, logger=None) -> bool:
     Öffnet eine Adresse mit eigenem Schema (`discord://…`) in der
     zuständigen Anwendung. `False`, wenn es keine gibt.
 
-    Je Plattform der Öffner, der einen Fehlschlag auch meldet:
+    Für Discord übernimmt `core/discord_app.py`: dort wird die
+    Anwendung gesucht, statt dem Rückgabewert eines Öffners zu
+    glauben, der auch den Browser als Erfolg meldet.
+
+    Für jedes andere Schema bleibt es beim Öffner des Systems -
     `os.startfile` wirft unter Windows, wenn kein Programm zugeordnet
     ist, `open` und `xdg-open` antworten mit einem Rückgabewert
     ungleich 0. `webbrowser.open()` sieht dagegen nur, dass es ein
@@ -69,6 +78,10 @@ def open_app_link(url: str, logger=None) -> bool:
 
     if not address:
         return False
+
+    if address.startswith(f"{discord_app.SCHEME}:"):
+
+        return discord_app.open_link(address, logger)
 
     try:
 
@@ -105,7 +118,7 @@ def open_app_link(url: str, logger=None) -> bool:
             #
 
             logger.info(
-                f"Discord-Anwendung nicht erreichbar ({exc}) - "
+                f"Anwendung nicht erreichbar ({exc}) - "
                 "es geht im Browser weiter."
             )
 

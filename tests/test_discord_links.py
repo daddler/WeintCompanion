@@ -393,12 +393,10 @@ def test_a_missing_id_stores_nothing():
 # Wer Discord nur im Browser nutzt, hat für `discord://` aber kein
 # Programm - und ein lautlos verpuffter Aufruf wäre wieder genau der
 # tote Knopf, gegen den core/browser.py geschrieben wurde.
-
-
-class _Result:
-
-    def __init__(self, returncode):
-        self.returncode = returncode
+#
+# Wo die Anwendung gesucht wird, steht in tests/test_discord_app.py.
+# Hier geht es nur um die Weiche: Anwendung zuerst, Browser danach -
+# und der Browser bekommt die **https**-Adresse, nie das Schema.
 
 
 @pytest.fixture
@@ -412,14 +410,20 @@ def linux(monkeypatch):
 
 def test_the_app_is_tried_first(linux, monkeypatch):
 
-    from core import browser
+    from core import browser, discord_app
 
     calls = []
 
     monkeypatch.setattr(
-        browser.subprocess,
-        "run",
-        lambda cmd, **kw: calls.append(cmd) or _Result(0),
+        discord_app,
+        "find_launcher",
+        lambda url: ["/usr/bin/discord", url],
+    )
+
+    monkeypatch.setattr(
+        discord_app.subprocess,
+        "Popen",
+        lambda argv, **kw: calls.append(argv),
     )
 
     monkeypatch.setattr(
@@ -433,23 +437,28 @@ def test_the_app_is_tried_first(linux, monkeypatch):
         app_url="discord://-/channels/1/2/3",
     )
 
-    assert calls == [["xdg-open", "discord://-/channels/1/2/3"]]
+    assert calls == [
+        ["/usr/bin/discord", "discord://-/channels/1/2/3"]
+    ]
 
 
-def test_without_a_handler_the_browser_takes_over(linux, monkeypatch):
+def test_without_an_app_the_browser_takes_over(linux, monkeypatch):
+    """
+    Und zwar mit der Web-Adresse. Genau das war der gemeldete Fehler:
+    xdg-open reichte `discord://…` an den Browser weiter und meldete
+    Erfolg, worauf dort `http://discord//-/channels/…` stand.
+    """
 
-    from core import browser
+    from core import browser, discord_app
 
     opened = []
 
-    #
-    # Rückgabewert 3: xdg-open kennt kein Programm für das Schema.
-    #
+    monkeypatch.setattr(discord_app, "find_launcher", lambda url: [])
 
     monkeypatch.setattr(
-        browser.subprocess,
-        "run",
-        lambda cmd, **kw: _Result(3),
+        discord_app.subprocess,
+        "Popen",
+        lambda argv, **kw: pytest.fail(f"nichts zu starten: {argv}"),
     )
 
     monkeypatch.setattr(
@@ -466,16 +475,22 @@ def test_without_a_handler_the_browser_takes_over(linux, monkeypatch):
     assert opened == ["https://discord.com/channels/1/2/3"]
 
 
-def test_a_crashing_opener_is_not_the_end_of_the_button(linux, monkeypatch):
+def test_a_crashing_launch_is_not_the_end_of_the_button(linux, monkeypatch):
 
-    from core import browser
+    from core import browser, discord_app
 
     opened = []
 
-    def boom(cmd, **kw):
-        raise FileNotFoundError("xdg-open")
+    def boom(argv, **kw):
+        raise FileNotFoundError(argv[0])
 
-    monkeypatch.setattr(browser.subprocess, "run", boom)
+    monkeypatch.setattr(
+        discord_app,
+        "find_launcher",
+        lambda url: ["/opt/discord/Discord", url],
+    )
+
+    monkeypatch.setattr(discord_app.subprocess, "Popen", boom)
 
     monkeypatch.setattr(
         browser.webbrowser,
@@ -490,7 +505,13 @@ def test_a_crashing_opener_is_not_the_end_of_the_button(linux, monkeypatch):
 
 def test_without_an_app_link_nothing_extra_happens(linux, monkeypatch):
 
-    from core import browser
+    from core import browser, discord_app
+
+    monkeypatch.setattr(
+        discord_app,
+        "find_launcher",
+        lambda url: pytest.fail("keine Anwendungssuche erwartet"),
+    )
 
     monkeypatch.setattr(
         browser.subprocess,
