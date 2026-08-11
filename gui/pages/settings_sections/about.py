@@ -30,18 +30,35 @@ DISCORD_FEEDBACK_URL = feedback_url()
 
 class _ArtworkHeader(QWidget):
     """
-    Artwork-Streifen oben im "Über"-Tab (~200px, Fade zum
-    App-Hintergrund) - der einzige Ort, an dem das Artwork
-    als Header auftritt, siehe Design-Notiz zu Screen 07.
+    Das Ökosystem-Artwork oben im "Über"-Tab - dasselbe Bild, das der
+    Startbildschirm zeigt.
+
+    Es wird **ganz** gezeigt, nicht als Streifen. Vorher stand hier
+    eine feste Höhe von 180 px mit `KeepAspectRatioByExpanding`: bei
+    einem 16:9-Bild in einem rund 5:1 breiten Streifen blieb davon ein
+    waagerechter Ausschnitt aus der Bildmitte übrig - ohne Titel, ohne
+    Wappen, ohne die fünf Bereiche. Genau das, was das Bild aussagt,
+    war das Erste, was weggeschnitten wurde.
+
+    `heightForWidth()` ist deshalb der Kern dieser Klasse und nicht
+    Beiwerk: nur damit darf die Höhe der Breite folgen, statt dass das
+    Bild einer festen Höhe folgen muss.
     """
 
-    HEIGHT = 180
+    #
+    # Seitenverhältnis des Artworks (16:9) und eine Obergrenze, damit
+    # der Kopf auf einem breiten Fenster nicht die ganze Seite
+    # einnimmt - darüber wird das Bild zentriert statt weiter zu
+    # wachsen.
+    #
+
+    ASPECT = 9 / 16
+
+    MAX_HEIGHT = 340
 
     def __init__(self):
 
         super().__init__()
-
-        self.setFixedHeight(self.HEIGHT)
 
         self.setSizePolicy(
             QSizePolicy.Expanding,
@@ -50,10 +67,34 @@ class _ArtworkHeader(QWidget):
 
         self._pixmap = QPixmap(Resources.banner())
 
+    # --------------------------------------------------
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        return min(self.MAX_HEIGHT, int(width * self.ASPECT))
+
+    def resizeEvent(self, event):
+
+        super().resizeEvent(event)
+
+        #
+        # Ein Layout fragt `heightForWidth()` nur, wenn die
+        # Größenrichtlinie es verlangt - und mehrere Qt-Layouts fragen
+        # gar nicht. Die Höhe wird deshalb zusätzlich selbst gesetzt.
+        #
+
+        self.setFixedHeight(
+            self.heightForWidth(self.width())
+        )
+
     def paintEvent(self, event):
 
         painter = QPainter(self)
+
         painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
         rect = self.rect()
 
@@ -61,16 +102,17 @@ class _ArtworkHeader(QWidget):
 
         if not self._pixmap.isNull():
 
+            #
+            # `KeepAspectRatio`: lieber links und rechts etwas Grund
+            # zeigen als das Bild anschneiden.
+            #
+
             scaled = self._pixmap.scaled(
                 self.width(),
                 self.height(),
-                Qt.KeepAspectRatioByExpanding,
+                Qt.KeepAspectRatio,
                 Qt.SmoothTransformation,
             )
-
-            painter.save()
-
-            painter.setOpacity(0.6)
 
             painter.drawPixmap(
                 (self.width() - scaled.width()) // 2,
@@ -78,11 +120,16 @@ class _ArtworkHeader(QWidget):
                 scaled,
             )
 
-            painter.restore()
+        #
+        # Nur noch ein schmaler Übergang an der Unterkante, damit das
+        # Bild in die Seite läuft, statt an einer harten Linie zu
+        # enden. Der frühere Verlauf begann bei 35 % und legte sich
+        # damit über die halbe Bildfläche.
+        #
 
         fade = QLinearGradient(0, rect.top(), 0, rect.bottom())
 
-        fade.setColorAt(0.35, QColor(0, 0, 0, 0))
+        fade.setColorAt(0.86, QColor(0, 0, 0, 0))
         fade.setColorAt(1.0, QColor(*_hex_to_rgb(Colors.SURFACE), 255))
 
         painter.fillRect(rect, fade)

@@ -142,6 +142,45 @@ SURFACE_EXTRA = {
 
 
 # ==========================================================
+# Startbildschirm-Artwork
+# ==========================================================
+
+#
+# Die Farben des Startbild-Ladebalkens gehören zum **Bild**, nicht zum
+# Theme: das Artwork (assets/splash.png) trägt seinen eigenen goldenen
+# Rahmen und ein grünes Leuchten, und der echte Balken liegt genau auf
+# dem gemalten. Er darf deshalb NICHT dem wählbaren Akzent folgen -
+# sonst steht ein bernsteinfarbener Balken in einem grün gemalten
+# Rahmen. Aus demselben Grund wie `wow_colors.py` eine eigene Tabelle,
+# aber weiterhin hier: ausserhalb von tokens.py steht kein Hex-Wert.
+#
+
+SPLASH_ART = {
+    #
+    # Der Zierrahmen um den Balken.
+    #
+    "frame": "#C9A227",
+
+    #
+    # Die dunkle Rinne darunter - deckt den gemalten Balken ab, damit
+    # ein leerer Fortschritt nicht den vollen aus dem Bild zeigt.
+    #
+    "trough": "#0B0A08",
+
+    #
+    # Der Verlauf der Füllung, von links nach rechts.
+    #
+    "fillFrom": "#4C7A16",
+    "fillTo": "#9BE023",
+
+    #
+    # Das Leuchten über der Füllung.
+    #
+    "glow": "#C6F76A",
+}
+
+
+# ==========================================================
 # Akzent
 # ==========================================================
 

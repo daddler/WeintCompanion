@@ -45,6 +45,22 @@ class Resources:
 
     @staticmethod
     def banner():
+        """
+        Das Ökosystem-Artwork - Startbildschirm und Einstellungen →
+        Über zeigen dasselbe Bild.
+
+        Fällt auf das alte `hero_banner.png` zurück, solange
+        `splash.png` nicht vorliegt: ein fehlendes Bild ergäbe sonst
+        eine leere `QPixmap`, und der Startbildschirm bestünde aus
+        einem schwarzen Rechteck mit einem Ladebalken darin. Der
+        Rückfall ist damit kein Notnagel, sondern die Zusicherung,
+        dass der Start nie an einer Datei hängt.
+        """
+
+        artwork = Resources.root() / "assets" / "splash.png"
+
+        if artwork.exists():
+            return str(artwork)
 
         return Resources.path(
             "assets/hero_banner.png"

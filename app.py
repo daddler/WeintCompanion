@@ -291,24 +291,54 @@ def main():
     # --------------------------------------------------
     # Splash-Screen (ephemer, siehe gui/splash.py)
     # --------------------------------------------------
-    # Rein kosmetisch - MainWindow initialisiert seinen eigenen
-    # Zustand ohnehin verzögert/im Hintergrund-Thread (siehe
+    # MainWindow initialisiert seinen eigenen Zustand ohnehin
+    # verzögert/im Hintergrund-Thread (siehe
     # CompanionManager.initialize()), der Splash verzögert also nur
     # den sichtbaren Fensterwechsel, nicht den echten App-Start.
     #
+    # Der Ladebalken benennt trotzdem echte Schritte und keine
+    # erfundenen: die beiden teuren stehen unten (das Fenster bauen,
+    # den ersten Bereich zeichnen), die davor sind zu diesem Zeitpunkt
+    # bereits erledigt und werden nachgetragen, damit der Balken nicht
+    # bei null steht, während sichtbar schon etwas geschehen ist.
+    #
 
     splash = SplashScreen()
+
+    splash.setStage(0.15, "Schriften werden geladen …")
+
     splash.show()
+
+    #
+    # Ohne processEvents() zeichnet Qt den Startbildschirm erst, wenn
+    # die Ereignisschleife läuft - also NACH dem Bau des Fensters. Der
+    # Balken stünde dann die ganze Zeit auf seinem letzten Wert und
+    # wäre genau das, wonach er aussieht: Zierrat.
+    #
+
+    def _stage(value: float, text: str):
+
+        splash.setStage(value, text)
+
+        app.processEvents()
+
+    _stage(0.3, "Darstellung wird vorbereitet …")
 
     window_holder = {}
 
     def _show_main_window():
 
+        _stage(0.55, "Fenster wird aufgebaut …")
+
         window = MainWindow()
 
         window_holder["window"] = window
 
+        _stage(0.85, "Übersicht wird gezeichnet …")
+
         window.show()
+
+        _stage(1.0, "Bereit")
 
         #
         # Einzelbericht (openSUSE/Wayland, 07/2026): Prozess läuft
