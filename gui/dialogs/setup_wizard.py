@@ -46,6 +46,12 @@ from gui.theme import tokens
 from gui.theme.fonts import font
 from gui.theme.restyle import restyle
 from gui.theme.theme_manager import theme
+from gui.widgets.appearance_picker import (
+    AccentSwatch,
+    DensitySwatch,
+    accent_labels,
+    density_labels,
+)
 from gui.widgets.card import Card
 from gui.widgets.chip import Chip
 from gui.widgets.eyebrow import eyebrow_label
@@ -157,107 +163,15 @@ class _Step(QWidget):
         self.status_label.setVisible(False)
 
 
-class _AccentSwatch(Card):
-    """
-    Eine Vorschaukarte für eine Akzentvariante - Schritt 4.
-    """
-
-    def __init__(self, name: str, label: str, parent=None):
-
-        super().__init__(parent=parent)
-
-        self._name = name
-
-        self.setCursor(Qt.PointingHandCursor)
-
-        from gui.theme import tokens as _tokens
-
-        accent = _tokens.ACCENTS[name]
-
-        dot = QLabel()
-
-        dot.setFixedSize(24, 24)
-
-        restyle(
-            dot,
-            f"""
-            QLabel{{
-                background:qlineargradient(
-                    x1:0,y1:0,x2:1,y2:1,
-                    stop:0 {accent["light"]},
-                    stop:1 {accent["base"]}
-                );
-                border-radius:12px;
-            }}
-            """,
-        )
-
-        self.addWidget(dot)
-
-        text = QLabel(label)
-
-        text.setFont(font("small"))
-
-        restyle(text, f"color:{tokens.TEXT['primary']};background:transparent;")
-
-        self.addWidget(text)
-
-        self.check = Chip("GEWÄHLT", "ok")
-
-        self.check.setVisible(False)
-
-        self.addWidget(self.check)
-
-    def set_selected(self, selected: bool):
-
-        self.check.setVisible(selected)
-
-        self.setAccent(selected)
-
-    def mousePressEvent(self, event):
-
-        if event.button() == Qt.LeftButton:
-            theme().set_accent(self._name)
-
-        super().mousePressEvent(event)
-
-
-class _DensitySwatch(Card):
-
-    def __init__(self, name: str, label: str, parent=None):
-
-        super().__init__(parent=parent)
-
-        self._name = name
-
-        self.setCursor(Qt.PointingHandCursor)
-
-        text = QLabel(label)
-
-        text.setFont(font("card"))
-
-        restyle(text, f"color:{tokens.WHITE};background:transparent;")
-
-        self.addWidget(text)
-
-        self.check = Chip("GEWÄHLT", "ok")
-
-        self.check.setVisible(False)
-
-        self.addWidget(self.check)
-
-    def set_selected(self, selected: bool):
-
-        self.check.setVisible(selected)
-
-        self.setAccent(selected)
-
-    def mousePressEvent(self, event):
-
-        if event.button() == Qt.LeftButton:
-            theme().set_density(self._name)
-
-        super().mousePressEvent(event)
+#
+# Die Vorschaukarten für Akzent und Dichte standen bis 2.0 hier, privat
+# in diesem Dialog - und damit an der einen Stelle, an der man sie genau
+# einmal sieht. Einstellungen → Erscheinungsbild hatte deshalb gar kein
+# Bedienelement für beide Wahlmöglichkeiten. Sie liegen jetzt in
+# gui/widgets/appearance_picker.py, mitsamt den Beschriftungen: die
+# Namen der Varianten in zwei Listen zu pflegen hiesse, dass eine
+# vierte in einem Bereich erscheint und im anderen fehlt.
+#
 
 
 class SetupWizard(QDialog):
@@ -622,15 +536,11 @@ class SetupWizard(QDialog):
 
         swatch_row.setSpacing(tokens.SPACE[2])
 
-        self.accent_swatches: dict[str, _AccentSwatch] = {}
+        self.accent_swatches: dict[str, AccentSwatch] = {}
 
-        for name, label in (
-            ("amber", "Bernstein"),
-            ("arcane", "Arkan-Violett"),
-            ("jade", "Jade"),
-        ):
+        for name, label in accent_labels():
 
-            swatch = _AccentSwatch(name, label)
+            swatch = AccentSwatch(name, label)
 
             swatch_row.addWidget(swatch)
 
@@ -648,14 +558,11 @@ class SetupWizard(QDialog):
 
         density_row.setSpacing(tokens.SPACE[2])
 
-        self.density_swatches: dict[str, _DensitySwatch] = {}
+        self.density_swatches: dict[str, DensitySwatch] = {}
 
-        for name, label in (
-            ("comfortable", "Komfortabel"),
-            ("compact", "Kompakt"),
-        ):
+        for name, label in density_labels():
 
-            swatch = _DensitySwatch(name, label)
+            swatch = DensitySwatch(name, label)
 
             density_row.addWidget(swatch)
 

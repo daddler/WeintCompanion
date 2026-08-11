@@ -51,6 +51,19 @@ class Config:
             "access_role_map": {},
 
             #
+            # Die Discord-Gilde, zu der das Zugriffsprofil gehoert -
+            # von core/access_profile_sync.py hinterlegt, sobald der
+            # Bot sie nennt. Die Uebersicht verlinkt damit auf die
+            # Aufstellung. Die ID ist eine ZEICHENKETTE, nicht eine
+            # Zahl: eine Discord-Snowflake sprengt die
+            # Zahlengenauigkeit.
+            #
+
+            "discord_community_id": "",
+
+            "discord_community_name": "",
+
+            #
             # Stellt die zuletzt ausgewertete WeintTV-/Academy-Analyse
             # ins Addon (core/addon_analysis_sync.py).
             #

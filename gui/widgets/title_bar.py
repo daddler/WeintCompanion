@@ -314,9 +314,19 @@ class TitleBar(QFrame):
 
         self._apply()
 
-        theme().accent_changed.connect(lambda _n: self._apply())
+        #
+        # Gebundene Methode statt Lambda: eine Lambda hält eine harte
+        # Referenz auf `self`, und der ThemeManager ist ein Singleton -
+        # die Titelleiste würde damit nie mehr freigegeben.
+        #
+
+        theme().accent_changed.connect(self._on_accent)
 
     # --------------------------------------------------
+
+    def _on_accent(self, _name: str = ""):
+
+        self._apply()
 
     def _apply(self):
 

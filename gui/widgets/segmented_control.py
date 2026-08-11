@@ -107,9 +107,18 @@ class SegmentedControl(QWidget):
 
             button.setFont(font("mono"))
 
-            button.toggled.connect(
-                lambda checked, b=button: self._on_toggled(b, checked)
-            )
+            #
+            # Gebundene Methode statt einer Lambda mit `b=button`:
+            # jene hält `self` fest, und weil der Knopf ein Kind von
+            # `self` ist, entsteht ein Kreis
+            # (self -> Knopf -> Verbindung -> Lambda -> self), den die
+            # Speicherbereinigung nicht auflösen kann - die Lambda
+            # liegt in der C++-Verbindung und ist für Python nicht
+            # sichtbar. Das Steuerelement würde damit nie freigegeben.
+            # Welcher Knopf gemeint ist, sagt sender().
+            #
+
+            button.toggled.connect(self._on_button_toggled)
 
             self.group.addButton(button)
 
@@ -124,7 +133,13 @@ class SegmentedControl(QWidget):
         for button in self._buttons:
             self._apply_segment(button, button.isChecked())
 
-        theme().accent_changed.connect(lambda _n: self._on_accent())
+        #
+        # Gebundene Methode statt Lambda: eine Lambda hält eine harte
+        # Referenz auf `self`, und der ThemeManager ist ein Singleton -
+        # das Steuerelement würde damit nie mehr freigegeben.
+        #
+
+        theme().accent_changed.connect(self._on_accent)
 
     # --------------------------------------------------
 
@@ -182,12 +197,29 @@ class SegmentedControl(QWidget):
 
         restyle(button, sheet)
 
-    def _on_accent(self):
+    def _on_accent(self, _name: str = ""):
 
         for button in self._buttons:
             self._apply_segment(button, button.isChecked())
 
     # --------------------------------------------------
+
+    def _on_button_toggled(self, checked: bool):
+        """
+        Der Slot am `toggled` jedes Segmentknopfes.
+
+        Welcher Knopf es war, sagt `sender()` - siehe den Kommentar an
+        der Verbindung. Ein unbekannter Absender wird stillschweigend
+        ignoriert: der Slot hängt an nichts anderem, und eine Ausnahme
+        in einem Qt-Slot ist schwer zu verfolgen.
+        """
+
+        button = self.sender()
+
+        if button not in self._buttons:
+            return
+
+        self._on_toggled(button, checked)
 
     def _on_toggled(self, button, checked):
 

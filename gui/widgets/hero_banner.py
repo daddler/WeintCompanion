@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
 
 from core.resources import Resources
 from gui.theme.colors import Colors
+from gui.theme.restyle import restyle
+from gui.theme.theme_manager import theme
 
 
 # ---------------------------------------------------------
@@ -40,7 +42,20 @@ class HeroButton(QPushButton):
 
         self.setGraphicsEffect(self._shadow)
 
-        self.setStyleSheet(self._stylesheet())
+        self._apply_stylesheet()
+
+        #
+        # Der Hauptknopf trägt die Akzentfarbe, und zwar in einer
+        # Stylesheet statt in einem paintEvent - er muss deshalb aktiv
+        # benachrichtigt werden. Ohne diese Verbindung blieb jeder
+        # "Speichern"-, "Trennen"- oder "Wiedergabe"-Knopf in der
+        # ganzen Anwendung bernsteinfarben, auch wenn der Nutzer in
+        # Einstellungen -> Erscheinungsbild Jade oder Arkan gewählt
+        # hatte. Im Konstruktor verbinden, nicht im Handler (sonst
+        # verdoppelt sich die Verbindung bei jedem Wechsel).
+        #
+
+        theme().accent_changed.connect(self._on_accent)
 
         self._pulse = QPropertyAnimation(
             self._shadow,
@@ -55,18 +70,53 @@ class HeroButton(QPushButton):
             QEasingCurve.InOutSine
         )
 
+    # --------------------------------------------------
+
+    def _on_accent(self, _name: str = ""):
+
+        self._apply_stylesheet()
+
+    def _apply_stylesheet(self):
+
+        #
+        # restyle() vergleicht zuerst: setStyleSheet() ist kein Setter,
+        # sondern verwirft die zwischengespeicherte Stilrechnung des
+        # Widgets und erzwingt ein Neuzeichnen - auch bei
+        # unveränderter Zeichenkette (siehe CLAUDE.md).
+        #
+
+        restyle(self, self._stylesheet())
+
     def _stylesheet(self):
 
         if self.primary:
+
+            #
+            # Aus theme() und nicht aus Colors.*: das Übergangsmodul
+            # gui/theme/colors.py hält seine Werte statisch und folgt
+            # damit keinem Akzentwechsel zur Laufzeit.
+            #
+
+            base = theme().accent_base()
+
+            light = theme().accent_light()
+
+            #
+            # "onBase" statt hart "white": Jade ist heller als
+            # Bernstein und verlangt eine dunkle Schrift, sonst steht
+            # weißer Text auf einer hellen Fläche.
+            #
+
+            on_base = theme().accent_on_base()
 
             return f"""
             QPushButton {{
                 background:qlineargradient(
                     x1:0,y1:0,x2:1,y2:0,
-                    stop:0 {Colors.PRIMARY},
-                    stop:1 {Colors.PRIMARY_2}
+                    stop:0 {base},
+                    stop:1 {light}
                 );
-                color:white;
+                color:{on_base};
                 border:none;
                 border-radius:8px;
                 padding-left:20px;
@@ -77,12 +127,12 @@ class HeroButton(QPushButton):
             QPushButton:hover {{
                 background:qlineargradient(
                     x1:0,y1:0,x2:1,y2:0,
-                    stop:0 {Colors.PRIMARY_HOVER},
-                    stop:1 {Colors.PRIMARY_2}
+                    stop:0 {theme().accent_hover()[0]},
+                    stop:1 {theme().accent_hover()[1]}
                 );
             }}
             QPushButton:pressed {{
-                background:{Colors.PRIMARY_PRESSED};
+                background:{theme().accent_pressed()};
             }}
             QPushButton:disabled {{
                 background:{Colors.SURFACE_LIGHT};

@@ -70,7 +70,19 @@ class StarRating(QWidget):
 
         self.setFixedSize(self.sizeHint())
 
-        theme().accent_changed.connect(lambda _n: self.update())
+        #
+        # `self.update` als gebundener Slot und NICHT
+        # `lambda _n: self.update()`: eine Lambda hält eine harte
+        # Referenz auf `self`, und der ThemeManager ist ein Singleton,
+        # der ewig lebt - das Widget würde damit nie mehr freigegeben.
+        # Wird sein C++-Objekt trotzdem zerstört, weil ein Elternteil
+        # abgebaut wird, feuert die Lambda in ein gelöschtes Objekt und
+        # Qt meldet "Internal C++ object already deleted". Einen
+        # gebundenen Slot trennt Qt beim Zerstören des Empfängers
+        # selbst.
+        #
+
+        theme().accent_changed.connect(self.update)
 
     # --------------------------------------------------
 

@@ -266,17 +266,38 @@ class OverlayWindow(QWidget):
 
         super().hideEvent(event)
 
-        if self._attached:
-
-            self.service.detach()
-
-            self._attached = False
+        self._release()
 
     def closeEvent(self, event):
 
-        self.hideEvent(event)
+        #
+        # Nicht `self.hideEvent(event)`: das reichte ein QCloseEvent an
+        # `QWidget::hideEvent(QHideEvent*)` weiter. Qt fragt den Zeiger
+        # dort ungeprüft als QHideEvent ab - das Schließen des Overlays
+        # beendete den Prozess mit SIGSEGV, ohne eine Python-Ausnahme
+        # auszulösen. Das Abmelden gehört deshalb in eine eigene
+        # Methode, die kein Ereignis braucht.
+        #
+
+        self._release()
 
         super().closeEvent(event)
+
+    def _release(self):
+        """
+        Vom Datendienst abmelden, falls angemeldet.
+
+        Mehrfach aufrufbar: `close()` löst auf manchen Plattformen
+        zusätzlich ein hideEvent aus, und der zweite Aufruf darf den
+        Zähler des Dienstes nicht ein zweites Mal senken.
+        """
+
+        if not self._attached:
+            return
+
+        self._attached = False
+
+        self.service.detach()
 
     # --------------------------------------------------
 

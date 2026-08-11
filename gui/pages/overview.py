@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.backend_config import TARGET_URL, roster_target
 from gui.pages._page import Page
 from gui.theme import tokens
 from gui.theme.fonts import font
@@ -749,6 +750,8 @@ class OverviewPage(Page):
 
         self.roster.launch.clicked.connect(self._launch_wow)
 
+        self.roster.discord.clicked.connect(self._open_discord_roster)
+
         self.addWidget(self.roster)
 
         #
@@ -819,6 +822,74 @@ class OverviewPage(Page):
             #
 
             self.openSettingsSection.emit("wow_client")
+
+    def _open_discord_roster(self):
+        """
+        Die Aufstellung dort öffnen, wo sie tatsächlich steht.
+
+        Diese Karte kann den Roster nicht anzeigen - er erreicht die
+        Companion als zwei undurchsichtige Zeichenketten und wird
+        ungeparst an das Addon weitergereicht (siehe RosterCard).
+        Der Knopf führt deshalb an die Quelle statt einen Inhalt zu
+        versprechen, den es hier nicht gibt.
+
+        Welches der drei möglichen Ziele es ist, entscheidet
+        `core.backend_config.roster_target()` - dort ohne Qt und
+        deshalb ohne Fenster prüfbar. Hier bleibt nur das Ausführen.
+        """
+
+        kind, value = roster_target(
+            self.manager.config.data.get("discord_community_id", ""),
+            self._discord_linked(),
+        )
+
+        if kind == TARGET_URL:
+
+            self._open_url(value)
+
+            return
+
+        self.openSettingsSection.emit(value)
+
+    def _discord_linked(self) -> bool:
+
+        store = getattr(self.manager, "discord_account", None)
+
+        if store is None:
+            return False
+
+        try:
+            account = store.load()
+
+        except Exception:
+
+            #
+            # Eine unlesbare discord_account.json ist kein Grund, den
+            # Knopf wirkungslos zu lassen - "nicht verknüpft" führt in
+            # die Einstellung, wo das Problem behoben wird.
+            #
+
+            return False
+
+        return bool(account and account.get("companion_token"))
+
+    def _open_url(self, url: str):
+
+        #
+        # webbrowser statt QDesktopServices - dasselbe Vorgehen wie in
+        # Einstellungen -> Über und in core/discord_auth.py.
+        #
+
+        import webbrowser
+
+        try:
+            webbrowser.open(url)
+
+        except Exception as exc:
+
+            self.manager.logger.error(
+                f"Discord konnte nicht geöffnet werden: {exc}"
+            )
 
     def _open_academy(self):
 

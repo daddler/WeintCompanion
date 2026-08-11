@@ -71,11 +71,21 @@ class ToggleSwitch(QAbstractButton):
             QEasingCurve(curve("toggle"))
         )
 
-        theme().accent_changed.connect(lambda _n: self.update())
+        #
+        # `self.update` als gebundener Slot und NICHT
+        # `lambda _n: self.update()`: eine Lambda hält eine harte
+        # Referenz auf `self`, und der ThemeManager ist ein Singleton,
+        # der ewig lebt - das Widget würde damit nie mehr freigegeben.
+        # Wird sein C++-Objekt trotzdem zerstört, weil ein Elternteil
+        # abgebaut wird, feuert die Lambda in ein gelöschtes Objekt und
+        # Qt meldet "Internal C++ object already deleted". Einen
+        # gebundenen Slot trennt Qt beim Zerstören des Empfängers
+        # selbst.
+        #
 
-        theme().motion_changed.connect(
-            lambda _r: self._animation.setDuration(duration("toggle"))
-        )
+        theme().accent_changed.connect(self.update)
+
+        theme().motion_changed.connect(self._on_motion_changed)
 
         #
         # super().setChecked() statt self.setChecked(): _thumb_position
@@ -88,6 +98,19 @@ class ToggleSwitch(QAbstractButton):
         self.toggled.connect(
             self._animate_to_state
         )
+
+    # --------------------------------------------------
+
+    def _on_motion_changed(self, _reduced: bool):
+        """
+        Die Dauer neu aus den Bewegungstoken holen.
+
+        Eigene Methode statt einer Lambda, aus demselben Grund wie
+        oben bei `accent_changed`: eine Lambda hält `self` fest und
+        der ThemeManager gibt sie nie wieder her.
+        """
+
+        self._animation.setDuration(duration("toggle"))
 
     # --------------------------------------------------
     # Sichtbaren Zustand synchron zu isChecked() halten

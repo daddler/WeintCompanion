@@ -348,7 +348,13 @@ class NavColumn(QFrame):
 
         self._apply_collapsed(animate=False)
 
-        theme().accent_changed.connect(lambda _n: self._on_accent())
+        #
+        # Gebundene Methode statt Lambda: eine Lambda hält eine harte
+        # Referenz auf `self`, und der ThemeManager ist ein Singleton -
+        # die Spalte würde damit nie mehr freigegeben.
+        #
+
+        theme().accent_changed.connect(self._on_accent)
 
     # --------------------------------------------------
 
@@ -414,7 +420,7 @@ class NavColumn(QFrame):
             """,
         )
 
-    def _on_accent(self):
+    def _on_accent(self, _name: str = ""):
 
         for item in self.items.values():
             item._apply()

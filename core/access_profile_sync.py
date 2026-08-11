@@ -194,6 +194,17 @@ class AccessProfileSync:
             payload.get("notice", ""),
         )
 
+        #
+        # Die Gilde festhalten, BEVOR der Fingerabdruck abkuerzt: die
+        # Uebersicht verlinkt damit auf die Aufstellung im Discord, und
+        # das Zugriffsprofil ist die einzige Stelle, an der die
+        # Gilden-ID ueberhaupt vorkommt. Haenge das an den Versand, und
+        # der Link fehlt bei jedem Start, an dem sich am Profil nichts
+        # geaendert hat - also fast immer.
+        #
+
+        self._remember_community(payload["community"])
+
         if fingerprint == self._last_fingerprint:
             return
 
@@ -222,3 +233,38 @@ class AccessProfileSync:
             f"{payload['tierLabel']}"
             + (f" (Rollen: {', '.join(matched)})" if matched else "")
         )
+
+    # --------------------------------------------------
+
+    def _remember_community(self, community: dict):
+        """
+        Gilden-ID und -Name in der Konfiguration hinterlegen.
+
+        Als Zeichenkette, aus demselben Grund wie im Addon-Payload: eine
+        Discord-Snowflake sprengt die Zahlengenauigkeit und wuerde als
+        `1.23e+18` zurueckkommen.
+
+        Nur schreiben, wenn sich etwas geaendert hat - `process()` laeuft
+        in jedem Sync-Zyklus, und `Config.save()` schreibt eine Datei.
+        """
+
+        community_id = str(community.get("id") or "").strip()
+
+        if not community_id:
+            return
+
+        name = str(community.get("name") or "").strip()
+
+        data = self.manager.config.data
+
+        if (
+            data.get("discord_community_id") == community_id
+            and data.get("discord_community_name") == name
+        ):
+            return
+
+        data["discord_community_id"] = community_id
+
+        data["discord_community_name"] = name
+
+        self.manager.config.save()

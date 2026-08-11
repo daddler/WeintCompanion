@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.backend_config import feedback_url
 from core.resources import Resources
 from core.runtime import Runtime
 from core.version import VERSION
@@ -21,13 +22,10 @@ from gui.widgets.hero_banner import HeroButton
 
 REPO_URL = "https://github.com/daddler/WeintCodex"
 
-# Feedback-Channel auf dem WeintCodex-Discord - Deep-Link statt der
-# reinen Invite-URL, damit Mitglieder direkt im richtigen Channel
-# landen statt auf dem Server-Standardkanal.
-DISCORD_FEEDBACK_URL = (
-    "https://discord.com/channels/"
-    "1311060525555257364/1519466082362982410"
-)
+# Der Feedback-Channel auf dem WeintCodex-Discord. Gilde und Channel
+# stehen in core/backend_config.py, weil die Übersicht dieselbe Gilde
+# für ihren "Aufstellung im Discord"-Knopf braucht.
+DISCORD_FEEDBACK_URL = feedback_url()
 
 
 class _ArtworkHeader(QWidget):

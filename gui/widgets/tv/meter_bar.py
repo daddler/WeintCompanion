@@ -15,6 +15,7 @@ from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from gui.theme.colors import Colors
+from gui.theme.theme_manager import theme
 
 
 class MeterBar(QWidget):
@@ -47,6 +48,22 @@ class MeterBar(QWidget):
             QSizePolicy.Expanding,
             QSizePolicy.Fixed,
         )
+
+        #
+        # Der Farbverlauf wird im paintEvent aus theme() gelesen -
+        # ohne dieses Neuzeichnen bliebe der Balken aber bis zur
+        # nächsten Wertänderung in der alten Akzentfarbe stehen. Die
+        # Verbindung gehört in den Konstruktor und nicht in den
+        # Handler, sonst verdoppelt sie sich bei jedem Wechsel
+        # (siehe CLAUDE.md).
+        #
+        # `self.update` als gebundener Slot und NICHT
+        # `lambda _n: self.update()`: eine Lambda hält eine harte
+        # Referenz auf `self`, und der ThemeManager ist ein Singleton,
+        # der ewig lebt - das Widget wird damit nie mehr freigegeben.
+        #
+
+        theme().accent_changed.connect(self.update)
 
     # --------------------------------------------------
     # API
@@ -155,8 +172,15 @@ class MeterBar(QWidget):
                     fill_rect.topRight(),
                 )
 
-                gradient.setColorAt(0, QColor(Colors.PRIMARY))
-                gradient.setColorAt(1, QColor(Colors.PRIMARY_2))
+                #
+                # theme() und nicht Colors.PRIMARY: das
+                # Übergangsmodul gui/theme/colors.py hält statische
+                # Werte und bleibt deshalb auf Bernstein stehen,
+                # während der Nutzer längst Jade gewählt hat.
+                #
+
+                gradient.setColorAt(0, QColor(theme().accent_base()))
+                gradient.setColorAt(1, QColor(theme().accent_light()))
 
                 painter.fillPath(fill_path, gradient)
 
