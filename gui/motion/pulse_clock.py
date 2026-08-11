@@ -33,6 +33,8 @@ import math
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from gui.theme.motion import MOTION
+
 
 #
 # Die Arten, in denen gepulst werden darf, in absteigendem Vorrang.
@@ -47,13 +49,26 @@ PRIORITY = (KIND_LIVE, KIND_WARN)
 
 
 #
-# 16 ms entsprechen rund 60 Bildern je Sekunde. Der Puls selbst dauert
-# 1000 ms (motion.pulse).
+# 16 ms entsprechen rund 60 Bildern je Sekunde.
 #
 
 TICK_MS = 16
 
-PERIOD_MS = 1000
+#
+# Die Pulsdauer kommt aus der Bewegungstabelle statt als eigene 1000
+# hier zu stehen. Sie stand vorher an beiden Stellen, mit einem
+# Kommentar "(motion.pulse)" als einziger Verbindung - zwei Zahlen, die
+# übereinstimmen müssen, und niemand hätte gemerkt, wenn eine davon
+# geändert worden wäre.
+#
+# Gelesen wird `MOTION` direkt und nicht `duration()`: hier ist die
+# Periode gemeint, nicht die Frage, ob animiert werden darf. Ob der
+# Puls überhaupt läuft, entscheidet `is_reduced()` an der Stelle, an
+# der der Timer gestartet wird - eine Periode von 0 ms wäre dort eine
+# Division durch Null.
+#
+
+PERIOD_MS = MOTION["pulse"].duration
 
 
 class PulseClock(QObject):

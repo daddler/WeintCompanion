@@ -58,6 +58,30 @@ class CompanionManager(QObject):
 
     tray_settings_changed = Signal(bool)
 
+    #
+    # Ausgelöst, sobald eine Prüfung den AppState verändert haben kann
+    # (full_refresh, refresh_update_status). Die Oberfläche zeichnet
+    # daraufhin die aktuelle Seite und die Navigationsspalte neu.
+    #
+    # Ohne dieses Signal war ein gefundenes Update auf der Übersicht
+    # praktisch nie zu sehen: `full_refresh()` läuft in einem
+    # Hintergrund-Thread und ist rund eine Sekunde NACH dem Zeichnen
+    # der Übersicht fertig, und nichts fragte danach noch einmal nach.
+    # Die Systemzeile zeigte deshalb den Stand von vor der Prüfung, bis
+    # der Nutzer die Seite verließ und erneut betrat - `refresh()` hängt
+    # ausschließlich am Seitenwechsel.
+    #
+    # Es wird bewusst aus dem Arbeits-Thread emittiert: der
+    # CompanionManager entsteht im Hauptthread, seine Thread-Affinität
+    # ist also richtig, und eine Signalverbindung über Thread-Grenzen
+    # wird immer über die Event-Loop des EMPFÄNGERS zugestellt (siehe
+    # den Docstring von _AutoSyncStarter). Ein direkter Aufruf von
+    # `page.refresh()` aus dem Thread heraus würde dagegen Widgets aus
+    # dem falschen Thread anfassen.
+    #
+
+    state_changed = Signal()
+
     def __init__(self):
 
         super().__init__()
@@ -617,12 +641,25 @@ class CompanionManager(QObject):
 
     def full_refresh(self):
 
-        self.detect_wow()
-        self.detect_addon()
-        self.check_github()
-        self.check_discord()
-        self.companion_updater.check_for_update()
-        self.sync.process()
+        try:
+
+            self.detect_wow()
+            self.detect_addon()
+            self.check_github()
+            self.check_discord()
+            self.companion_updater.check_for_update()
+            self.sync.process()
+
+        finally:
+
+            #
+            # Auch dann melden, wenn ein Schritt gescheitert ist: die
+            # vorherigen haben den Zustand bereits verändert, und eine
+            # halb aktualisierte Anzeige ist besser als eine, die auf
+            # dem Stand von vor der Prüfung stehen bleibt.
+            #
+
+            self.state_changed.emit()
 
     # --------------------------------------------------
     # Manuelle Update-Prüfung (Button im Dashboard)
@@ -636,7 +673,13 @@ class CompanionManager(QObject):
         die für eine reine "nach Updates suchen"-Aktion irrelevant sind.
         """
 
-        self.detect_addon()
-        self.check_github()
-        self.companion_updater.check_for_update()
+        try:
+
+            self.detect_addon()
+            self.check_github()
+            self.companion_updater.check_for_update()
+
+        finally:
+
+            self.state_changed.emit()
 

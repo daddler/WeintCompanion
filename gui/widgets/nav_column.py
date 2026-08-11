@@ -53,6 +53,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+#
+# Nur `PageId`, nicht `build_page_specs()`: dieses Modul auf Ebene der
+# Seitenklassen zu binden wäre ein Zirkelbezug. `gui/navigation.py`
+# importiert die Seiten selbst erst im Funktionsrumpf, der Enum-Import
+# hier ist deshalb unbedenklich (main_window macht denselben).
+#
+
+from gui.navigation import PageId
 from gui.theme import tokens
 from gui.theme.fonts import font
 from gui.theme.icons import tinted_pixmap
@@ -734,6 +742,8 @@ class NavColumn(QFrame):
 
         state = self.manager.state
 
+        self._refresh_update_badge(state)
+
         account = self.manager.discord_account.load()
 
         if account:
@@ -753,6 +763,51 @@ class NavColumn(QFrame):
         else:
 
             self.account.setState(False, "Nicht verbunden", "")
+
+    # --------------------------------------------------
+
+    def _refresh_update_badge(self, state):
+        """
+        Das Abzeichen an "Addon & Updates".
+
+        Der einzige Hinweis auf ein wartendes Update, der **außerhalb
+        der Übersicht** sichtbar ist. Ohne ihn musste man entweder auf
+        der Übersicht stehen oder von sich aus in den Addon-Bereich
+        gehen - `NavItem.setBadge()` gab es seit 2.0, aufgerufen hat es
+        niemand.
+
+        Eine Zahl und kein Punkt, weil es zwei voneinander unabhängige
+        Update-Kanäle gibt (Addon und Companion) und "2" die
+        Nachfrage erspart, ob beide gemeint sind. Eingeklappt zeigt die
+        Spalte nur Symbole; `setBadge()` blendet die Zahl dann aus, und
+        der Punkt bleibt - deshalb wird beides gesetzt.
+
+        Ein fehlendes Addon ist **kein** Update: dort steht die
+        Installation aus, und das sagt die Systemzeile der Übersicht mit
+        ihrem eigenen Wortlaut. Ein Abzeichen "1" daneben würde eine
+        Aktualisierung behaupten, wo noch nichts installiert ist.
+        """
+
+        item = self.items.get(PageId.ADDON)
+
+        if item is None:
+            return
+
+        pending = 0
+
+        if getattr(state, "update_available", False):
+            pending += 1
+
+        if getattr(state, "companion_update_available", False):
+            pending += 1
+
+        if not pending:
+
+            item.setBadge(None, "")
+
+            return
+
+        item.setBadge("warn", str(pending))
 
 
 class _AccountButton(QFrame):

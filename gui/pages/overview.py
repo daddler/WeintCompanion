@@ -27,7 +27,13 @@ stehen jeweils an Ort und Stelle.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import (
+    QEasingCurve,
+    QPropertyAnimation,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -42,6 +48,7 @@ from core.backend_config import TARGET_URL, roster_target
 from gui.pages._page import Page
 from gui.theme import tokens
 from gui.theme.fonts import font
+from gui.theme.motion import curve, duration
 from gui.theme.restyle import restyle
 from gui.theme.theme_manager import theme
 from gui.widgets.card import Card
@@ -634,6 +641,38 @@ class SystemRow(QFrame):
 
         root.addStretch(1)
 
+        #
+        # Eine Animation je Zeile, wiederverwendet: das Ziel ist immer
+        # `minimumHeight` dieses Widgets. Eine neue QPropertyAnimation
+        # je Aufklappen wäre ein Kind, das liegen bleibt - siehe die
+        # Notiz zu Animationen in CLAUDE.md. Der Zustand, aus dem sie
+        # startet, wird in _set_expanded() gesetzt.
+        #
+
+        self._height_animation = QPropertyAnimation(
+            self,
+            b"minimumHeight",
+            self,
+        )
+
+        self._height_animation.setEasingCurve(
+            QEasingCurve(curve("expand"))
+        )
+
+        self._expanded: bool | None = None
+
+        #
+        # Einmal verbunden, mit einer gebundenen Methode statt einer
+        # Closure über `expanded`: eine Closure müsste vor jedem Start
+        # wieder getrennt werden (sonst stellt eine ältere den falschen
+        # Endzustand her), und `disconnect()` ohne bestehende Verbindung
+        # warnt. Den Zustand liest der Handler aus `self._expanded`.
+        #
+
+        self._height_animation.finished.connect(
+            self._on_height_animation_finished
+        )
+
     # --------------------------------------------------
 
     def _open_addon(self):
@@ -715,11 +754,87 @@ class SystemRow(QFrame):
         # eine Auskunft und brauchen weder Platz noch Knopf.
         #
 
-        self.details.setVisible(needs_action)
+        self._set_expanded(needs_action)
+
+    def _set_expanded(self, expanded: bool):
+        """
+        Die Zeile auf ihre Höhe bringen - animiert (`motion.expand`).
+
+        Vorher sprang sie über `setFixedHeight()` von 44 auf 132 px.
+        Der Auslöser ist meist eine Prüfung, die im Hintergrund fertig
+        wird, also kein Klick des Nutzers: ohne Bewegung sieht es aus,
+        als hätte die Seite einen Sprung gemacht, statt dass etwas
+        dazugekommen ist. `motion.expand` ist genau für diese Zeile
+        gedacht und war bis hierher unbenutzt.
+        """
+
+        if expanded == self._expanded:
+            return
+
+        self._expanded = expanded
+
+        target = self.EXPANDED if expanded else self.COLLAPSED
+
+        #
+        # Beim Aufklappen zuerst zeigen, beim Zuklappen erst am Ende
+        # verbergen - andernfalls animiert die Zeile auf eine Höhe, in
+        # der noch nichts steht bzw. schon nichts mehr.
+        #
+
+        if expanded:
+            self.details.setVisible(True)
+
+        ms = duration("expand")
+
+        #
+        # setFixedHeight() setzt Minimum UND Maximum. Animiert wird
+        # `minimumHeight`, das Maximum muss deshalb vorher freigegeben
+        # werden, sonst hält es die Zeile auf ihrer alten Höhe fest.
+        #
+
+        self.setMaximumHeight(max(target, self.height()))
+
+        self._height_animation.stop()
+
+        if ms <= 0:
+
+            #
+            # Bewegung reduziert: setzen statt animieren. Der
+            # Endzustand muss hier von Hand hergestellt werden, weil
+            # der finished-Zweig unten nicht durchläuft.
+            #
+
+            self.setFixedHeight(target)
+
+            self.details.setVisible(expanded)
+
+            return
+
+        self._height_animation.setDuration(ms)
+
+        self._height_animation.setStartValue(self.height())
+
+        self._height_animation.setEndValue(target)
+
+        self._height_animation.start()
+
+    def _on_height_animation_finished(self):
+        """
+        Am Ziel wieder festnageln, damit das Layout die Zeile nicht
+        weiter dehnt, und den Detailbereich erst jetzt verbergen.
+
+        Liest `self._expanded`, statt den Zustand mitzuschleppen: läuft
+        das Zuklappen noch, während schon wieder aufgeklappt wird, gilt
+        der neueste Stand und nicht der, mit dem die Animation startete.
+        """
+
+        expanded = bool(self._expanded)
 
         self.setFixedHeight(
-            self.EXPANDED if needs_action else self.COLLAPSED
+            self.EXPANDED if expanded else self.COLLAPSED
         )
+
+        self.details.setVisible(expanded)
 
 
 class OverviewPage(Page):

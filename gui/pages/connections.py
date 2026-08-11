@@ -16,7 +16,9 @@ war zuvor nur ein Alias darauf (`class ConnectionsPage(SyncPage): pass`).
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+import threading
+
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -209,6 +211,17 @@ class _BridgeCard(Card):
 
 class ConnectionsPage(Page):
 
+    #
+    # Beides wird aus dem Prüf-Thread gemeldet und über die Event-Loop
+    # des Hauptthreads zugestellt (siehe `_sync_worker`). Ein QTimer
+    # oder ein Widget darf nicht aus einem fremden Thread angefasst
+    # werden.
+    #
+
+    syncRequested = Signal()
+
+    syncFinished = Signal()
+
     def __init__(self, manager, parent=None):
 
         super().__init__(
@@ -217,6 +230,12 @@ class ConnectionsPage(Page):
             "Was zwischen deinem Discord-Server und WoW läuft.",
             parent,
         )
+
+        self._sync_thread: threading.Thread | None = None
+
+        self.syncRequested.connect(self._on_sync_requested)
+
+        self.syncFinished.connect(self._on_sync_finished)
 
         self.sync_button = self._make_sync_button()
 
@@ -374,8 +393,25 @@ class ConnectionsPage(Page):
     # --------------------------------------------------
 
     def refresh(self):
+        """
+        Nur zeichnen.
 
-        self.manager.full_refresh()
+        Hier stand ein `self.manager.full_refresh()` - ein vollständiger
+        Netzdurchgang (GitHub, Discord, Sync) **blockierend im
+        Hauptthread**, und zwar in einer Methode, die `change_page()`
+        bei jedem Betreten der Seite aufruft und die der Konstruktor
+        gleich mit. Das Fenster stand damit jedes Mal, wenn man
+        "Verbindungen" öffnete.
+
+        Seit es `CompanionManager.state_changed` gibt, war es zusätzlich
+        eine Endlosschleife: `full_refresh()` meldet am Ende seinen
+        neuen Zustand, das Fenster zeichnet daraufhin die sichtbare
+        Seite neu - und die fing wieder von vorne an.
+
+        Die Prüfung gehört zu der Handlung, die sie verlangt: dem Knopf
+        "Jetzt synchronisieren" (siehe `sync_now()`). Ihr Ergebnis
+        erreicht diese Seite von selbst über `state_changed`.
+        """
 
         state = self.manager.state
 
@@ -470,25 +506,85 @@ class ConnectionsPage(Page):
             self.manager.logger.info("Charakter-Roster-Sync deaktiviert.")
 
     def sync_now(self):
+        """
+        Alles neu prüfen und dann synchronisieren.
+
+        In einem eigenen kurzlebigen Thread - dasselbe Vorgehen wie bei
+        den Archiv-Abrufen. `full_refresh()` fragt GitHub und den Bot,
+        das sind Sekunden, und die gehören nicht in einen Klick-Handler.
+        Die Anzeige zieht am Ende von selbst nach, weil `full_refresh()`
+        `state_changed` meldet.
+        """
+
+        if self._sync_thread is not None and self._sync_thread.is_alive():
+
+            #
+            # Zweimal drücken soll nicht zwei Durchgänge starten - der
+            # zweite würde dieselben Anfragen doppelt stellen.
+            #
+
+            return
 
         self.manager.logger.info("Starte Synchronisationstest...")
 
-        self.refresh()
+        self.sync_button.setEnabled(False)
 
-        state = self.manager.state
+        self._sync_thread = threading.Thread(
+            target=self._sync_worker,
+            daemon=True,
+            name="ConnectionsSyncTest",
+        )
 
-        if not state.wow_found:
+        self._sync_thread.start()
 
-            self.manager.logger.error("Keine WoW-Installation gefunden.")
+    def _sync_worker(self):
 
-            return
+        try:
 
-        if not state.addon_found:
+            self.manager.full_refresh()
 
-            self.manager.logger.warning("Addon wurde nicht gefunden.")
+            state = self.manager.state
 
-            return
+            if not state.wow_found:
+
+                self.manager.logger.error(
+                    "Keine WoW-Installation gefunden."
+                )
+
+                return
+
+            if not state.addon_found:
+
+                self.manager.logger.warning(
+                    "Addon wurde nicht gefunden."
+                )
+
+                return
+
+            #
+            # Über das Signal in den Hauptthread: run_auto_sync() legt
+            # einen QTimer-gestützten Ablauf an, und ein QObject darf
+            # nicht aus einem fremden Thread angestoßen werden.
+            #
+
+            self.syncRequested.emit()
+
+        except Exception as exc:
+
+            self.manager.logger.error(
+                f"Synchronisationstest fehlgeschlagen: {exc}"
+            )
+
+        finally:
+
+            self.syncFinished.emit()
+
+    def _on_sync_requested(self):
 
         self.manager.run_auto_sync()
 
         self.manager.logger.success("Synchronisation angestoßen.")
+
+    def _on_sync_finished(self):
+
+        self.sync_button.setEnabled(True)

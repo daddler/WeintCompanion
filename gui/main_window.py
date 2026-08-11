@@ -125,6 +125,20 @@ class MainWindow(QMainWindow):
         )
 
         #
+        # Welche Fassung je Kanal (Addon/Companion) schon als Meldung
+        # angekündigt wurde - siehe _announce_updates().
+        #
+
+        self._announced_updates: dict[str, str] = {}
+
+        #
+        # Siehe _on_state_changed(): verhindert, dass eine Seite über
+        # ihr eigenes refresh() eine neue Prüfung auslöst.
+        #
+
+        self._refreshing_state = False
+
+        #
         # --------------------------------------------------
         # Root Widget
         # --------------------------------------------------
@@ -327,6 +341,23 @@ class MainWindow(QMainWindow):
         self.nav.avatarClicked.connect(
             lambda: self.open_settings_section("discord")
         )
+
+        #
+        # Ergebnisse einer Prüfung erreichen die Oberfläche von selbst.
+        # Vor 2.0.1 hing `refresh()` ausschließlich am Seitenwechsel:
+        # `full_refresh()` läuft im Hintergrund und ist erst fertig,
+        # nachdem die Übersicht schon gezeichnet wurde - ein gefundenes
+        # Update war deshalb praktisch nie beim ersten Hinsehen da,
+        # sondern erst, wenn man die Seite verließ und erneut betrat.
+        #
+        # Erst hier verbunden und nicht oben beim Manager: der Slot
+        # zeichnet die Navigationsspalte mit, und die entsteht in dieser
+        # Zeile darüber. Ein Signal aus dem Arbeits-Thread kann während
+        # __init__ ohnehin nicht ankommen (die Event-Loop läuft noch
+        # nicht), aber die Reihenfolge soll das nicht voraussetzen.
+        #
+
+        self.manager.state_changed.connect(self._on_state_changed)
 
         #
         # Startseite - und damit die einzige Seite, die beim Start
@@ -578,6 +609,123 @@ class MainWindow(QMainWindow):
         #
 
         self.nav.refresh()
+
+    def _on_state_changed(self):
+        """
+        Eine Prüfung ist durch - die Anzeige nachziehen.
+
+        Nur die **sichtbare** Seite: die übrigen sind entweder noch
+        Platzhalter oder ziehen beim nächsten Betreten ohnehin nach
+        (`change_page()` ruft `refresh()`). Alle zu zeichnen hieße,
+        WeintTV und die Academy im Hintergrund arbeiten zu lassen -
+        genau das, was `_attached` dort verhindert.
+
+        Die Navigationsspalte immer, denn ihr Abzeichen ist der
+        einzige Hinweis, der auch außerhalb der Übersicht sichtbar ist.
+        """
+
+        #
+        # Wiedereintrittssperre. Eine Seite, deren `refresh()` selbst
+        # eine Prüfung anstößt, schließt sonst einen Kreis: die Prüfung
+        # meldet ihren neuen Zustand, das Fenster zeichnet die Seite
+        # neu, die Seite prüft wieder. Genau das ist mit
+        # ConnectionsPage.refresh() passiert, das ein blockierendes
+        # `full_refresh()` enthielt - bis zur Rekursionsgrenze.
+        #
+        # Die Seite dort ist korrigiert; die Sperre bleibt, weil der
+        # Fehler von einer einzelnen Seite ausgeht und das ganze Fenster
+        # lahmlegt.
+        #
+
+        if self._refreshing_state:
+            return
+
+        self._refreshing_state = True
+
+        try:
+            self._refresh_after_state_change()
+
+        finally:
+            self._refreshing_state = False
+
+    def _refresh_after_state_change(self):
+
+        page = self._current_page
+
+        if page is not None and hasattr(page, "refresh"):
+
+            try:
+                page.refresh()
+
+            except Exception as exc:
+
+                #
+                # Ein Fehler beim Zeichnen darf die Prüfung nicht in
+                # einen Absturz verwandeln; der Slot hängt an einem
+                # Signal aus einem Arbeits-Thread.
+                #
+
+                self.manager.logger.error(
+                    f"Anzeige konnte nicht aktualisiert werden: {exc}"
+                )
+
+        self.nav.refresh()
+
+        self._announce_updates()
+
+    def _announce_updates(self):
+        """
+        Ein gefundenes Update einmal als Meldung einblenden.
+
+        Der dritte Weg neben der Systemzeile der Übersicht und dem
+        Abzeichen in der Navigation - und der einzige, der den Nutzer
+        erreicht, ohne dass er hinsieht. `notify()` gab es seit 2.0,
+        aufgerufen hat es niemand.
+
+        Gemerkt wird die **Fassung**, über die schon berichtet wurde,
+        nicht bloß "schon gemeldet": nach einem Addon-Update soll die
+        nächste Version wieder eine Meldung bekommen. Ohne dieses Gedenken
+        würde eine zweite Prüfung dasselbe erneut ankündigen -
+        `state_changed` kommt beim Start und bei jedem Druck auf
+        "Erneut prüfen".
+        """
+
+        state = self.manager.state
+
+        pending = []
+
+        if state.update_available:
+
+            pending.append(
+                ("addon", state.github_version, "WeintCodex")
+            )
+
+        if state.companion_update_available:
+
+            pending.append(
+                ("app", state.companion_latest_version, "WeintCompanion")
+            )
+
+        for key, version, label in pending:
+
+            if self._announced_updates.get(key) == version:
+                continue
+
+            self._announced_updates[key] = version
+
+            toast = self.notify(
+                f"{label} {version} steht bereit.",
+                "warn",
+                "Öffnen",
+            )
+
+            if toast is not None and hasattr(toast, "actionTriggered"):
+
+                toast.actionTriggered.connect(self._open_addon_page)
+
+    def _open_addon_page(self):
+
+        self.change_page(PageId.ADDON)
 
     def _apply_forced_nav(self, spec):
         """
