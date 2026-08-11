@@ -59,7 +59,6 @@ class SyncManager:
         #
 
         messages = self.reader.get_messages()
-        print(messages)
 
         if not messages:
 
