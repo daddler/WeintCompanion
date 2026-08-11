@@ -197,6 +197,25 @@ The addon's Rotationshelfer reports one `dummy_practice_session` message per fin
 
 The return path is the outbound `academy` state message: lesson checkboxes ticked in-game come back as `<char>|<done,…>|<excluded,…>;…` and `SyncManager._apply_academy_progress()` replaces the local `AcademyService` lists with them. It never reaches the bot — this is desktop-local data.
 
+### Gear: what "Meine Charaktere" and "Vorbereitung" draw
+
+Both pages were empty through 2.0.0, and that was honest: the app knew *nothing* about gear. The twink list (`"character"`) carries name, class and realm and goes on to the bot; item level, enchants, sockets and open BiS slots appeared nowhere. A progress ring at 0 % would have claimed a measurement nobody took — the same line `stars == 0` draws in the analyzer.
+
+WeintCodex 1.3.3.1 supplies that measurement as `character_sheet`, a fourth local message type (`core/character_sheet_sync.py`, dispatched in `SyncManager`, never sent to the bot — it is the player's own gear, not guild knowledge). Full contract in `docs/character-sheet-bridge.md`. Four things worth knowing before touching it:
+
+- **The addon judges, the Companion draws.** Which enchant is optimal, which gem sits wrong, which stat is over cap — all decided in `modules/charakter.lua`, where spec profiles, caps, socket bonuses and the real item tooltip exist. Exactly the reverse of WeintTV/Academy, and for the same reason: two evaluations of one fact drift apart, and then game and desktop contradict each other.
+- **The addon reports one character, `CharacterStore` builds the list.** `character_sheet` is a `STATE_MESSAGE`, so at most one is queued and it always describes the character logged in *now*. The roster across twinks only exists on this side, in `characters.json` under `Paths.config()` — a twink not played for two weeks must still be listed, and in `cache()` the first cleanup would delete him while the page claimed he doesn't exist. A newer report **replaces** an entry rather than merging into it: a field the new report no longer carries describes a state that no longer exists.
+- **`None` is not zero, in three places.** `readiness()` returns `None` when nothing was checked (ring stays at 0 but carries a "KEINE PRÜFUNG" chip); `bis is None` means "no BiS list maintained for this spec" and shows "keine Liste" rather than "0 offen"; a slot status of `-` means "this slot has no such thing" (a neck takes no enchant) and is not a defect. **Open BiS slots deliberately do not count toward the ring** — they hang on loot luck, not preparation, and would keep a freshly geared character permanently red for something they cannot fix.
+- **The version gate needed a third digit.** The addon only sends when `companionVersion` is ≥ 2.0.1; 2.0.0 was already shipped and does not know the type, so `CompanionAtLeast(2, 0)` would have included exactly the version that breaks. That is why the addon's helper grew an optional `patch` argument.
+
+The Overview's `PreparationCard.apply()` reads the same `CharacterStore.preparation_summary()`, so the tile and the page cannot disagree.
+
+### A card that is empty must say whether it was asked
+
+`RaidSnapshot.has_analysis` is an OR across every deep-analysis field: as soon as the source delivers *any* of them it is true and the explanatory paragraph above WeintTV's analysis area disappears. That is precisely when the most common case slips through — the source delivers part of the block and not the rest. What is left is one card's placeholder, and "Keine Raid-Cooldowns erkannt." is indistinguishable from "the raid fired none".
+
+`block_gap_text(snapshot, block)` in `gui/widgets/tv/analysis_gap.py` closes that: it is silent when the block has rows (nothing to explain) and silent when the deep analysis is missing entirely (the area paragraph already says it), and otherwise names the source and states that *this* block was not delivered while others were. Four blocks use it — `movement`, `cooldown_usage`, `raid_cooldowns`, `heal_cooldowns`, the four that reliably come up empty when the bot's `Casts` path fails, since all four derive from it (`events(dataType: Casts)` for the first two, `table(dataType: Casts)` for the other two). The Companion side of those four is provably correct: a contract-shaped payload produces all of them (`tests/test_warcraftlogs_payload.py`), so an empty card is a delivery question, not a mapping question.
+
 ### Who is "me"? (character identity, `analyzer/names.py` + `core/character_report_sync.py`)
 
 This question had **four independent answers** and nothing reconciled them: the combo box in `gui/pages/academy.py`, `config["academy_player_name"]`, `PlayerProfile.name`, and `UnitName("player")` in-game. The one reliable source — the logged-in character — was never asked, so the app *guessed* from a WarcraftLogs roster and the addon adopted the guess unchecked. Symptom: picking a character on the desktop showed an old or a completely different one in-game.

@@ -101,6 +101,82 @@ def analysis_gap_text(snapshot: RaidSnapshot) -> str:
     )
 
 
+#
+# --------------------------------------------------
+# Einzelne Blöcke
+# --------------------------------------------------
+#
+# `has_analysis` ist ein ODER über alle Tiefenfelder: sobald die
+# Quelle *irgendetwas* davon liefert, ist es wahr und der erklärende
+# Absatz über dem Bereich verschwindet. Genau dann fällt aber der
+# häufigste Fall durchs Raster - die Quelle liefert einen Teil und den
+# Rest nicht. Übrig bleibt der Platzhaltertext einer Karte, und
+# "Keine Raid-Cooldowns erkannt." ist von "der Raid hat keine
+# gezündet" nicht zu unterscheiden.
+#
+# Das ist derselbe Fehler, den `stars == 0` im Analyzer verhindert und
+# den `spec_reference` beim Ergänzen fehlender Fähigkeiten sorgfältig
+# umgeht: eine Datenlücke darf nicht wie ein Befund aussehen. Die
+# Companion kann den Unterschied auch benennen, denn sie sieht, dass
+# andere Tiefenfelder desselben Kampfes angekommen sind.
+#
+
+BLOCK_MOVEMENT = "movement"
+
+BLOCK_COOLDOWN_USAGE = "cooldown_usage"
+
+BLOCK_RAID_COOLDOWNS = "raid_cooldowns"
+
+BLOCK_HEAL_COOLDOWNS = "heal_cooldowns"
+
+
+#
+# Je Block: das Feld des Snapshots und wie die Karte heißt. Die
+# Beschriftung steht hier und nicht in der Seite, damit Karte und
+# Erklärung nicht auseinanderlaufen.
+#
+
+BLOCK_FIELDS: dict[str, tuple[str, str]] = {
+    BLOCK_MOVEMENT: ("movement", "Laufwege"),
+    BLOCK_COOLDOWN_USAGE: ("cooldown_usage", "Cooldown-Nutzung"),
+    BLOCK_RAID_COOLDOWNS: ("raid_cooldowns", "Raid-Cooldowns"),
+    BLOCK_HEAL_COOLDOWNS: ("heal_cooldowns", "Heil-Cooldowns"),
+}
+
+
+def block_gap_text(snapshot: RaidSnapshot, block: str) -> str:
+    """
+    Warum genau dieser Block leer ist - oder leerer Text, wenn es
+    nichts zu erklären gibt.
+
+    Nichts zu erklären gibt es in zwei Fällen: der Block hat Zeilen
+    (dann steht der Platzhalter ohnehin nicht da), oder die
+    Tiefenauswertung fehlt komplett - dann sagt der Absatz über dem
+    ganzen Bereich es bereits, und ein zweiter Satz je Karte wäre
+    dieselbe Auskunft fünfmal.
+    """
+
+    field = BLOCK_FIELDS.get(block)
+
+    if field is None:
+        return ""
+
+    name, label = field
+
+    if getattr(snapshot, name, ()):
+        return ""
+
+    if not snapshot.has_analysis:
+        return ""
+
+    return (
+        f"Die Datenquelle „{snapshot.source_label}“ hat für diesen "
+        f"Kampf keine {label} geliefert - andere Tiefenwerte sind "
+        f"angekommen. Das heißt „nicht übertragen“, nicht „nicht "
+        f"genutzt“."
+    )
+
+
 def rating_gap_text(snapshot: RaidSnapshot) -> str:
     """
     Für die Bewertungskarte der Academy.

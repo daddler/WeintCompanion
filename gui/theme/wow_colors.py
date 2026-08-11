@@ -87,6 +87,44 @@ ROLE_COLORS: dict[str, str] = {
 }
 
 
+#
+# --------------------------------------------------
+# Die zweite Schreibweise: WoWs classFile
+# --------------------------------------------------
+#
+# Die Tabellen oben sind auf den englischen Anzeigenamen geschlüsselt
+# ("Death Knight"), wie ihn Combat-Log und WarcraftLogs liefern. Das
+# Addon meldet stattdessen `UnitClass()`s zweiten Rückgabewert -
+# grossgeschrieben und ohne Leerzeichen ("DEATHKNIGHT"). Beides ist
+# dieselbe Klasse; ohne diese Zuordnung wäre jeder ingame gemeldete
+# Charakter grau, was wie "unbekannte Klasse" aussieht statt wie
+# "andere Schreibweise".
+#
+
+CLASS_FILE_NAMES: dict[str, str] = {
+    name.upper().replace(" ", ""): name
+    for name in CLASS_COLORS
+}
+
+
+def normalize_class(class_name: str) -> str:
+    """
+    Beide Schreibweisen auf den englischen Anzeigenamen bringen. Was
+    keine von beiden ist, bleibt unverändert - dieselbe Regel wie bei
+    unbekannten Spezialisierungen im Analyzer.
+    """
+
+    class_name = (class_name or "").strip()
+
+    if class_name in CLASS_COLORS:
+        return class_name
+
+    return CLASS_FILE_NAMES.get(
+        class_name.upper().replace(" ", ""),
+        class_name,
+    )
+
+
 # --------------------------------------------------
 
 
@@ -95,13 +133,18 @@ def class_color(class_name: str) -> str:
     Klassenfarbe, oder die neutrale Textfarbe bei unbekannter Klasse.
     """
 
-    return CLASS_COLORS.get(class_name, Colors.TEXT_SECONDARY)
+    return CLASS_COLORS.get(
+        normalize_class(class_name),
+        Colors.TEXT_SECONDARY,
+    )
 
 
 def class_label(class_name: str) -> str:
     """
     Deutsche Klassenbezeichnung, sonst der Originalname.
     """
+
+    class_name = normalize_class(class_name)
 
     return CLASS_LABELS.get(class_name, class_name)
 

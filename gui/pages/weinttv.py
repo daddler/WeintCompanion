@@ -53,7 +53,14 @@ from gui.theme.wow_colors import class_color, role_label
 from gui.widgets.card import Card
 from gui.widgets.section_card import SectionCard
 from gui.widgets.segmented_control import SegmentedControl
-from gui.widgets.tv.analysis_gap import analysis_gap_text
+from gui.widgets.tv.analysis_gap import (
+    BLOCK_COOLDOWN_USAGE,
+    BLOCK_HEAL_COOLDOWNS,
+    BLOCK_MOVEMENT,
+    BLOCK_RAID_COOLDOWNS,
+    analysis_gap_text,
+    block_gap_text,
+)
 from gui.widgets.tv.archive_picker import ArchivePicker
 from gui.widgets.tv.data_table import (
     DataTable,
@@ -1597,8 +1604,25 @@ class WeintTvPage(QWidget):
 
     def _apply_analysis(self, snapshot: RaidSnapshot):
 
+        #
+        # Erst der Platzhalter, dann die Zeilen: bleibt die Liste
+        # leer, soll dort stehen, ob die Quelle nichts geliefert hat
+        # oder der Raid nichts gezündet hat. Ohne die Unterscheidung
+        # liest sich eine Datenlücke wie ein Befund über den Raid.
+        #
+
+        self.raid_cooldowns.setPlaceholder(
+            block_gap_text(snapshot, BLOCK_RAID_COOLDOWNS)
+            or "Keine Raid-Cooldowns erkannt."
+        )
+
         self.raid_cooldowns.setRows(
             self._cooldown_rows(snapshot.raid_cooldowns)
+        )
+
+        self.heal_cooldowns.setPlaceholder(
+            block_gap_text(snapshot, BLOCK_HEAL_COOLDOWNS)
+            or "Keine Heil-Cooldowns erkannt."
         )
 
         self.heal_cooldowns.setRows(
@@ -1920,6 +1944,11 @@ class WeintTvPage(QWidget):
             default=0.0,
         )
 
+        self.movement_list.setPlaceholder(
+            block_gap_text(snapshot, BLOCK_MOVEMENT)
+            or "Keine Angaben zu Laufwegen."
+        )
+
         self.movement_list.setRows(
             MeterRowData(
                 title=entry.actor_name,
@@ -1982,12 +2011,23 @@ class WeintTvPage(QWidget):
 
         hint = cooldown_hint(self._focused_actor(snapshot))
 
+        #
+        # Zwei verschiedene Auskünfte, und die Reihenfolge ist keine
+        # Geschmacksfrage: liefert die Quelle den Block gar nicht, ist
+        # das die Ursache und muss zuerst stehen. Der Spec-Hinweis
+        # ("erwartet für diese Spezialisierung") beantwortet die
+        # andere Frage - was hier stünde, wenn Daten da wären - und
+        # hängt sich deshalb hinten an.
+        #
+
+        gap = block_gap_text(snapshot, BLOCK_COOLDOWN_USAGE)
+
         self.cooldown_table.setPlaceholder(
-            "Keine Angaben zur Cooldown-Nutzung."
-            if not hint
-            else (
-                "Keine Angaben zur Cooldown-Nutzung. Erwartet für "
-                f"diese Spezialisierung: {hint}."
+            (gap or "Keine Angaben zur Cooldown-Nutzung.")
+            + (
+                f" Erwartet für diese Spezialisierung: {hint}."
+                if hint
+                else ""
             )
         )
 

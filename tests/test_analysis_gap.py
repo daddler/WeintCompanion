@@ -15,15 +15,21 @@ lässt es sich hier ohne laufende Oberfläche prüfen.
 from analyzer.models import (
     ActivityEntry,
     EncounterInfo,
+    MovementEntry,
     RaidSnapshot,
 )
 
 from gui.widgets.tv.analysis_gap import (
+    BLOCK_COOLDOWN_USAGE,
+    BLOCK_HEAL_COOLDOWNS,
+    BLOCK_MOVEMENT,
+    BLOCK_RAID_COOLDOWNS,
     NO_PULL,
     NO_RAID,
     SUMS_ONLY,
     analysis_gap,
     analysis_gap_text,
+    block_gap_text,
     rating_gap_text,
 )
 
@@ -130,3 +136,103 @@ def test_a_snapshot_with_deep_values_needs_no_explanation():
     assert snapshot.has_analysis is True
 
     assert rating_gap_text(snapshot) == ""
+
+
+# --------------------------------------------------
+# Einzelne Blöcke
+# --------------------------------------------------
+#
+# Der Fall, den `has_analysis` nicht abdeckt: die Quelle liefert einen
+# Teil der Tiefenauswertung und den Rest nicht. Dann verschwindet der
+# erklärende Absatz über dem Bereich (weil "irgendetwas" da ist), und
+# übrig bleibt der Platzhalter einer Karte - "Keine Raid-Cooldowns
+# erkannt." ist aber von "der Raid hat keine gezündet" nicht zu
+# unterscheiden. Genau diese Verwechslung von Datenlücke und Befund
+# verhindert im Analyzer `stars == 0`.
+
+
+def _partial() -> RaidSnapshot:
+    """
+    Ein laufender Pull, für den die Quelle Aktivzeit liefert - aber
+    weder Laufwege noch Cooldowns.
+    """
+
+    return RaidSnapshot(
+        source_label="WarcraftLogs (Bot)",
+        encounter=_encounter(),
+        in_combat=True,
+        pull_seconds=60.0,
+        activity=(
+            ActivityEntry(
+                actor_name="Njiah",
+                active_percent=92.0,
+                apm=38.0,
+            ),
+        ),
+    )
+
+
+def test_a_block_the_source_did_not_send_says_so():
+
+    snapshot = _partial()
+
+    assert snapshot.has_analysis
+
+    for block in (
+        BLOCK_MOVEMENT,
+        BLOCK_COOLDOWN_USAGE,
+        BLOCK_RAID_COOLDOWNS,
+        BLOCK_HEAL_COOLDOWNS,
+    ):
+
+        text = block_gap_text(snapshot, block)
+
+        assert "WarcraftLogs (Bot)" in text
+        assert "nicht übertragen" in text
+
+    assert "Laufwege" in block_gap_text(snapshot, BLOCK_MOVEMENT)
+    assert "Heil-Cooldowns" in block_gap_text(snapshot, BLOCK_HEAL_COOLDOWNS)
+
+
+def test_a_block_with_rows_needs_no_explanation():
+
+    snapshot = RaidSnapshot(
+        source_label="Simulation",
+        encounter=_encounter(),
+        in_combat=True,
+        pull_seconds=60.0,
+        movement=(
+            MovementEntry(actor_name="Njiah", meters=400.0),
+        ),
+    )
+
+    assert block_gap_text(snapshot, BLOCK_MOVEMENT) == ""
+
+
+def test_without_any_deep_analysis_the_area_text_explains_it_alone():
+    """
+    Sonst stünde dieselbe Auskunft einmal über dem Bereich und
+    nochmals auf jeder der vier Karten.
+    """
+
+    snapshot = RaidSnapshot(
+        source_label="WarcraftLogs (Bot)",
+        encounter=_encounter(),
+        in_combat=True,
+        pull_seconds=60.0,
+    )
+
+    assert not snapshot.has_analysis
+
+    for block in (
+        BLOCK_MOVEMENT,
+        BLOCK_COOLDOWN_USAGE,
+        BLOCK_RAID_COOLDOWNS,
+        BLOCK_HEAL_COOLDOWNS,
+    ):
+        assert block_gap_text(snapshot, block) == ""
+
+
+def test_an_unknown_block_name_is_silent_rather_than_wrong():
+
+    assert block_gap_text(_partial(), "erfunden") == ""

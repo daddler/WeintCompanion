@@ -17,6 +17,7 @@ LOCAL_MESSAGE_TYPES = {
     "academy",
     "dummy_practice_session",
     "character_report",
+    "character_sheet",
 }
 
 
@@ -145,6 +146,35 @@ class SyncManager:
                         "Ingame angemeldet: "
                         f"{report['name']}"
                         + (f"-{report['realm']}" if report["realm"] else "")
+                    )
+
+                self.reader.remove_message(
+                    message["id"]
+                )
+
+                continue
+
+            #
+            # Der Ausrüstungsstand des angemeldeten Charakters, seit
+            # WeintCodex 1.3.3.1. Bleibt aus demselben Grund lokal wie
+            # die Meldung darüber: es ist die eigene Ausrüstung, kein
+            # Gildenwissen - und die Seiten "Meine Charaktere" und
+            # "Vorbereitung" sind die einzigen Leser.
+            #
+
+            if message.get("type") == "character_sheet":
+
+                store = getattr(self.manager, "characters", None)
+
+                sheet = store.apply(message.get("payload") or "") if store else None
+
+                if sheet is not None:
+
+                    self.manager.logger.info(
+                        "Ausrüstung übernommen: "
+                        f"{sheet['name']}"
+                        + (f"-{sheet['realm']}" if sheet["realm"] else "")
+                        + (f" ({sheet['spec']})" if sheet["spec"] else "")
                     )
 
                 self.reader.remove_message(

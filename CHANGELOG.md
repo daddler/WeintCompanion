@@ -2,6 +2,49 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.0.1
+
+**"Meine Charaktere" und "Vorbereitung" zeigen jetzt etwas.** Beide
+Seiten standen in 2.0.0 leer, und das war ehrlich: über Ausrüstung
+wusste die App schlicht nichts. Die Twinkliste, die das Addon meldet,
+trägt Name, Klasse und Realm und wandert an den Bot weiter -
+Gegenstandsstufe, Verzauberungen, Sockel und offene BiS-Plätze kamen
+nirgends vor. Ein Fortschrittsring bei 0 % hätte deshalb eine Messung
+behauptet, die es nicht gab.
+
+WeintCodex **1.3.3.1** liefert diese Messung jetzt nach: beim Anmelden
+und nach jedem Ausrüstungswechsel meldet das Addon den geprüften Stand
+des gespielten Charakters. Die App sammelt diese Meldungen über
+mehrere Anmeldungen zu einer Liste - wer seit zwei Wochen nicht auf
+dem Zweitcharakter war, sieht ihn trotzdem.
+
+- **Meine Charaktere** zeigt je Charakter Name in Klassenfarbe,
+  Spezialisierung, Stufe, Gegenstandsstufe und wann er zuletzt gemeldet
+  hat.
+- **Vorbereitung** zeigt je Charakter einen Ring aus geprüften
+  Verzauberungen und Sockeln, daneben die offenen BiS-Plätze und
+  darunter die konkreten Mängel in der Reihenfolge, in der sie das
+  Addon bewertet ("Finger 1: Verzauberung fehlt - Empfehlung: …").
+- Auch die Kachel **Vorbereitung** auf der Übersicht rechnet jetzt mit
+  echten Zahlen statt dauerhaft "keine Daten" zu zeigen.
+
+Die Bewertung selbst - welche Verzauberung optimal ist, welcher Stein
+falsch sitzt, welcher Wert über dem Cap liegt - entsteht im Spiel, wo
+Spec-Profile, Caps und Sockelboni bekannt sind. Die App zeichnet sie
+nur; damit können Spiel und Desktop nicht auseinanderlaufen. Und die
+alte Unterscheidung bleibt: **ein Ring ohne Wert heißt "nicht
+geprüft"** und wird als solcher beschriftet, statt als rote Null zu
+erscheinen. Offene BiS-Plätze zählen bewusst nicht in den Ring - sie
+hängen an Würfelglück, nicht an Vorbereitung.
+
+**Leere Karten in WeintTVs Analyse sagen jetzt, warum sie leer sind.**
+"Keine Raid-Cooldowns erkannt." war von "der Raid hat keine gezündet"
+nicht zu unterscheiden. Liefert die Datenquelle andere Tiefenwerte
+desselben Kampfes, aber diesen Block nicht, steht das jetzt auf der
+Karte - für Laufwege, Cooldown-Nutzung, Raid- und Heil-Cooldowns.
+Das ist dieselbe Regel, nach der null Sterne in der Academy
+ausdrücklich "keine Daten" heißen und nicht "schlecht".
+
 ## 2.0.0
 
 Ein komplettes Neudesign. Bernstein trägt jetzt die Bedeutung, Violett

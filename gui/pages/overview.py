@@ -415,11 +415,13 @@ class PreparationCard(Card):
     """
     Der Stand der Vorbereitung über alle Charaktere.
 
-    Ausrüstungsdaten existieren im Programm nicht (siehe
-    `gui/pages/preparation.py`). Der Ring steht deshalb auf 0 und wird
-    ausdrücklich als "keine Daten" beschriftet - ein Ring ohne diese
-    Beschriftung läse sich als "nichts vorbereitet", also als Befund
-    über den Spieler statt über die Datenlage.
+    Seit 2.0.1 gibt es die Daten wirklich: WeintCodex 1.3.3.1 meldet
+    Verzauberungen, Sockel und offene BiS-Plätze (`"character_sheet"`,
+    siehe `core/character_store.py`). Bis dahin stand der Ring auf 0
+    und trug ausdrücklich "keine Daten" - genau diese Beschriftung
+    bleibt für den Fall, dass noch nichts geliefert wurde. Ein Ring
+    ohne sie läse sich als "nichts vorbereitet", also als Befund über
+    den Spieler statt über die Datenlage.
     """
 
     def __init__(self, parent=None):
@@ -450,7 +452,9 @@ class PreparationCard(Card):
 
         self.chip_row.addStretch(1)
 
-        self.chip_row.addWidget(Chip("KEINE DATEN", "neutral"))
+        self.chip = Chip("KEINE DATEN", "neutral")
+
+        self.chip_row.addWidget(self.chip)
 
         self.chip_row.addStretch(1)
 
@@ -459,8 +463,8 @@ class PreparationCard(Card):
         self.addWidget(_divider())
 
         self.note = QLabel(
-            "Verzauberungen, Sockel und BiS-Plätze werden vom Addon "
-            "noch nicht übertragen."
+            "Verzauberungen, Sockel und BiS-Plätze meldet das Addon "
+            "beim Anmelden im Spiel."
         )
 
         self.note.setFont(font("small"))
@@ -483,6 +487,61 @@ class PreparationCard(Card):
         self.button.setCursor(Qt.PointingHandCursor)
 
         self.addWidget(self.button)
+
+    # --------------------------------------------------
+
+    def apply(self, summary: dict):
+        """
+        `summary` ist `CharacterStore.preparation_summary()`.
+
+        `ratio is None` heißt "kein Charakter hat eine Prüfung
+        gemeldet" - dann bleibt der Ring auf 0 und der Chip sagt
+        warum. Eine Null ohne diesen Chip wäre eine Messung, die es
+        nicht gab.
+        """
+
+        ratio = summary.get("ratio")
+
+        if ratio is None:
+
+            self.ring.setValue(0.0)
+
+            self.chip.setText("KEINE DATEN")
+
+            self.chip.setVariant("neutral")
+
+            self.note.setText(
+                "Verzauberungen, Sockel und BiS-Plätze meldet das "
+                "Addon beim Anmelden im Spiel."
+            )
+
+            return
+
+        self.ring.setValue(ratio)
+
+        self.chip.setText(f"{ratio * 100:.0f} % AUSGERÜSTET")
+
+        self.chip.setVariant("ok" if ratio >= 0.999 else "warn")
+
+        open_count = summary.get("open", 0)
+
+        rated = summary.get("rated", 0)
+
+        if open_count == 0:
+
+            self.note.setText(
+                f"Alles verzaubert und gesockelt "
+                f"({rated} Charakter{'e' if rated != 1 else ''} geprüft)."
+            )
+
+            return
+
+        self.note.setText(
+            f"{open_count} fehlende Verzauberung"
+            f"{'en' if open_count != 1 else ''} oder leere Sockel über "
+            f"{rated} geprüfte{'n' if rated == 1 else ''} "
+            f"Charakter{'e' if rated != 1 else ''}."
+        )
 
 
 class SystemRow(QFrame):
@@ -1082,6 +1141,17 @@ class OverviewPage(Page):
         self.system.refresh()
 
         self.last_pull.refresh()
+
+        #
+        # Der Vorbereitungsstand kommt aus der Charakterliste, nicht
+        # aus einem Netzwerkabruf - `refresh()` darf nur zeichnen
+        # (siehe `tests/test_update_visibility.py`).
+        #
+
+        store = getattr(self.manager, "characters", None)
+
+        if store is not None:
+            self.preparation.apply(store.preparation_summary())
 
         state = self.manager.state
 

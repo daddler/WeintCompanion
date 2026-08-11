@@ -26,6 +26,7 @@ from addon.addon_inbox import AddonInbox
 from core.addon_analysis_sync import AddonAnalysisSync
 from core.raid_data_service import RaidDataService
 from core.academy_service import AcademyService
+from core.character_store import CharacterStore
 
 
 class _AutoSyncStarter(QObject):
@@ -137,6 +138,16 @@ class CompanionManager(QObject):
 
         self.raid_data = RaidDataService(self)
         self.academy = AcademyService(self)
+
+        #
+        # Die Charakterliste sammelt die "character_sheet"-Meldungen
+        # mehrerer Anmeldungen ein - das Addon meldet immer nur den
+        # gerade gespielten Charakter. Sie liest beim Erzeugen ihre
+        # Datei und macht sonst nichts, verlängert den Start also
+        # nicht.
+        #
+
+        self.characters = CharacterStore(self)
 
         #
         # Stellt die zuletzt ausgewertete Auswertung samt Lernpfad ins
