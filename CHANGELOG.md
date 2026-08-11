@@ -37,6 +37,23 @@ geprüft"** und wird als solcher beschriftet, statt als rote Null zu
 erscheinen. Offene BiS-Plätze zählen bewusst nicht in den Ring - sie
 hängen an Würfelglück, nicht an Vorbereitung.
 
+**Laufwege, Cooldown-Nutzung, Raid- und Heil-Cooldowns bleiben nicht
+mehr leer.** Die Auswertung auf dieser Seite war in Ordnung - eine
+vertragskonforme Antwort erzeugt alle vier -, es fehlte die Lieferung.
+Zwei Ursachen, beide im Bot behoben: optionale GraphQL-Argumente wurden
+als `null` geschickt statt weggelassen, was den Server-Default
+überschreibt (deshalb kam ausgerechnet der eine Ereignisstrom an, der
+sein Argument ausdrücklich setzt); und der Fähigkeitskatalog kannte je
+nur *eine* deutsche Schreibweise.
+
+Für Letzteres hat auch diese Seite dazugelernt: ein Abgleich der beiden
+unabhängig gepflegten Tabellen fand zwanzig Fähigkeiten mit
+verschiedenen deutschen Namen - Seelenruhe/Gelassenheit,
+Aufstieg/Aszendenz, Dunkle Seele/Finstere Seele, Neubelebung/Belebung.
+Jede davon war über den Namen gematcht eine dauerhaft unerkannte Zeile,
+und in der Oberfläche nicht davon zu unterscheiden, dass die Fähigkeit
+nie gewirkt wurde. Beide Schreibweisen zählen jetzt.
+
 **Leere Karten in WeintTVs Analyse sagen jetzt, warum sie leer sind.**
 "Keine Raid-Cooldowns erkannt." war von "der Raid hat keine gezündet"
 nicht zu unterscheiden. Liefert die Datenquelle andere Tiefenwerte
