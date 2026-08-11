@@ -3,12 +3,11 @@ from __future__ import annotations
 import http.server
 import secrets
 import urllib.parse
-import webbrowser
 
 import httpx
 
 from core.backend_config import BOT_BASE_URL
-from core.runtime import Runtime
+from core.browser import open_url
 
 # --------------------------------------------------
 # Discord OAuth2 Konfiguration
@@ -115,19 +114,16 @@ class DiscordAuth:
         })
 
         #
-        # Siehe Runtime.clean_environ(): ohne das vererbt der
-        # AppImage/PyInstaller-Bundle sein eigenes LD_LIBRARY_PATH an
-        # den vom Browser-Öffnen intern gestarteten Subprozess (meist
-        # über /bin/sh) - der crasht dann sofort mit einem "symbol
-        # lookup error", der Browser öffnet nie, und der Login läuft
-        # stattdessen in den Timeout unten.
+        # Über core.browser.open_url(): ohne dessen bereinigte
+        # Umgebung vererbt das AppImage/PyInstaller-Bündel sein
+        # eigenes LD_LIBRARY_PATH an den vom Browser-Öffnen intern
+        # gestarteten Subprozess (meist über /bin/sh) - der crasht
+        # dann sofort mit einem "symbol lookup error", der Browser
+        # öffnet nie, und der Login läuft stattdessen in den Timeout
+        # unten.
         #
 
-        with Runtime.clean_environ():
-
-            webbrowser.open(
-                f"{DISCORD_AUTHORIZE_URL}?{query}"
-            )
+        open_url(f"{DISCORD_AUTHORIZE_URL}?{query}")
 
         try:
 

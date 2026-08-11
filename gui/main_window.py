@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from core.companion_manager import CompanionManager
 from core.resources import Resources
 
+from gui.controllers.update_runner import UpdateRunner
 from gui.dialogs.discord_link_prompt import show_discord_link_prompt_if_needed
 from gui.dialogs.whats_new_dialog import show_whats_new_if_needed
 
@@ -333,6 +334,16 @@ class MainWindow(QMainWindow):
         self.toasts = ToastHost(self)
 
         #
+        # Ein Update-Läufer für die ganze Anwendung. Er wird beim
+        # Aufbau an jede Seite gereicht, die ihn haben will
+        # (`set_update_runner`), damit die Übersicht und "Addon &
+        # Updates" nicht zwei nebeneinander laufende Installationen
+        # anstoßen können.
+        #
+
+        self.update_runner = UpdateRunner(self.manager, self)
+
+        #
         # Navigation
         #
 
@@ -499,6 +510,10 @@ class MainWindow(QMainWindow):
         if hasattr(page, "openSettingsSection"):
 
             page.openSettingsSection.connect(self.open_settings_section)
+
+        if hasattr(page, "set_update_runner"):
+
+            page.set_update_runner(self.update_runner)
 
         return page
 

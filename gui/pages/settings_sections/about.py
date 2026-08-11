@@ -1,6 +1,5 @@
 import platform
 import sys
-import webbrowser
 
 import PySide6
 from PySide6.QtCore import Qt
@@ -14,8 +13,8 @@ from PySide6.QtWidgets import (
 )
 
 from core.backend_config import feedback_url
+from core.browser import open_url
 from core.resources import Resources
-from core.runtime import Runtime
 from core.version import VERSION
 from gui.theme.colors import Colors
 from gui.widgets.hero_banner import HeroButton
@@ -139,14 +138,12 @@ class _ArtworkHeader(QWidget):
 
 def _open_external(url: str):
     """
-    Öffnet eine URL im System-Browser. Siehe Runtime.clean_environ():
-    ohne das vererbt der AppImage/PyInstaller-Bundle sein eigenes
-    LD_LIBRARY_PATH an den intern gestarteten Browser-Subprozess, der
-    dann lautlos abstürzt - der Browser öffnet nie, ohne Fehler.
+    Öffnet eine URL im System-Browser - über `core.browser.open_url()`,
+    das den AppImage-Fallstrick (geerbtes LD_LIBRARY_PATH, lautlos
+    abstürzender Browser) an einer Stelle für alle Aufrufer abfängt.
     """
 
-    with Runtime.clean_environ():
-        webbrowser.open(url)
+    open_url(url)
 
 
 def _hex_to_rgb(value: str):

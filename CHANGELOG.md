@@ -2,6 +2,59 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.0.2
+
+**Der Knopf "Aufstellung im Discord" war tot.** Kein Fenster, keine
+Meldung, kein Protokolleintrag - er tat schlicht nichts. Ursache war
+eine Regel, die an zwei von drei Stellen befolgt wurde: im AppImage
+erbt ein gestarteter Browser die mitgelieferten Bibliothekspfade der
+Anwendung und stürzt sofort ab, weshalb der Discord-Login und der
+Feedback-Link die Umgebung vorher bereinigen. Dieser eine Aufruf tat
+es nicht, und `webbrowser.open()` bemerkt den Absturz nicht - es
+sieht nur, dass es ein Hilfsprogramm gestartet hat. Das Öffnen einer
+Adresse läuft jetzt an genau einer Stelle zusammen, und wenn gar kein
+Browser gefunden wird, steht die Adresse im Protokoll statt nirgends.
+
+**"Kein Termin bekannt", obwohl im Discord ein Termin stand.** Auch
+das war kein Fehler in der Anzeige, sondern der Stand: der Chip wurde
+einmal gebaut und danach nie wieder angefasst. Vom Gildenkalender
+kannte die App nur zwei undurchsichtige Zeichenketten, die sie
+ungeparst an das Addon weiterreicht - und die bekommt ohnehin nur, wer
+die Raidlead-Rolle trägt.
+
+Der Bot beantwortet die Frage jetzt eigens, für **jeden** verknüpften
+Nutzer. Die Übersicht zeigt damit den nächsten Raidtermin mit
+Countdown, Titel, Datum und Uhrzeit sowie die Zahl der Zusagen ("18
+von 25 zugesagt · 2 vielleicht · 1 Ersatzbank"). Bewusst weiterhin
+**ohne Namensliste**: der Termin und die Zahlen stehen im
+Anmelde-Beitrag, den jeder im Kanal lesen kann, die Namen bleiben
+hinter der Rolle. Wer sie sehen will, kommt über denselben Knopf ins
+Discord. Ohne Antwort des Bots steht dort wie bisher, dass nichts
+bekannt ist - ein erfundener Mittwoch wäre von einem echten nicht zu
+unterscheiden.
+
+**Updates lassen sich jetzt auf der Übersicht auslösen.** Ein
+wartendes Update war an drei Stellen zu sehen - Systemzeile,
+Abzeichen in der Navigation, Meldung beim Start - und an keiner davon
+zu starten: jeder Weg endete auf "Addon & Updates". Oben auf der
+Übersicht steht dafür jetzt eine Karte, die nennt, was die neue
+Fassung bringt, und den Knopf gleich mitbringt. Sie erscheint nur,
+wenn wirklich etwas ansteht.
+
+**Der Changelog steht in der App.** Bisher zeigte die Addon-Karte
+"Keine Änderungen gefunden." (der Text des Releases war tatsächlich
+leer) und die Companion-Karte eine Handvoll Commit-Betreffs, also
+Text, der für Entwickler geschrieben ist. Der neue Knopf "Änderungen"
+öffnet die vollständige Liste **beider** Komponenten, jede Fassung
+einzeln, mit Kennzeichnung der installierten und der neuen. Die Liste
+des Addons kommt aus dem Addon-Ordner selbst und steht damit auch
+ohne Internet vollständig zur Verfügung.
+
+Damit das so bleibt, trägt ab sofort **jedes Release seinen
+Changelog**: der Text auf GitHub wird aus der gepflegten Liste
+erzeugt, und ein Tag ohne Eintrag lässt den Bau abbrechen, statt ein
+Release ohne Beschreibung zu veröffentlichen.
+
 ## 2.0.1
 
 **"Meine Charaktere" und "Vorbereitung" zeigen jetzt etwas.** Beide

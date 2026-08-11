@@ -171,6 +171,24 @@ jobs:
 
     steps:
 
+      #
+      # Der Release-Text ist der Changelog-Abschnitt dieses Tags, nicht
+      # die von GitHub erzeugte Commit-Liste. Nur so steht in der App
+      # unter "Addon & Updates" und in der Änderungsansicht derselbe
+      # Text wie auf GitHub - und zwar einer, der für Spieler
+      # geschrieben ist. Der Abschnitt existiert garantiert: der
+      # version-Job oben bricht sonst ab.
+      #
+
+      - name: Repository auschecken
+        uses: actions/checkout@v4
+
+      - name: Release-Text aus dem Changelog holen
+        run: >
+          python scripts/release_notes.py
+          "${{ github.event.inputs.tag || github.ref_name }}"
+          > release-notes.md
+
       - name: Linux Build herunterladen
         uses: actions/download-artifact@v4
         with:
@@ -194,7 +212,7 @@ jobs:
           # "tag"-Input würde die Action mangels Tag-Kontext fehlschlagen.
           #
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
-          generate_release_notes: true
+          body_path: release-notes.md
           fail_on_unmatched_files: false
           files: |
             release/windows/WeintCompanion-Setup.exe

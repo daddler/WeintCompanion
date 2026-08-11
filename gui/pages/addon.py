@@ -23,12 +23,10 @@ stattdessen ehrlich, was bekannt ist: dass gerade etwas läuft.
 
 from __future__ import annotations
 
-import threading
 from datetime import datetime
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -37,9 +35,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+#
+# ADDON/COMPANION sind dieselben beiden Schlüssel, die auch der
+# UpdateRunner benutzt - er bezieht sie von hier, siehe dort.
+#
+
+from core.changelog_reader import format_changelog_body
+from core.changelog_source import ADDON, COMPANION, latest_entry
 from core.paths import Paths
 from core.platform import open_folder
 
+from gui.dialogs.changelog_dialog import show_changelog
 from gui.navigation import PageId
 from gui.pages._page import Page
 from gui.theme import tokens
@@ -51,6 +57,14 @@ from gui.widgets.chip import Chip
 from gui.widgets.eyebrow import eyebrow_label
 from gui.widgets.status_dot import StatusDot
 from gui.widgets.wrapped_label import enable_wrap
+
+
+#
+# Wie viele Zeilen der Auszug auf einer Komponentenkarte trägt. Die
+# Karte ist keine Leseansicht - dafür gibt es den Knopf "Änderungen".
+#
+
+CARD_CHANGELOG_LINES = 6
 
 
 #
@@ -75,17 +89,6 @@ def _divider() -> QFrame:
     line.setStyleSheet(f"background:{tokens.SURFACE['raised']};border:none;")
 
     return line
-
-
-class _CompanionUpdateBridge(QObject):
-    """
-    Meldet das Ergebnis des Companion-Updates thread-sicher an den
-    Hauptthread zurück - der eigentliche Download/Install-Aufruf läuft
-    in einem Hintergrundthread, damit die GUI währenddessen nicht
-    einfriert.
-    """
-
-    finished = Signal(bool)
 
 
 class ComponentCard(Card):
@@ -326,25 +329,49 @@ class ComponentCard(Card):
 
         self.available_value.setToolTip(available_meta)
 
-    def set_changelog(self, lines: list[str] | None):
+    def set_changelog(self, entry, fallback: list[str] | None = None):
+        """
+        Der Auszug aus dem Changelog dieser Komponente.
 
-        if lines is None:
+        **Was hier vorher stand.** Die Addon-Karte zeigte "Keine
+        Änderungen gefunden." (die Release-Notes des Tags waren leer)
+        und die Companion-Karte eine Handvoll Commit-Betreffs. Beide
+        Angaben waren richtig und beide halfen niemandem: das eine
+        sagte nichts, das andere sprach die Sprache des Repositorys.
+
+        Gelesen wird jetzt die CHANGELOG.md der Komponente
+        (`core/changelog_source.py`); die Commit-Liste bleibt nur als
+        Rückfall für eine Fassung, die noch keine mitbringt.
+        """
+
+        if entry is not None:
+
+            text = format_changelog_body(entry.body)
+
+            lines = [
+                line for line in text.splitlines() if line.strip()
+            ]
+
+            head = "\n".join(lines[:CARD_CHANGELOG_LINES])
 
             self.changelog.setText(
-                "Changelog nicht verfügbar - kein passendes Release "
-                "gefunden oder GitHub nicht erreichbar."
+                head + ("\n\n…" if len(lines) > CARD_CHANGELOG_LINES else "")
             )
 
             return
 
-        if not lines:
+        if fallback:
 
-            self.changelog.setText("Keine Änderungen gefunden.")
+            self.changelog.setText(
+                "\n".join(f"•  {line}" for line in fallback)
+            )
 
             return
 
         self.changelog.setText(
-            "\n".join(f"•  {line}" for line in lines)
+            "Für diese Fassung liegen keine Änderungsnotizen vor - "
+            "die vollständige Liste steht hinter dem Knopf "
+            "\"Änderungen\"."
         )
 
     def set_loading(self, active: bool, note: str = ""):
@@ -631,11 +658,14 @@ class AddonPage(Page):
         # Signale
         #
 
-        self._update_bridge = _CompanionUpdateBridge(self)
+        #
+        # Wird vom MainWindow nachgereicht (`set_update_runner`). Bis
+        # dahin sind die beiden Update-Knöpfe wirkungslos statt
+        # halbfertig - die Seite kann in Tests auch ohne Fenster
+        # entstehen.
+        #
 
-        self._update_bridge.finished.connect(
-            self._on_companion_update_finished
-        )
+        self._runner = None
 
         self.check_button.clicked.connect(self.check_updates)
 
@@ -671,6 +701,42 @@ class AddonPage(Page):
 
         self.companion_card.primary_button.clicked.connect(
             self.update_companion
+        )
+
+        #
+        # "Änderungen" öffnet die vollständige Liste beider
+        # Komponenten (gui/dialogs/changelog_dialog.py), vorgewählt
+        # auf die Karte, von der aus geklickt wurde. Je Karte ein
+        # Knopf: die Frage "was bringt das" stellt sich an der Karte,
+        # nicht an der Seite.
+        #
+
+        self.addon_changelog_button = QPushButton("Änderungen")
+
+        self.addon_changelog_button.setObjectName("ghost")
+
+        self.addon_changelog_button.setCursor(Qt.PointingHandCursor)
+
+        self.addon_changelog_button.clicked.connect(
+            self.show_addon_changelog
+        )
+
+        self.addon_card.footer.insertWidget(
+            2, self.addon_changelog_button
+        )
+
+        self.companion_changelog_button = QPushButton("Änderungen")
+
+        self.companion_changelog_button.setObjectName("ghost")
+
+        self.companion_changelog_button.setCursor(Qt.PointingHandCursor)
+
+        self.companion_changelog_button.clicked.connect(
+            self.show_companion_changelog
+        )
+
+        self.companion_card.footer.insertWidget(
+            0, self.companion_changelog_button
         )
 
         self.refresh()
@@ -728,9 +794,7 @@ class AddonPage(Page):
         )
 
         self.addon_card.set_changelog(
-            (state.github_changelog or "").splitlines()
-            if state.github_changelog
-            else []
+            latest_entry(ADDON, state)
         )
 
         if not state.addon_found:
@@ -782,7 +846,10 @@ class AddonPage(Page):
             highlight=state.companion_update_available,
         )
 
-        self.companion_card.set_changelog(state.companion_changelog)
+        self.companion_card.set_changelog(
+            latest_entry(COMPANION, state),
+            state.companion_changelog,
+        )
 
         if state.companion_update_available:
 
@@ -937,6 +1004,18 @@ class AddonPage(Page):
     # Addon-Ordner
     # --------------------------------------------------
 
+    def show_addon_changelog(self):
+
+        show_changelog(self.manager.state, ADDON, self)
+
+    def show_companion_changelog(self):
+
+        show_changelog(self.manager.state, COMPANION, self)
+
+    # --------------------------------------------------
+    # Addon-Ordner
+    # --------------------------------------------------
+
     def open_addon_folder(self):
 
         state = self.manager.state
@@ -956,50 +1035,20 @@ class AddonPage(Page):
     # --------------------------------------------------
 
     def install_or_update(self):
+        """
+        Über den gemeinsamen `UpdateRunner`.
 
-        state = self.manager.state
+        Der Ablauf selbst (Karte auf „lädt", `processEvents()`,
+        blockierender Aufruf, Protokoll) steht seit 2.0.2 in
+        `gui/controllers/update_runner.py` - der Update-Hinweis auf
+        der Übersicht löst dasselbe aus, und zwei Fassungen desselben
+        Ablaufs laufen beim ersten Sonderfall auseinander.
+        """
 
-        #
-        # Die Karte zeigt „lädt", bevor der blockierende Aufruf
-        # beginnt, und processEvents() zeichnet sie tatsächlich -
-        # sonst käme der Aufruf zuerst und Qt bekäme nie die Chance,
-        # den neuen Zustand zu malen, bevor der Hauptthread blockiert.
-        # Das ändert nichts an der Ausführung selbst, nur daran, dass
-        # sie sichtbar wird.
-        #
+        if self._runner is None:
+            return
 
-        self.addon_card.set_loading(
-            True,
-            "Prüfsumme wird nach dem Download verifiziert.",
-        )
-
-        QApplication.processEvents()
-
-        try:
-
-            if state.addon_found:
-                self.manager.logger.info("Starte Addon-Aktualisierung...")
-
-            else:
-                self.manager.logger.info("Starte Addon-Installation...")
-
-            self.manager.install_or_update()
-
-            if state.addon_found:
-                self.manager.logger.success("Addon erfolgreich aktualisiert.")
-
-            else:
-                self.manager.logger.success("Addon erfolgreich installiert.")
-
-        except Exception as e:
-
-            self.manager.logger.error(f"Fehler: {e}")
-
-        finally:
-
-            self.addon_card.set_loading(False)
-
-            self.refresh()
+        self._runner.install_addon()
 
     # --------------------------------------------------
     # Companion-Update (Download + Installation im Hintergrund)
@@ -1010,59 +1059,56 @@ class AddonPage(Page):
 
     def update_companion(self):
 
-        self.companion_card.set_loading(
-            True,
-            "Wird heruntergeladen und installiert - die App startet "
-            "danach neu.",
-        )
-
-        self.manager.logger.info("Companion-Update wird heruntergeladen...")
-
-        #
-        # stop_auto_sync() fasst ein QTimer-Objekt an, das dem
-        # Hauptthread gehört - muss deshalb HIER passieren, nicht im
-        # Worker.
-        #
-
-        self.manager.stop_auto_sync()
-
-        thread = threading.Thread(
-            target=self._companion_update_worker,
-            daemon=True,
-            name="AddonPageCompanionUpdateThread",
-        )
-
-        thread.start()
-
-    def _companion_update_worker(self):
-
-        try:
-
-            success = self.manager.companion_updater.install_update()
-
-        except Exception as exc:
-
-            self.manager.logger.error(f"Companion-Update fehlgeschlagen: {exc}")
-
-            success = False
-
-        self._update_bridge.finished.emit(success)
-
-    def _on_companion_update_finished(self, success: bool):
-
-        if success:
-
-            QTimer.singleShot(300, QApplication.quit)
-
+        if self._runner is None:
             return
 
+        self._runner.update_companion()
+
+    # --------------------------------------------------
+    # Zustandsmeldungen des gemeinsamen Läufers
+    # --------------------------------------------------
+
+    def set_update_runner(self, runner):
+        """
+        Duck-getypt vom MainWindow gesetzt (`_ensure_page`).
+        """
+
+        self._runner = runner
+
+        runner.started.connect(self._on_update_started)
+
+        runner.finished.connect(self._on_update_finished)
+
+    def _card_for(self, component: str):
+
+        return (
+            self.addon_card
+            if component == ADDON
+            else self.companion_card
+        )
+
+    def _on_update_started(self, component: str):
+
+        self._card_for(component).set_loading(
+            True,
+            "Prüfsumme wird nach dem Download verifiziert."
+            if component == ADDON
+            else "Wird heruntergeladen und installiert - die App "
+            "startet danach neu.",
+        )
+
+    def _on_update_finished(self, component: str, success: bool, _message: str):
+
         #
-        # Fehlschlag: Auto-Sync wieder anlaufen lassen und die echte
-        # Kartenanzeige wiederherstellen.
+        # Bei Erfolg des Companion-Updates beendet der Läufer die
+        # Anwendung; die Karte hier zurückzusetzen wäre ein Bild, das
+        # niemand mehr sieht. Bei allem anderen gilt: Ladezustand weg,
+        # Seite neu zeichnen.
         #
 
-        self.companion_card.set_loading(False)
+        if component == COMPANION and success:
+            return
 
-        self.manager.start_auto_sync()
+        self._card_for(component).set_loading(False)
 
         self.refresh()
