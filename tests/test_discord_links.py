@@ -20,8 +20,11 @@ import pytest
 from core.backend_config import (
     DISCORD_FEEDBACK_CHANNEL_ID,
     DISCORD_GUILD_ID,
+    DISCORD_RAID_CHANNEL_ID,
     TARGET_SETTINGS,
     TARGET_URL,
+    app_url,
+    channel_url,
     feedback_url,
     guild_url,
     roster_target,
@@ -67,6 +70,50 @@ def test_the_ids_are_strings():
     assert isinstance(DISCORD_GUILD_ID, str)
 
     assert isinstance(DISCORD_FEEDBACK_CHANNEL_ID, str)
+
+    assert isinstance(DISCORD_RAID_CHANNEL_ID, str)
+
+
+def test_a_channel_link_carries_channel_and_message():
+
+    assert channel_url("1", "2", "3") == (
+        "https://discord.com/channels/1/2/3"
+    )
+
+    assert channel_url("1", "2") == "https://discord.com/channels/1/2"
+
+
+def test_a_message_without_a_channel_stays_a_guild_link():
+    """
+    `/channels/<gilde>` öffnet den Standardkanal,
+    `/channels/<gilde>//<nachricht>` dagegen gar nichts.
+    """
+
+    assert channel_url("1", "", "3") == "https://discord.com/channels/1"
+
+
+def test_the_app_link_is_the_same_path_under_its_own_scheme():
+
+    assert app_url("https://discord.com/channels/1/2/3") == (
+        "discord://-/channels/1/2/3"
+    )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "",
+        "https://github.com/daddler/WeintCodex",
+        "https://discord.gg/einladung",
+    ],
+)
+def test_only_a_discord_link_gets_an_app_variant(url):
+    """
+    Leer heißt für den Aufrufer "bleib beim Browser". Ein GitHub-Link
+    unter `discord://` wäre eine Adresse, die niemand öffnen kann.
+    """
+
+    assert app_url(url) == ""
 
 
 @pytest.mark.parametrize(
@@ -121,12 +168,69 @@ def test_the_profile_guild_beats_the_project_guild():
     assert DISCORD_GUILD_ID not in value
 
 
-def test_a_linked_account_without_a_guild_uses_the_project_guild():
+def test_a_linked_account_without_a_guild_uses_the_project_channel():
+    """
+    Nicht nur die Gilde: der Anmelde-Kanal ist der Ort, an dem die
+    Aufstellung steht. `/channels/<gilde>` allein landet auf dem
+    Standardkanal des Servers.
+    """
 
     assert roster_target("", has_account=True) == (
         TARGET_URL,
-        guild_url(),
+        f"{guild_url()}/{DISCORD_RAID_CHANNEL_ID}",
     )
+
+
+def test_the_signup_the_bot_reported_wins():
+    """
+    Die einzige Auskunft, die auf den Beitrag selbst zeigt - und sie
+    stammt aus derselben Antwort wie der Termin daneben.
+    """
+
+    assert roster_target(
+        "999",
+        has_account=True,
+        signup={
+            "guild_id": "1",
+            "channel_id": "2",
+            "message_id": "3",
+        },
+    ) == (TARGET_URL, "https://discord.com/channels/1/2/3")
+
+
+@pytest.mark.parametrize(
+    "signup",
+    [
+        None,
+        {},
+        {"guild_id": "1"},
+        {"message_id": "3"},
+    ],
+)
+def test_a_signup_without_a_channel_is_no_target(signup):
+    """
+    Ein halber Fundort ist keiner: ohne Kanal bliebe eine Adresse
+    übrig, die auf nichts zeigt. Dann gilt wieder die Reihenfolge
+    darunter.
+    """
+
+    assert roster_target("999", has_account=True, signup=signup) == (
+        TARGET_URL,
+        guild_url("999"),
+    )
+
+
+def test_the_project_channel_is_not_carried_into_a_foreign_guild():
+    """
+    Eine fremde Gilde hat eigene Kanäle - die Kanal-ID des Projekts
+    führte dort ins Nichts.
+    """
+
+    kind, value = roster_target("999", has_account=True)
+
+    assert value == guild_url("999")
+
+    assert DISCORD_RAID_CHANNEL_ID not in value
 
 
 def test_without_an_account_the_settings_are_the_target():
@@ -278,3 +382,122 @@ def test_a_missing_id_stores_nothing():
     assert "discord_community_id" not in manager.config.data
 
     assert manager.config.saves == 0
+
+
+# --------------------------------------------------
+# Anwendung statt Browser
+# --------------------------------------------------
+#
+# Der Knopf soll in der Discord-Anwendung landen, nicht in einer
+# zweiten, meist abgemeldeten Ansicht desselben Servers im Browser.
+# Wer Discord nur im Browser nutzt, hat für `discord://` aber kein
+# Programm - und ein lautlos verpuffter Aufruf wäre wieder genau der
+# tote Knopf, gegen den core/browser.py geschrieben wurde.
+
+
+class _Result:
+
+    def __init__(self, returncode):
+        self.returncode = returncode
+
+
+@pytest.fixture
+def linux(monkeypatch):
+
+    from core.runtime import Runtime
+
+    monkeypatch.setattr(Runtime, "is_windows", staticmethod(lambda: False))
+    monkeypatch.setattr(Runtime, "is_macos", staticmethod(lambda: False))
+
+
+def test_the_app_is_tried_first(linux, monkeypatch):
+
+    from core import browser
+
+    calls = []
+
+    monkeypatch.setattr(
+        browser.subprocess,
+        "run",
+        lambda cmd, **kw: calls.append(cmd) or _Result(0),
+    )
+
+    monkeypatch.setattr(
+        browser.webbrowser,
+        "open",
+        lambda url: pytest.fail(f"Browser statt Anwendung: {url}"),
+    )
+
+    assert browser.open_url(
+        "https://discord.com/channels/1/2/3",
+        app_url="discord://-/channels/1/2/3",
+    )
+
+    assert calls == [["xdg-open", "discord://-/channels/1/2/3"]]
+
+
+def test_without_a_handler_the_browser_takes_over(linux, monkeypatch):
+
+    from core import browser
+
+    opened = []
+
+    #
+    # Rückgabewert 3: xdg-open kennt kein Programm für das Schema.
+    #
+
+    monkeypatch.setattr(
+        browser.subprocess,
+        "run",
+        lambda cmd, **kw: _Result(3),
+    )
+
+    monkeypatch.setattr(
+        browser.webbrowser,
+        "open",
+        lambda url: opened.append(url) or True,
+    )
+
+    assert browser.open_url(
+        "https://discord.com/channels/1/2/3",
+        app_url="discord://-/channels/1/2/3",
+    )
+
+    assert opened == ["https://discord.com/channels/1/2/3"]
+
+
+def test_a_crashing_opener_is_not_the_end_of_the_button(linux, monkeypatch):
+
+    from core import browser
+
+    opened = []
+
+    def boom(cmd, **kw):
+        raise FileNotFoundError("xdg-open")
+
+    monkeypatch.setattr(browser.subprocess, "run", boom)
+
+    monkeypatch.setattr(
+        browser.webbrowser,
+        "open",
+        lambda url: opened.append(url) or True,
+    )
+
+    assert browser.open_url("https://discord.com/x", app_url="discord://-/x")
+
+    assert opened == ["https://discord.com/x"]
+
+
+def test_without_an_app_link_nothing_extra_happens(linux, monkeypatch):
+
+    from core import browser
+
+    monkeypatch.setattr(
+        browser.subprocess,
+        "run",
+        lambda cmd, **kw: pytest.fail("kein Anwendungsaufruf erwartet"),
+    )
+
+    monkeypatch.setattr(browser.webbrowser, "open", lambda url: True)
+
+    assert browser.open_url("https://github.com/daddler/WeintCodex")

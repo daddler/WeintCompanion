@@ -124,6 +124,16 @@ class RaidSchedule:
 
     detail: str = ""
 
+    #
+    # Wo die Anmeldung im Discord steht (Gilde, Kanal, Nachricht), so
+    # wie der Bot sie meldet. Damit springt der Knopf "Aufstellung im
+    # Discord" in den Anmelde-Beitrag statt auf den Standardkanal des
+    # Servers. Leer, solange der Bot den Block nicht schickt - die
+    # Companion hat dafür ihren eigenen Rückfall.
+    #
+
+    signup: dict = field(default_factory=dict)
+
     # --------------------------------------------------
 
     def next_day(self, now: datetime | None = None) -> RaidDay | None:
@@ -235,7 +245,34 @@ def parse_schedule(data) -> RaidSchedule:
         signup_status=str(data.get("signup_status") or "open"),
         raid_size=int(data.get("raid_size") or 0),
         days=tuple(days),
+        signup=_parse_signup(data.get("discord")),
     )
+
+
+def _parse_signup(data) -> dict:
+    """
+    Der `discord`-Block: Gilde, Kanal, Nachricht der Anmeldung.
+
+    Jede Kennung als **Zeichenkette** - eine Discord-Snowflake sprengt
+    die Zahlengenauigkeit, und aus `1.23e+18` wird nie wieder ein
+    Link. Ältere Bot-Fassungen schicken den Block nicht; dann bleibt er
+    leer, statt aus Teilen etwas zusammenzusetzen, das wie eine Adresse
+    aussieht.
+    """
+
+    if not isinstance(data, dict):
+        return {}
+
+    signup = {}
+
+    for key in ("guild_id", "channel_id", "message_id"):
+
+        value = str(data.get(key) or "").strip()
+
+        if value:
+            signup[key] = value
+
+    return signup
 
 
 def countdown_text(day: RaidDay | None, now: datetime | None = None) -> str:

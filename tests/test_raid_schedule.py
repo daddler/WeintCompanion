@@ -200,3 +200,64 @@ def test_a_day_without_a_timestamp_is_not_a_day():
     assert schedule.known
     assert schedule.next_day() is None
     assert schedule.days[0].active == 4
+
+
+# --------------------------------------------------
+# Wo die Anmeldung steht
+# --------------------------------------------------
+
+
+def test_the_signup_location_is_read_as_strings():
+    """
+    Der `discord`-Block nennt Gilde, Kanal und Nachricht der
+    Anmeldung. Jede Kennung als Zeichenkette - aus `1.23e+18` wird
+    nie wieder ein Link.
+    """
+
+    schedule = parse_schedule({
+        **PAYLOAD,
+        "discord": {
+            "guild_id": 1311060525555257364,
+            "channel_id": "1311325324008751225",
+            "message_id": "  1400000000000000000  ",
+        },
+    })
+
+    assert schedule.signup == {
+        "guild_id": "1311060525555257364",
+        "channel_id": "1311325324008751225",
+        "message_id": "1400000000000000000",
+    }
+
+
+def test_an_older_bot_reports_no_location():
+    """
+    Kein Block, kein Fundort - und nichts Zusammengesetztes, das wie
+    eine Adresse aussieht. Die Übersicht hat dafür ihren eigenen
+    Rückfall.
+    """
+
+    assert parse_schedule(PAYLOAD).signup == {}
+
+    for broken in ("", [], {"channel_id": ""}, {"channel_id": None}):
+
+        assert parse_schedule({**PAYLOAD, "discord": broken}).signup == {}
+
+
+def test_a_signup_that_is_gone_is_not_a_raid():
+    """
+    Der Bot antwortet "idle", sobald die Anmeldenachricht im Kanal
+    fehlt - bis 2.0.2 nannte die Übersicht einen längst gelöschten
+    Testraid nach jedem Neustart wieder als nächsten Termin.
+    """
+
+    schedule = parse_schedule({
+        "status": "idle",
+        "detail": "Zu diesem Raid gibt es im Anmelde-Kanal keine Nachricht mehr.",
+    })
+
+    assert not schedule.known
+
+    assert schedule.next_day() is None
+
+    assert "Anmelde-Kanal" in schedule.detail

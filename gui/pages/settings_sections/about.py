@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.backend_config import feedback_url
+from core.backend_config import app_url, feedback_url
 from core.browser import open_url
 from core.resources import Resources
 from core.version import VERSION
@@ -141,9 +141,13 @@ def _open_external(url: str):
     Öffnet eine URL im System-Browser - über `core.browser.open_url()`,
     das den AppImage-Fallstrick (geerbtes LD_LIBRARY_PATH, lautlos
     abstürzender Browser) an einer Stelle für alle Aufrufer abfängt.
+
+    Der Feedback-Link geht dabei zuerst an die Discord-Anwendung; für
+    alles andere (GitHub) liefert `app_url()` nichts und es bleibt beim
+    Browser.
     """
 
-    open_url(url)
+    open_url(url, app_url=app_url(url))
 
 
 def _hex_to_rgb(value: str):

@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from core.backend_config import TARGET_URL, roster_target
+from core.backend_config import TARGET_URL, app_url, roster_target
 from core.browser import open_url
 from core.changelog_reader import format_changelog_body
 from core.changelog_source import ADDON, COMPANION, LABELS, latest_entry
@@ -1452,14 +1452,21 @@ class OverviewPage(Page):
         Der Knopf führt deshalb an die Quelle statt einen Inhalt zu
         versprechen, den es hier nicht gibt.
 
-        Welches der drei möglichen Ziele es ist, entscheidet
+        Welches der möglichen Ziele es ist, entscheidet
         `core.backend_config.roster_target()` - dort ohne Qt und
         deshalb ohne Fenster prüfbar. Hier bleibt nur das Ausführen.
+
+        Den Fundort der Anmeldung nennt der Bot mit dem Termin
+        (`/companion/raid-schedule`); damit landet der Knopf im
+        Anmelde-Beitrag statt auf dem Standardkanal des Servers.
         """
+
+        schedule = self._schedule()
 
         kind, value = roster_target(
             self.manager.config.data.get("discord_community_id", ""),
             self._discord_linked(),
+            getattr(schedule, "signup", None),
         )
 
         if kind == TARGET_URL:
@@ -1502,9 +1509,15 @@ class OverviewPage(Page):
         `LD_LIBRARY_PATH` und stirbt beim Start, ohne dass hier eine
         Ausnahme ankommt. Die beiden anderen Aufrufer im Programm
         hatten den Schutz, dieser eine nicht.
+
+        Ein Discord-Link geht zuerst an die Discord-Anwendung: im
+        Browser landete man in einer zweiten, meist abgemeldeten
+        Ansicht desselben Servers, während die Anwendung daneben
+        offen stand. Gibt es für das Schema kein Programm, übernimmt
+        weiterhin der Browser (siehe `core/browser.py`).
         """
 
-        open_url(url, self.manager.logger)
+        open_url(url, self.manager.logger, app_url(url))
 
     # --------------------------------------------------
     # Updates

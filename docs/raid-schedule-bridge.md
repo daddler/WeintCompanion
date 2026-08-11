@@ -81,7 +81,12 @@ Authorization: Bearer <companion_token>
       "starts_at": "2026-08-13T20:00:00+02:00",
       "signups": { "active": 20, "tentative": 0, "bench": 0, "absent": 2 }
     }
-  ]
+  ],
+  "discord": {
+    "guild_id": "1311060525555257364",
+    "channel_id": "1311325324008751225",
+    "message_id": "1400000000000000000"
+  }
 }
 ```
 
@@ -94,6 +99,16 @@ Authorization: Bearer <companion_token>
 | `days[].key` | `wednesday`, `thursday` oder `special` |
 | `days[].starts_at` | ISO-8601 **mit Offset** |
 | `days[].signups` | `active` / `tentative` / `bench` / `absent` |
+| `discord` | Fundort der Anmeldung; optional, alle IDs als **Zeichenkette** |
+
+Der `discord`-Block ist der Ort, an dem die Anmeldung wirklich steht —
+gefunden über `locate_signup()` im Bot, also die Zusammenfassung, sonst
+die Mittwochs-, sonst die Donnerstagsnachricht. Er ist keine Auskunft
+über Personen, sondern der Beitrag selbst, den jeder im Kanal sieht.
+Die Companion macht daraus das Ziel des Knopfes **„Aufstellung im
+Discord"**; fehlt er (ältere Bot-Fassung), fällt sie auf den
+Anmelde-Kanal der Projektgilde zurück (`DISCORD_RAID_CHANNEL_ID` in
+`core/backend_config.py`).
 
 ## Antwort — kein Raid
 
@@ -104,6 +119,41 @@ Authorization: Bearer <companion_token>
 **HTTP 200, nicht 404.** Die Companion fragt im Sync-Takt; ein ruhiger
 Mittwoch darf nicht als Störung ankommen — dieselbe Haltung wie bei
 `/companion/warcraftlogs/live`.
+
+## Antwort — Raid nur noch in der Datenbank
+
+```json
+{
+  "status": "idle",
+  "detail": "Zu diesem Raid gibt es im Anmelde-Kanal keine Nachricht mehr."
+}
+```
+
+**Die Datenbank des Bots entscheidet nicht allein, ob es einen Raid
+gibt.** Wird die Anmeldenachricht in Discord von Hand gelöscht
+(Rechtsklick → Nachricht löschen) statt über „Raid löschen", merkt der
+Bot davon nichts: der Datensatz bleibt liegen und gilt weiter als
+laufende Anmeldung. In Discord fällt das nicht auf — dort ist die
+Nachricht ja weg. In der Companion dagegen stand so ein längst
+entfernter Testraid dauerhaft als nächster Termin, nach jedem Neustart
+aufs Neue.
+
+Der Endpunkt sieht deshalb vor jeder Antwort in Discord nach. Zwei
+Regeln dazu:
+
+- **Der Zweifelsfall gilt als „vorhanden".** Nur wenn Discord für
+  *jede* bekannte Nachricht ausdrücklich `NotFound` liefert, ist die
+  Anmeldung weg. Ein leerer Cache, ein Rate-Limit oder ein fehlendes
+  Leserecht sind kein Beleg — und eine kurz nicht erreichbare API darf
+  keinen laufenden Raid ausblenden.
+- **Die Antwort gilt eine Minute** (`SIGNUP_PRESENCE_SECONDS`), je
+  Raid. Sonst wäre das bei 25 Installationen eine Discord-Anfrage alle
+  paar Sekunden für eine Auskunft, die sich höchstens einmal am Tag
+  ändert.
+
+Der Bot räumt denselben Fall beim Start zusätzlich auf: findet
+`recover_raid_state()` zu einem Datensatz keine Anmeldung in Discord,
+wird er entfernt (`drop_orphaned_raid()`).
 
 ## Regeln, die beide Seiten einhalten müssen
 

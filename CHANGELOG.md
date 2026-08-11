@@ -2,6 +2,36 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.0.3
+
+**Ein gelöschter Testraid stand nach jedem Neustart wieder als
+nächster Termin in der Übersicht.** Die Ursache lag nicht in der
+Anzeige, sondern in der Frage, wen die App gefragt hat: den Bot, und
+der wiederum nur seine eigene Datenbank. Wird die Anmeldenachricht in
+Discord von Hand gelöscht (Rechtsklick → Nachricht löschen) statt über
+"Raid löschen", bekommt der Bot davon nichts mit — der Datensatz
+bleibt liegen und gilt weiter als laufende Anmeldung. In Discord fällt
+das nicht auf, dort ist die Nachricht ja weg. In der Übersicht dagegen
+stand daraufhin dauerhaft ein Termin, den es nicht mehr gab.
+
+Der Bot sieht jetzt vor jeder Auskunft in Discord nach, ob es die
+Anmeldung dort überhaupt noch gibt, und antwortet sonst mit "kein
+Termin". Beim Start räumt er den zurückgebliebenen Datensatz
+zusätzlich weg. Der Zweifelsfall zählt dabei als "vorhanden": nur wenn
+Discord für jede bekannte Nachricht ausdrücklich "gibt es nicht"
+sagt, gilt die Anmeldung als weg — eine kurz nicht erreichbare
+Schnittstelle darf keinen laufenden Raid ausblenden.
+
+**"Aufstellung im Discord" öffnete den Browser statt Discord.** Man
+landete damit in einer zweiten, meist abgemeldeten Ansicht desselben
+Servers, während die Anwendung daneben offen stand — und außerdem nur
+auf dem Standardkanal, nicht dort, wo die Anmeldung steht. Der Knopf
+springt jetzt in der Discord-Anwendung genau in den Anmelde-Beitrag;
+wo er steht, sagt der Bot mit dem Termin zusammen. Wer Discord nur im
+Browser nutzt, merkt nichts davon: gibt es für `discord://` kein
+Programm, übernimmt weiterhin der Browser. Derselbe Weg gilt für den
+Feedback-Link unter *Einstellungen → Über*.
+
 ## 2.0.2
 
 **Der Knopf "Aufstellung im Discord" war tot.** Kein Fenster, keine
