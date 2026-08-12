@@ -2,6 +2,30 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.0.6
+
+**Das Fenster ließ sich unter Linux nicht mehr verschieben**, solange
+es nicht maximiert war. Kein Absturz, keine Fehlermeldung — ein Zug
+an der Titelleiste hatte schlicht keine Wirkung.
+
+Die eigene Titelleiste (rahmenloses Fenster seit 2.0) verschob das
+Fenster bisher von Hand: Mausposition merken, bei jeder Bewegung
+`window.move()` auf die neue Position setzen. Das funktioniert unter
+X11 und Windows, aber nicht unter Wayland — dort darf eine Anwendung
+ihre eigene Fensterposition aus Sicherheitsgründen gar nicht setzen,
+das ist Sache des Compositors. `move()` lief also einfach ins Leere,
+ohne jede Rückmeldung. Da `app.py` beim Start zuerst den
+Wayland-Treiber versucht, traf das jeden Linux-Nutzer auf einem
+Wayland-Desktop (mittlerweile die Voreinstellung bei GNOME, KDE und
+den meisten aktuellen Distributionen).
+
+Die Titelleiste bittet jetzt stattdessen den Fenstermanager selbst um
+das Verschieben (`QWindow.startSystemMove()`) — der einzige Weg, der
+unter Wayland überhaupt vorgesehen ist, und funktioniert unverändert
+unter X11 und Windows. Das Wiederherstellen eines maximierten
+Fensters durch Ziehen an der Titelleiste bleibt unverändert per Hand
+gesteuert.
+
 ## 2.0.5
 
 **Nach dem Update auf 2.0.3 startete die App unter Windows nicht

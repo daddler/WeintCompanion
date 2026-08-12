@@ -416,6 +416,30 @@ class TitleBar(QFrame):
 
         return not isinstance(child, WindowButton)
 
+    def _start_system_move(self) -> bool:
+        """
+        Überlässt das Ziehen dem Fenstermanager statt es selbst per
+        `move()` nachzuführen.
+
+        Unter Wayland darf eine Anwendung ihre eigene Fensterposition
+        nicht setzen - das ist bewusste Compositor-Politik, kein
+        Bug. `QWidget.move()`/`setGeometry()` auf einem Top-Level-
+        Fenster ist dort schlicht ein No-Op, ohne Fehler und ohne
+        Log-Zeile. Die Titelleiste zog das Fenster also nur unter X11
+        und Windows tatsächlich; unter Wayland (und das ist seit
+        `QT_QPA_PLATFORM=wayland;xcb` der zuerst versuchte Treiber,
+        siehe app.py) blieb jeder Zug wirkungslos - genau das
+        gemeldete Verhalten. `QWindow.startSystemMove()` fragt
+        stattdessen den Compositor selbst um die interaktive
+        Verschiebung, der einzige Weg, der unter Wayland überhaupt
+        existiert, und funktioniert unverändert unter X11 und
+        Windows.
+        """
+
+        handle = self._window.windowHandle()
+
+        return handle is not None and handle.startSystemMove()
+
     def mousePressEvent(self, event):
 
         if (
@@ -424,6 +448,18 @@ class TitleBar(QFrame):
         ):
 
             super().mousePressEvent(event)
+
+            return
+
+        #
+        # Ein maximiertes Fenster muss beim Ziehen erst wiederhergestellt
+        # werden (siehe mouseMoveEvent) - dafür wird weiterhin von Hand
+        # verfolgt. Im Normalfall übernimmt sofort der Fenstermanager.
+        #
+
+        if not self._window.isMaximized() and self._start_system_move():
+
+            event.accept()
 
             return
 
@@ -469,6 +505,21 @@ class TitleBar(QFrame):
                 int(width * ratio),
                 self._drag_offset.y(),
             )
+
+            self._window.move(global_position - self._drag_offset)
+
+            #
+            # Ab hier ist das Fenster wiederhergestellt - der
+            # Fenstermanager kann den weiteren Zug übernehmen, mit
+            # demselben Wayland-Grund wie im Normalfall oben.
+            #
+
+            if self._start_system_move():
+                self._drag_offset = None
+
+            event.accept()
+
+            return
 
         self._window.move(global_position - self._drag_offset)
 
