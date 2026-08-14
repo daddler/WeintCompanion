@@ -56,7 +56,16 @@ class RaidScheduleSync:
 
         self.schedule = self._load_cached()
 
-        self._last_fetch = 0.0
+        #
+        # `None` heißt "noch nie", und das ist nicht dasselbe wie "vor
+        # null Sekunden": `time.monotonic()` zählt ab dem Start des
+        # Rechners. Wer die App kurz nach dem Hochfahren öffnet, hätte
+        # mit einer Null als Startwert die ersten fünf Minuten keinen
+        # Abruf - und die Übersicht trüge so lange "kein Termin
+        # bekannt".
+        #
+
+        self._last_fetch = None
 
     # --------------------------------------------------
 
@@ -113,7 +122,7 @@ class RaidScheduleSync:
         für den Knopf "Erneut prüfen" und nach einer Kontoänderung.
         """
 
-        self._last_fetch = 0.0
+        self._last_fetch = None
 
     def process(self):
 
@@ -124,7 +133,10 @@ class RaidScheduleSync:
 
         now = time.monotonic()
 
-        if now - self._last_fetch < REFRESH_SECONDS:
+        if (
+            self._last_fetch is not None
+            and now - self._last_fetch < REFRESH_SECONDS
+        ):
             return
 
         self._last_fetch = now

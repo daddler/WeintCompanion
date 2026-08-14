@@ -33,12 +33,119 @@ ziehen:
   "Ersatzbank" stehen daneben, nicht mittendrin. Sie in eine Zahl zu
   werfen wäre genau die Art Vereinfachung, wegen der man dann doch
   wieder im Discord nachsieht.
+
+**Die Aufstellung ist mehr als eine Zahl.** Der Entwurf der Übersicht
+zeigte an dieser Stelle von Anfang an die *Zusammensetzung*: Tanks,
+Heiler und Schaden als Reihen von Plätzen, gefüllte in Klassenfarbe,
+offene als leere Kästchen, darunter ein Satz, was noch fehlt. Genau
+das ist die Frage, wegen der man vor dem Raid ins Discord sieht - "21
+von 25" beantwortet sie nicht, denn ob die vier fehlenden Heiler oder
+Schaden sind, entscheidet, ob der Abend stattfindet.
+
+Dafür trägt `days[].roster` je Zusage **Rolle und Klasse, niemals
+einen Namen** (siehe `docs/raid-schedule-bridge.md`) - die Grenze des
+Vertrags bleibt damit unverändert, denn beides steht ohnehin als
+Symbol im Anmelde-Beitrag. Zwei Regeln kommen hinzu:
+
+- **Ohne Rollen keine Rollen.** Fehlt der Block (ältere Bot-Fassung),
+  gibt es einen einzigen Streifen "zugesagt" statt drei erfundener.
+  Eine Aufteilung zu schätzen wäre in der Anzeige von einer gemeldeten
+  nicht zu unterscheiden.
+- **Was fehlt, sagt nur, wer ein Soll kennt.** `composition` ist die
+  Sollstärke je Rolle. Ohne sie bleibt es bei "vier offene Plätze";
+  mit ihr steht daneben, welche. Ein geratenes Soll (2 Tanks, 5
+  Heiler) wäre für die halbe Gilde falsch.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+
+
+#
+# --------------------------------------------------
+# Rollen
+# --------------------------------------------------
+#
+# Die Reihenfolge ist die der Anzeige: Tanks, Heiler, Schaden - so
+# steht sie im Entwurf und so liest sie jeder Raidleiter. Sie ist
+# hier festgelegt und nicht im Widget, damit Streifen und Satz
+# darunter nicht in unterschiedlicher Folge auftreten.
+#
+
+ROLE_ORDER = ("tank", "healer", "dps")
+
+ROLE_LABELS = {
+    "tank": "TANKS",
+    "healer": "HEILER",
+    "dps": "SCHADEN",
+}
+
+#
+# Für den Satz unter den Streifen ("1 Tank, 2 Schaden") - Einzahl und
+# Mehrzahl fallen im Deutschen bei allen drei zusammen.
+#
+
+ROLE_NAMES = {
+    "tank": "Tank",
+    "healer": "Heiler",
+    "dps": "Schaden",
+}
+
+#
+# Wie der Bot eine Rolle nennen könnte. Additiv gedacht wie
+# `player_abilities`: ein unbekannter Wert kostet die Zuordnung, er
+# erfindet keine.
+#
+
+ROLE_ALIASES = {
+    "tank": "tank",
+    "tanks": "tank",
+    "healer": "healer",
+    "heal": "healer",
+    "heals": "healer",
+    "heiler": "healer",
+    "dps": "dps",
+    "damage": "dps",
+    "damager": "dps",
+    "dd": "dps",
+    "schaden": "dps",
+    "melee": "dps",
+    "ranged": "dps",
+}
+
+#
+# Zahlwörter für den Satz unter den Streifen. Der Entwurf schreibt
+# "Vier offene Plätze", nicht "4 offene Plätze" - eine kleine Zahl
+# ausgeschrieben liest sich als Satz statt als Messwert, und mehr als
+# zwölf offene Plätze sind ohnehin keine Feinheit mehr.
+#
+
+NUMBER_WORDS = {
+    2: "Zwei",
+    3: "Drei",
+    4: "Vier",
+    5: "Fünf",
+    6: "Sechs",
+    7: "Sieben",
+    8: "Acht",
+    9: "Neun",
+    10: "Zehn",
+    11: "Elf",
+    12: "Zwölf",
+}
+
+
+def normalize_role(value) -> str:
+    """
+    Die Rolle in einem der drei bekannten Werte - oder "".
+
+    Ein unbekannter Wert wird nicht geraten: der Platz erscheint dann
+    im Streifen "zugesagt" statt in einer falschen Rolle.
+    """
+
+    return ROLE_ALIASES.get(str(value or "").strip().lower(), "")
 
 
 #
@@ -49,6 +156,23 @@ from datetime import datetime, timezone
 #
 
 RUNNING_MINUTES = 4 * 60
+
+
+@dataclass(frozen=True)
+class RosterSlot:
+    """
+    Ein zugesagter Platz: Rolle und Klasse, **kein Name**.
+
+    Die Grenze des Vertrags verläuft genau hier. Rolle und Klasse
+    stehen als Symbol in jedem Anmelde-Beitrag, den jeder im Kanal
+    liest; die Namensliste bleibt hinter der Raidlead-Rolle. Ein
+    `name`-Feld an dieser Stelle würde eine rollengeschützte Auskunft
+    unbemerkt in eine ungeschützte verschieben.
+    """
+
+    role: str = ""
+
+    class_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -68,6 +192,44 @@ class RaidDay:
     bench: int = 0
 
     absent: int = 0
+
+    #
+    # Die Zusagen als Plätze. Leer, solange der Bot den Block nicht
+    # schickt - dann zeigt die Übersicht einen einzigen Streifen
+    # "zugesagt" statt drei geschätzter Rollen.
+    #
+
+    roster: tuple[RosterSlot, ...] = ()
+
+    # --------------------------------------------------
+
+    def role_counts(self) -> dict[str, int]:
+        """
+        Wie viele Zusagen je Rolle - nur aus dem gemeldeten Roster.
+
+        Ein leeres Ergebnis heißt "nicht bekannt" und nicht "keine
+        Tanks": die beiden Fälle unterscheidet allein `roster`.
+        """
+
+        counts = {role: 0 for role in ROLE_ORDER}
+
+        for slot in self.roster:
+
+            if slot.role in counts:
+                counts[slot.role] += 1
+
+        return counts
+
+    def has_roles(self) -> bool:
+        """
+        Ob die Zusammensetzung überhaupt bekannt ist.
+
+        Ein Roster ohne eine einzige zuzuordnende Rolle zählt nicht -
+        drei leere Streifen wären eine Behauptung über den Raid, wo
+        in Wahrheit die Auskunft fehlt.
+        """
+
+        return any(self.role_counts().values())
 
     # --------------------------------------------------
 
@@ -121,6 +283,14 @@ class RaidSchedule:
     raid_size: int = 0
 
     days: tuple[RaidDay, ...] = field(default_factory=tuple)
+
+    #
+    # Die Sollstärke je Rolle, so wie der Raid geplant ist. Leer,
+    # solange der Bot sie nicht meldet - dann bleibt es bei "vier
+    # offene Plätze", ohne zu behaupten, welche.
+    #
+
+    composition: dict = field(default_factory=dict)
 
     detail: str = ""
 
@@ -228,6 +398,7 @@ def parse_schedule(data) -> RaidSchedule:
                 tentative=int(counts.get("tentative") or 0),
                 bench=int(counts.get("bench") or 0),
                 absent=int(counts.get("absent") or 0),
+                roster=_parse_roster(entry.get("roster"), counts.get("roles")),
             )
         )
 
@@ -245,8 +416,107 @@ def parse_schedule(data) -> RaidSchedule:
         signup_status=str(data.get("signup_status") or "open"),
         raid_size=int(data.get("raid_size") or 0),
         days=tuple(days),
+        composition=_parse_composition(data.get("composition")),
         signup=_parse_signup(data.get("discord")),
     )
+
+
+def _parse_roster(rows, roles) -> tuple[RosterSlot, ...]:
+    """
+    Die Zusagen als Plätze - aus `days[].roster`, ersatzweise aus
+    `days[].signups.roles`.
+
+    Zwei Formen, weil der Bot die zweite deutlich billiger liefern
+    kann: `roster` nennt je Zusage Rolle **und** Klasse (dann sind die
+    Plätze in Klassenfarbe), `roles` nur die Zahlen je Rolle (dann
+    sind sie in Akzentfarbe). Beides sagt dasselbe über die
+    Zusammensetzung; nur das Bild wird ärmer.
+
+    Ein Eintrag ohne erkennbare Rolle wird verworfen, statt unter
+    "Schaden" zu landen - eine falsche Rolle ist schlechter als eine
+    fehlende, weil sie sich nicht als Lücke zu erkennen gibt.
+    """
+
+    slots: list[RosterSlot] = []
+
+    if isinstance(rows, (list, tuple)):
+
+        for row in rows:
+
+            if not isinstance(row, dict):
+                continue
+
+            role = normalize_role(row.get("role"))
+
+            if not role:
+                continue
+
+            slots.append(
+                RosterSlot(
+                    role=role,
+                    class_name=str(
+                        row.get("class") or row.get("class_name") or ""
+                    ).strip(),
+                )
+            )
+
+    if slots:
+        return tuple(slots)
+
+    if not isinstance(roles, dict):
+        return ()
+
+    for key in ROLE_ORDER:
+
+        count = 0
+
+        for name, value in roles.items():
+
+            if normalize_role(name) != key:
+                continue
+
+            try:
+                count += int(value or 0)
+
+            except (TypeError, ValueError):
+                continue
+
+        slots.extend(RosterSlot(role=key) for _ in range(max(0, count)))
+
+    return tuple(slots)
+
+
+def _parse_composition(data) -> dict:
+    """
+    Die Sollstärke je Rolle.
+
+    Nur die drei bekannten Rollen und nur positive Zahlen: ein Soll
+    von null ist keins, und eine unbekannte Rolle hätte im Streifen
+    keinen Platz, an dem sie erscheinen könnte.
+    """
+
+    if not isinstance(data, dict):
+        return {}
+
+    target = {}
+
+    for name, value in data.items():
+
+        role = normalize_role(name)
+
+        if not role:
+            continue
+
+        try:
+            count = int(value or 0)
+
+        except (TypeError, ValueError):
+            continue
+
+        if count > 0:
+            target[role] = count
+
+    return target
 
 
 def _parse_signup(data) -> dict:
@@ -364,3 +634,150 @@ def signup_text(day: RaidDay | None, size: int = 0) -> str:
         parts.append(f"{day.bench} Ersatzbank")
 
     return " · ".join(parts)
+
+
+# --------------------------------------------------
+# Die Aufstellung
+# --------------------------------------------------
+
+
+def count_text(day: RaidDay | None, size: int = 0) -> str:
+    """
+    Die Zahl rechts über den Streifen: "21 / 25 zugesagt".
+
+    Ohne Raidgröße ohne das "/ 25", aus demselben Grund wie in
+    `signup_text()`.
+    """
+
+    if day is None:
+        return ""
+
+    if size:
+        return f"{day.active} / {size} zugesagt"
+
+    return f"{day.active} zugesagt"
+
+
+def open_slots(schedule: RaidSchedule | None, day: RaidDay | None):
+    """
+    Was noch fehlt: (offene Plätze, je Rolle offen, frei wählbar).
+
+    Drei Zahlen, weil sie drei verschiedene Dinge wissen:
+
+    - **offen** folgt allein aus Raidgröße minus Zusagen und ist
+      deshalb schon bekannt, wenn von Rollen noch keine Rede ist.
+    - **je Rolle** braucht beides, das gemeldete Soll und die
+      gemeldete Zusammensetzung. Fehlt eines, bleibt die Angabe leer
+      statt geschätzt.
+    - **frei wählbar** ist der Rest. Er ist der ehrliche Teil der
+      Auskunft: die Sollstärke sagt, wie viele Heiler gebraucht
+      werden, nicht wie die letzten Plätze zu besetzen sind.
+
+    Ohne bekannte Raidgröße ist alles davon `None`-artig, hier also
+    `(0, {}, 0)` - die Oberfläche sagt dann gar nichts über offene
+    Plätze, statt gegen eine erfundene Obergrenze zu rechnen.
+    """
+
+    if day is None or schedule is None:
+        return 0, {}, 0
+
+    size = int(getattr(schedule, "raid_size", 0) or 0)
+
+    if size <= 0:
+        return 0, {}, 0
+
+    total = max(0, size - day.active)
+
+    composition = getattr(schedule, "composition", None) or {}
+
+    if not composition or not day.has_roles():
+        return total, {}, total
+
+    have = day.role_counts()
+
+    missing = {}
+
+    for role in ROLE_ORDER:
+
+        target = int(composition.get(role) or 0)
+
+        if target <= 0:
+            continue
+
+        gap = target - have.get(role, 0)
+
+        if gap > 0:
+            missing[role] = gap
+
+    return total, missing, max(0, total - sum(missing.values()))
+
+
+def number_word(count: int) -> str:
+    """
+    "Vier" statt "4" - bis zwölf, darüber die Ziffer.
+    """
+
+    return NUMBER_WORDS.get(count, str(count))
+
+
+def composition_text(
+    schedule: RaidSchedule | None,
+    day: RaidDay | None,
+) -> str:
+    """
+    Der Satz unter den Streifen.
+
+    "Vier offene Plätze · 1 Tank, 1 Heiler, 2 frei wählbar" - oder,
+    ohne gemeldetes Soll, nur der erste Teil. Ist der Raid voll, sagt
+    er das; ohne bekannte Raidgröße sagt er nichts, weil er dann auch
+    nichts weiß.
+    """
+
+    if day is None:
+        return ""
+
+    total, missing, free = open_slots(schedule, day)
+
+    size = int(getattr(schedule, "raid_size", 0) or 0)
+
+    if size <= 0:
+        return ""
+
+    parts = [
+        f"{count} {ROLE_NAMES[role]}"
+        for role, count in (
+            (role, missing.get(role, 0)) for role in ROLE_ORDER
+        )
+        if count
+    ]
+
+    if total <= 0:
+
+        #
+        # Voll und trotzdem falsch besetzt: fünfundzwanzig Zusagen,
+        # darunter kein zweiter Tank. "Vollständig" wäre hier die
+        # bequeme Antwort und die einzige, die der Raidleiter nicht
+        # gebrauchen kann - die Streifen daneben zeigen die Lücke ja.
+        #
+
+        if not parts:
+            return "Die Aufstellung ist vollständig."
+
+        return (
+            f"Voll besetzt · {', '.join(parts)} "
+            f"{'fehlt' if sum(missing.values()) == 1 else 'fehlen'} noch"
+        )
+
+    head = (
+        "Ein offener Platz"
+        if total == 1
+        else f"{number_word(total)} offene Plätze"
+    )
+
+    if free and parts:
+        parts.append(f"{free} frei wählbar")
+
+    if not parts:
+        return head
+
+    return f"{head} · {', '.join(parts)}"

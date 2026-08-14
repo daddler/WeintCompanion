@@ -150,6 +150,52 @@ def test_meter_bar_follows_the_accent():
     )
 
 
+def test_the_roster_strip_follows_the_accent():
+    """
+    Ein zugesagter Platz ohne gemeldete Klasse trägt die Akzentfarbe.
+    Gelesen wird sie im `paintEvent` - im Konstruktor gelesen bliebe
+    der Streifen bernsteinfarben, und zwar lautlos.
+    """
+
+    from gui.widgets.roster_strip import RosterStrip, SlotGroup
+
+    def build():
+
+        strip = RosterStrip()
+
+        strip.setGroups([SlotGroup("ZUGESAGT", [""] * 8, 4)])
+
+        return strip
+
+    images = _images_per_accent(build)
+
+    assert len(set(images.values())) == len(images), (
+        "Die Plätze der Aufstellung bleiben bernsteinfarben."
+    )
+
+
+def test_a_class_coloured_slot_ignores_the_accent():
+    """
+    Die Gegenprobe: eine gemeldete Klasse hat ihre eigene Farbe, und
+    die ist keine Frage des Themas. Änderte sie sich mit, wäre die
+    Klassenfarbe nur Zierde.
+    """
+
+    from gui.widgets.roster_strip import RosterStrip, SlotGroup
+
+    def build():
+
+        strip = RosterStrip()
+
+        strip.setGroups([SlotGroup("", ["Mage"] * 8, 0)])
+
+        return strip
+
+    images = _images_per_accent(build)
+
+    assert len(set(images.values())) == 1
+
+
 def test_a_secondary_hero_button_carries_no_accent():
     """
     Die Gegenprobe: der Zweitknopf ist bewusst neutral. Änderte auch

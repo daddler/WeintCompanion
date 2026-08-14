@@ -67,6 +67,7 @@ def _builders():
     from gui.widgets.card import Card
     from gui.widgets.hero_banner import HeroButton
     from gui.widgets.progress_ring import ProgressRing
+    from gui.widgets.roster_strip import RosterStrip
     from gui.widgets.segmented_control import SegmentedControl
     from gui.widgets.sparkline import Sparkline
     from gui.widgets.toggle_switch import ToggleSwitch
@@ -78,6 +79,7 @@ def _builders():
         "HeroButton": lambda: HeroButton("Speichern"),
         "MeterBar": MeterBar,
         "ProgressRing": ProgressRing,
+        "RosterStrip": RosterStrip,
         "SegmentedControl": lambda: SegmentedControl(
             [("A", "a"), ("B", "b")]
         ),
@@ -121,6 +123,7 @@ WIDGET_NAMES = (
     "HeroButton",
     "MeterBar",
     "ProgressRing",
+    "RosterStrip",
     "SegmentedControl",
     "Sparkline",
     "StarRating",

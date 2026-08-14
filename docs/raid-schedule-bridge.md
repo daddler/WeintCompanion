@@ -31,14 +31,17 @@ sondern der Stand der Dinge:
 
 ## Was der Endpunkt liefert — und was bewusst nicht
 
-**Termin und Zahlen, niemals Namen.** Beides steht ohnehin im
-Anmelde-Beitrag, den jeder im Kanal lesen kann, deshalb genügt ein
-verknüpftes Konto ohne jede Rolle. Die Namensliste mit den echten
-Charakternamen bleibt hinter `RAIDLEAD_ROLE_ID`, wo sie war.
+**Termin, Zahlen und die Zusammensetzung — niemals Namen.** All das
+steht ohnehin im Anmelde-Beitrag, den jeder im Kanal lesen kann
+(Rolle und Klasse dort als Symbol), deshalb genügt ein verknüpftes
+Konto ohne jede Rolle. Die Namensliste mit den echten Charakternamen
+bleibt hinter `RAIDLEAD_ROLE_ID`, wo sie war.
 
 > Diese Grenze ist der Kern des Vertrags. Wer die Antwort später um
 > Namen erweitert, verschiebt eine rollengeschützte Auskunft
-> unbemerkt in eine ungeschützte.
+> unbemerkt in eine ungeschützte. `roster[]` trägt deshalb `role` und
+> `class` und **kein** `name` — auch nicht als Discord-Anzeigename,
+> auch nicht gekürzt.
 
 ## Anfrage
 
@@ -58,6 +61,7 @@ Authorization: Bearer <companion_token>
   "raid_type": "standard",
   "signup_status": "open",
   "raid_size": 25,
+  "composition": { "tank": 2, "healer": 6, "dps": 17 },
   "timezone": "Europe/Berlin",
   "days": [
     {
@@ -71,7 +75,12 @@ Authorization: Bearer <companion_token>
         "tentative": 2,
         "bench": 1,
         "absent": 3
-      }
+      },
+      "roster": [
+        { "role": "tank",   "class": "Warrior" },
+        { "role": "healer", "class": "Priest" },
+        { "role": "dps",    "class": "Mage" }
+      ]
     },
     {
       "key": "thursday",
@@ -99,7 +108,46 @@ Authorization: Bearer <companion_token>
 | `days[].key` | `wednesday`, `thursday` oder `special` |
 | `days[].starts_at` | ISO-8601 **mit Offset** |
 | `days[].signups` | `active` / `tentative` / `bench` / `absent` |
+| `days[].roster` | **optional**: je Zusage `role` und `class`, ohne Namen |
+| `days[].signups.roles` | **optional**: Ersatzform, nur Zahlen je Rolle |
+| `composition` | **optional**: Sollstärke je Rolle |
 | `discord` | Fundort der Anmeldung; optional, alle IDs als **Zeichenkette** |
+
+## Die Aufstellung (`roster`, `composition`)
+
+Die Übersicht zeichnet daraus die Aufstellung: je Rolle eine Reihe
+Plätze, gefüllte in Klassenfarbe, offene als Lücke, darunter ein Satz
+wie „Vier offene Plätze · 1 Heiler, 3 Schaden". Das ist die Frage, wegen
+der man vor einem Raid ins Discord sieht — „21 von 25" beantwortet sie
+nicht, denn ob die vier fehlenden Heiler oder Schaden sind, entscheidet,
+ob der Abend stattfindet.
+
+- `role` ist `tank`, `healer` oder `dps`; `heiler`, `heal`, `damage`,
+  `dd`, `melee`, `ranged` werden ebenfalls erkannt. Ein **unbekannter**
+  Wert lässt den Eintrag weg, statt ihn unter „Schaden" abzulegen: eine
+  falsche Rolle gibt sich nicht als Lücke zu erkennen.
+- `class` ist der englische Klassenname wie im Combat-Log
+  (`Death Knight`, `Warrior`, …). Fehlt er, ist der Platz in
+  Akzentfarbe statt in Klassenfarbe — die Aufstellung stimmt, nur das
+  Bild ist ärmer.
+- `roster` beschreibt genau die **aktiven** Zusagen. „Vielleicht" und
+  „Ersatzbank" gehören nicht hinein; sie stehen weiterhin als Zahl
+  daneben.
+- `signups.roles` (`{ "tank": 2, "healer": 5, "dps": 14 }`) ist die
+  billigere Form, falls die Klassen dem Bot nicht vorliegen. Sie wird
+  nur gelesen, wenn `roster` fehlt.
+- `composition` ist die **Sollstärke** je Rolle. Ohne sie bleibt es bei
+  „Vier offene Plätze", ohne zu behaupten, welche — ein geratenes Soll
+  (2 Tanks, 5 Heiler) wäre für die halbe Gilde falsch. Bleibt nach den
+  fehlenden Rollen noch etwas offen, heißt es „frei wählbar": das Soll
+  sagt, wie viele Heiler gebraucht werden, nicht wie der letzte Platz
+  zu besetzen ist.
+
+**Fehlt beides, ändert sich nichts an der bisherigen Anzeige** außer
+der Form: ein einziger Streifen „zugesagt" mit den gefüllten und den
+offenen Plätzen. Drei Reihen aus einer Gesamtzahl zu schätzen wäre in
+der Anzeige von drei gemeldeten nicht zu unterscheiden — dieselbe Linie
+wie `stars == 0` im Analyzer.
 
 Der `discord`-Block ist der Ort, an dem die Anmeldung wirklich steht —
 gefunden über `locate_signup()` im Bot, also die Zusammenfassung, sonst

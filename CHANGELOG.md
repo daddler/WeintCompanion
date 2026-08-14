@@ -2,6 +2,55 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.0.7
+
+**Die Aufstellung auf der Übersicht zeigt jetzt, wer fehlt** — nicht
+nur, wie viele. Statt einer Zeile "10 von 25 zugesagt" steht dort die
+Zusammensetzung, so wie sie im Entwurf der Übersicht immer gedacht
+war: je Rolle eine Reihe von Plätzen, die besetzten in Klassenfarbe,
+die offenen als Lücke, darunter ein Satz wie "Vier offene Plätze · 1
+Heiler, 3 Schaden".
+
+Das ist die Frage, wegen der man vor einem Raid überhaupt ins Discord
+sieht. Vier offene Plätze sind harmlos, wenn es Schaden ist, und ein
+abgesagter Abend, wenn einer davon der zweite Tank ist — die reine
+Zahl beantwortet das nicht.
+
+Rolle und Klasse liefert der Bot mit dem Termin, **Namen weiterhin
+nicht**: beides steht als Symbol in der Anmeldung, die jeder im Kanal
+lesen kann, während die Namensliste hinter der Raidlead-Rolle bleibt.
+Meldet eine ältere Bot-Fassung keine Rollen, steht dort ein einziger
+Streifen "zugesagt" mit den besetzten und den offenen Plätzen — eine
+Aufteilung wird nicht geschätzt, denn drei geratene Reihen wären von
+drei gemeldeten nicht zu unterscheiden.
+
+**"Dein letzter Pull" kennt jetzt auch den Raid von gestern.** Bisher
+las die Karte ausschließlich die Pulls mit, die *während der
+laufenden Sitzung* endeten, während WeintTV oder die Academy geöffnet
+war. Nach einem Neustart war diese Liste leer, und die Übersicht sagte
+am Tag nach dem Raidabend "Noch kein Pull" — keine vorsichtige
+Auskunft, sondern schlicht eine falsche: der Kampf hat stattgefunden,
+die App hat an der falschen Stelle nachgesehen.
+
+Findet sich in der Sitzung nichts, tritt jetzt der letzte Pull aus dem
+WarcraftLogs-Archiv an diese Stelle, mit Boss, Ausgang, Dauer,
+Pullnummer und der Kurve der letzten Versuche an demselben Boss. Die
+laufende Sitzung hat weiterhin Vorrang — was gerade eben endete, ist
+der letzte Kampf, auch wenn WarcraftLogs ihn noch nicht kennt.
+
+Was ein Pull aus dem Archiv **nicht** mitbringt, ist die Bewertung:
+dafür müsste der ganze Kampf geladen werden, was beim Bot Minuten
+dauert. Die Sternreihe bleibt deshalb leer, und die Lektionskarte sagt
+das ausdrücklich und nennt den Weg zur vollständigen Auswertung —
+statt einen schwächsten Bereich zu benennen, den niemand gemessen hat.
+
+Nebenbei behoben: die Karte las zwei Felder unter Namen, die es nie
+gab (`boss` statt `encounter_name`, `boss_percent` statt
+`boss_health_percent`). Selbst mit gefüllter Historie stand dort
+"Kampf" ohne Kurve. Und beide Abrufe der Übersicht — Termin wie
+letzter Pull — starteten nicht, wenn die App innerhalb der ersten
+Minuten nach dem Hochfahren des Rechners geöffnet wurde.
+
 ## 2.0.6
 
 **Das Fenster ließ sich unter Linux nicht mehr verschieben**, solange

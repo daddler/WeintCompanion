@@ -9,8 +9,11 @@ abend ein anderer als am Montag.
 from datetime import datetime
 
 from core.raid_schedule import (
+    composition_text,
+    count_text,
     countdown_text,
     day_text,
+    open_slots,
     parse_schedule,
     signup_text,
 )
@@ -242,6 +245,244 @@ def test_an_older_bot_reports_no_location():
     for broken in ("", [], {"channel_id": ""}, {"channel_id": None}):
 
         assert parse_schedule({**PAYLOAD, "discord": broken}).signup == {}
+
+
+# --------------------------------------------------
+# Die Aufstellung
+# --------------------------------------------------
+
+
+def _with_roster(**extra):
+
+    day = dict(PAYLOAD["days"][0])
+
+    day["roster"] = (
+        [{"role": "tank", "class": "Warrior"}] * 2
+        + [{"role": "healer", "class": "Priest"}] * 5
+        + [{"role": "dps", "class": "Mage"}] * 14
+    )
+
+    day["signups"] = {"active": 21, "tentative": 2, "bench": 1}
+
+    return parse_schedule({
+        **PAYLOAD,
+        "days": [day],
+        **extra,
+    })
+
+
+def test_the_roster_carries_roles_and_classes_but_no_names():
+    """
+    Die Grenze des Vertrags: Rolle und Klasse ja, Name nein. Ein
+    Namensfeld hier würde eine rollengeschützte Auskunft in eine
+    ungeschützte verschieben.
+    """
+
+    day = _with_roster().days[0]
+
+    assert day.has_roles()
+
+    assert day.role_counts() == {"tank": 2, "healer": 5, "dps": 14}
+
+    assert day.roster[0].class_name == "Warrior"
+
+    assert not hasattr(day.roster[0], "name")
+
+
+def test_an_older_bot_reports_no_roles_and_nothing_is_guessed():
+    """
+    Ohne den Block bleibt die Zusammensetzung unbekannt - und wird
+    nicht aus der Gesamtzahl geschätzt. Drei geraten Reihen wären in
+    der Anzeige von drei gemeldeten nicht zu unterscheiden.
+    """
+
+    day = parse_schedule(PAYLOAD).days[0]
+
+    assert day.roster == ()
+
+    assert not day.has_roles()
+
+    assert day.role_counts() == {"tank": 0, "healer": 0, "dps": 0}
+
+
+def test_bare_role_counts_are_enough_for_the_bars():
+    """
+    Die billigere der beiden Formen: nur Zahlen je Rolle, keine
+    Klassen. Die Aufstellung stimmt dann, nur die Farbe fehlt.
+    """
+
+    day = dict(PAYLOAD["days"][0])
+
+    day["signups"] = {
+        "active": 21,
+        "roles": {"tank": 2, "heiler": 5, "damage": 14},
+    }
+
+    parsed = parse_schedule({**PAYLOAD, "days": [day]}).days[0]
+
+    assert parsed.role_counts() == {"tank": 2, "healer": 5, "dps": 14}
+
+    assert all(not slot.class_name for slot in parsed.roster)
+
+
+def test_an_unknown_role_is_dropped_rather_than_filed_as_damage():
+    """
+    Eine falsche Rolle ist schlechter als eine fehlende: sie gibt sich
+    nicht als Lücke zu erkennen.
+    """
+
+    day = dict(PAYLOAD["days"][0])
+
+    day["roster"] = [
+        {"role": "tank", "class": "Warrior"},
+        {"role": "Buffbot", "class": "Mage"},
+        {"role": "", "class": "Mage"},
+    ]
+
+    parsed = parse_schedule({**PAYLOAD, "days": [day]}).days[0]
+
+    assert parsed.role_counts() == {"tank": 1, "healer": 0, "dps": 0}
+
+
+def test_what_is_missing_needs_a_target_to_compare_against():
+    """
+    Ohne gemeldete Sollstärke bleibt es bei "vier offene Plätze" -
+    welche es sind, weiß nur, wer das Soll kennt. Ein geratenes Soll
+    (2 Tanks, 5 Heiler) wäre für die halbe Gilde falsch.
+    """
+
+    schedule = _with_roster()
+
+    day = schedule.days[0]
+
+    total, missing, free = open_slots(schedule, day)
+
+    assert (total, missing, free) == (4, {}, 4)
+
+    assert composition_text(schedule, day) == "Vier offene Plätze"
+
+    #
+    # Mit Soll wird daraus eine Ansage.
+    #
+
+    schedule = _with_roster(
+        composition={"tank": 2, "healer": 6, "dps": 17},
+    )
+
+    day = schedule.days[0]
+
+    total, missing, free = open_slots(schedule, day)
+
+    assert total == 4
+
+    assert missing == {"healer": 1, "dps": 3}
+
+    assert free == 0
+
+    assert composition_text(schedule, day) == (
+        "Vier offene Plätze · 1 Heiler, 3 Schaden"
+    )
+
+
+def test_the_rest_is_free_rather_than_forced_into_a_role():
+    """
+    Die Sollstärke sagt, wie viele Heiler gebraucht werden, nicht wie
+    der letzte Platz zu besetzen ist.
+    """
+
+    schedule = _with_roster(
+        composition={"tank": 2, "healer": 6, "dps": 15},
+    )
+
+    day = schedule.days[0]
+
+    total, missing, free = open_slots(schedule, day)
+
+    assert (total, missing, free) == (4, {"healer": 1, "dps": 1}, 2)
+
+    assert composition_text(schedule, day) == (
+        "Vier offene Plätze · 1 Heiler, 1 Schaden, 2 frei wählbar"
+    )
+
+
+def test_a_full_raid_says_so_and_a_single_slot_is_singular():
+
+    day = dict(PAYLOAD["days"][0])
+
+    day["signups"] = {"active": 25}
+
+    schedule = parse_schedule({**PAYLOAD, "days": [day]})
+
+    assert composition_text(schedule, schedule.days[0]) == (
+        "Die Aufstellung ist vollständig."
+    )
+
+    day["signups"] = {"active": 24}
+
+    schedule = parse_schedule({**PAYLOAD, "days": [day]})
+
+    assert composition_text(schedule, schedule.days[0]) == (
+        "Ein offener Platz"
+    )
+
+
+def test_full_and_wrongly_composed_is_not_called_complete():
+    """
+    Fünfundzwanzig Zusagen, darunter kein zweiter Tank:
+    "vollständig" wäre die bequeme Antwort und die einzige, die der
+    Raidleitung nichts nützt.
+    """
+
+    day = dict(PAYLOAD["days"][0])
+
+    day["signups"] = {"active": 25}
+
+    day["roster"] = (
+        [{"role": "tank", "class": "Warrior"}]
+        + [{"role": "healer", "class": "Priest"}] * 6
+        + [{"role": "dps", "class": "Mage"}] * 18
+    )
+
+    schedule = parse_schedule({
+        **PAYLOAD,
+        "days": [day],
+        "composition": {"tank": 2, "healer": 6, "dps": 17},
+    })
+
+    assert composition_text(schedule, schedule.days[0]) == (
+        "Voll besetzt · 1 Tank fehlt noch"
+    )
+
+
+def test_without_a_raid_size_nothing_is_said_about_open_slots():
+    """
+    Dieselbe Regel wie bei `signup_text()`: eine erfundene Obergrenze
+    ließe die Zusagen knapp oder üppig aussehen.
+    """
+
+    schedule = parse_schedule({
+        **PAYLOAD,
+        "raid_size": 0,
+    })
+
+    day = schedule.days[0]
+
+    assert open_slots(schedule, day) == (0, {}, 0)
+
+    assert composition_text(schedule, day) == ""
+
+    assert count_text(day, 0) == "18 zugesagt"
+
+    assert count_text(day, 25) == "18 / 25 zugesagt"
+
+
+def test_a_broken_composition_costs_nothing():
+
+    for broken in (None, [], "nein", {"tank": "zwei"}, {"buffbot": 3}):
+
+        schedule = parse_schedule({**PAYLOAD, "composition": broken})
+
+        assert schedule.composition == {}
 
 
 def test_a_signup_that_is_gone_is_not_a_raid():

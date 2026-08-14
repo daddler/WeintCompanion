@@ -23,6 +23,7 @@ from core.discord_auth import DiscordAuth
 from core.access_profile_sync import AccessProfileSync
 from core.discord_roster_sync import DiscordRosterSync
 from core.raid_schedule_sync import RaidScheduleSync
+from core.last_pull_sync import LastPullSync
 from addon.addon_inbox import AddonInbox
 from core.addon_analysis_sync import AddonAnalysisSync
 from core.raid_data_service import RaidDataService
@@ -137,6 +138,16 @@ class CompanionManager(QObject):
         #
 
         self.raid_schedule_sync = RaidScheduleSync(self)
+
+        #
+        # Der letzte Pull für die Übersicht. Ebenfalls kein Absender
+        # Richtung Addon: er beantwortet allein die Frage "was war
+        # mein letzter Kampf", die die Übersicht bis 2.0.6 nur für die
+        # laufende Sitzung stellen konnte - nach einem Neustart stand
+        # dort auch am Tag nach dem Raid "Noch kein Pull".
+        #
+
+        self.last_pull_sync = LastPullSync(self)
 
         #
         # WeintTV und WeintAcademy hängen beide am selben
@@ -376,6 +387,22 @@ class CompanionManager(QObject):
 
             self.logger.error(
                 f"Raidtermin-Abruf fehlgeschlagen: {exc}"
+            )
+
+        #
+        # Der letzte Pull der Uebersicht. Eigener try/except wie jeder
+        # andere Schritt - und bewusst nach dem Termin, weil er die
+        # teureren beiden Abrufe traegt (Bericht- und Pull-Liste).
+        #
+
+        try:
+
+            self.last_pull_sync.process()
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"Abruf des letzten Pulls fehlgeschlagen: {exc}"
             )
 
         #

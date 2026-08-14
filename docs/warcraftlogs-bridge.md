@@ -931,6 +931,16 @@ GET /companion/warcraftlogs/reports
 }
 ```
 
+**Die Reihenfolge ist Teil des Vertrags: neueste zuerst.** Seit 2.0.7
+liest nicht nur der Archivmodus diese Liste, sondern auch die
+Übersicht - sie nimmt den ersten Bericht, der einen Bosskampf enthält,
+und dessen letzten Pull als „Dein letzter Pull"
+(`core/last_pull_sync.py`, alle 20 Minuten, zwischengespeichert). Der
+teure Einzel-Fight wird dafür ausdrücklich **nicht** abgerufen: Boss,
+Ausgang, Dauer und Pullnummer stehen bereits in der Fightliste, und
+was ohne ihn fehlt - Bewertung und Lektion - sagt die Karte
+ausdrücklich, statt es zu schätzen.
+
 Eine sinnvolle Grenze (z. B. die letzten 20-30 Reports der Gilde,
 neueste zuerst) reicht aus - die Companion-App zeigt sie in einem
 Dropdown, kein endloses Scrollen. `code` ist das einzige Pflichtfeld

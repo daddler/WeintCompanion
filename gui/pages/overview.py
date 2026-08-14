@@ -48,8 +48,24 @@ from core.backend_config import TARGET_URL, app_url, roster_target
 from core.browser import open_url
 from core.changelog_reader import format_changelog_body
 from core.changelog_source import ADDON, COMPANION, LABELS, latest_entry
+from core.last_pull import (
+    LastPull,
+    from_history,
+    result_text,
+    source_text,
+    when_text,
+)
 from core.platform import is_linux
-from core.raid_schedule import countdown_text, day_text, signup_text
+from core.raid_schedule import (
+    ROLE_LABELS,
+    ROLE_ORDER,
+    composition_text,
+    count_text,
+    countdown_text,
+    day_text,
+    open_slots,
+    signup_text,
+)
 from gui.dialogs.changelog_dialog import show_changelog
 from gui.pages._page import Page
 from gui.theme import tokens
@@ -63,6 +79,7 @@ from gui.widgets.eyebrow import eyebrow_label
 from gui.widgets.sparkline import Sparkline
 from gui.widgets.status_dot import StatusDot
 from gui.widgets.progress_ring import ProgressRing
+from gui.widgets.roster_strip import RosterStrip, SlotGroup
 from gui.widgets.academy.star_rating import Rating
 from gui.widgets.wrapped_label import enable_wrap
 
@@ -123,9 +140,85 @@ def _divider() -> QFrame:
     return line
 
 
+def _slot_groups(schedule, day) -> list[SlotGroup]:
+    """
+    Die Reihen des Aufstellungsstreifens.
+
+    Drei Fälle, und sie unterscheiden sich in dem, was der Bot
+    geliefert hat - nicht in dem, was die Karte gerne hätte:
+
+    - **Rollen gemeldet**: eine Reihe je Rolle, gefüllt mit den
+      Klassen der Zusagen, dahinter die fehlenden Plätze dieser Rolle
+      (nur wenn eine Sollstärke gemeldet ist). Was danach noch offen
+      ist, steht als eigene Reihe "FREI" - die Sollstärke sagt, wie
+      viele Heiler gebraucht werden, nicht, wie der letzte Platz zu
+      besetzen ist.
+    - **Nur Zahlen**: ein einziger Streifen "ZUGESAGT". Drei Reihen
+      aus einer Gesamtzahl zu schätzen wäre in der Anzeige von einer
+      gemeldeten Aufstellung nicht zu unterscheiden.
+    - **Keine Raidgröße und keine Zusage**: gar kein Streifen. Ein
+      leerer Rahmen ohne einen einzigen Platz ist kein Bild, sondern
+      ein Ladefehler.
+    """
+
+    if day is None:
+        return []
+
+    size = int(getattr(schedule, "raid_size", 0) or 0)
+
+    total_open, missing, free = open_slots(schedule, day)
+
+    if day.has_roles():
+
+        groups = []
+
+        for role in ROLE_ORDER:
+
+            filled = [
+                slot.class_name
+                for slot in day.roster
+                if slot.role == role
+            ]
+
+            gap = missing.get(role, 0)
+
+            if not filled and not gap:
+                continue
+
+            groups.append(
+                SlotGroup(
+                    label=ROLE_LABELS[role],
+                    filled=filled,
+                    open_slots=gap,
+                )
+            )
+
+        if free:
+
+            groups.append(SlotGroup(label="FREI", open_slots=free))
+
+        return groups
+
+    if not day.active and not size:
+        return []
+
+    #
+    # Ohne Rollen: ein Streifen. Die gefüllten Plätze tragen keine
+    # Klasse und erscheinen deshalb in Akzentfarbe.
+    #
+
+    return [
+        SlotGroup(
+            label="ZUGESAGT",
+            filled=[""] * day.active,
+            open_slots=total_open,
+        )
+    ]
+
+
 class RosterCard(Card):
     """
-    Der nächste Raid: Termin, Titel, Zusagen.
+    Der nächste Raid: Termin, Titel, **Aufstellung**.
 
     **Was sich hier geändert hat.** Bis 2.0.1 stand an dieser Stelle
     "Zusagen und Rollen sind der App nicht bekannt", und das stimmte:
@@ -135,22 +228,33 @@ class RosterCard(Card):
     die Raidlead-Rolle trägt.
 
     Der Bot beantwortet die Frage jetzt eigens
-    (`/companion/raid-schedule`, für jeden verknüpften Nutzer). Was
-    weiterhin **nicht** hier steht, ist die Namensliste: dieser
-    Endpunkt liefert bewusst nur Termin und Zahlen. Wer sehen will,
-    wer zugesagt hat, geht über den Knopf ins Discord.
+    (`/companion/raid-schedule`, für jeden verknüpften Nutzer). Seit
+    2.0.7 steht hier die Aufstellung so, wie sie im Entwurf der
+    Übersicht stand: je Rolle eine Reihe Plätze, gefüllte in
+    Klassenfarbe, offene als Lücke, darunter ein Satz, was noch fehlt.
+    "10 von 25" ist die Zahl; die Frage vor einem Raid ist aber, *wer*
+    fehlt - vier offene Plätze sind harmlos, wenn es Schaden ist, und
+    ein Abend ohne Raid, wenn es der zweite Tank ist.
+
+    Was weiterhin **nicht** hier steht, ist die Namensliste: der
+    Endpunkt liefert Rolle und Klasse, niemals einen Namen. Beides
+    steht als Symbol im Anmelde-Beitrag, den jeder im Kanal lesen
+    kann; die Namen bleiben hinter der Raidlead-Rolle. Wer sie sehen
+    will, geht über den Knopf ins Discord.
 
     Ohne Antwort bleibt die alte Haltung unverändert: die Karte sagt,
     dass nichts bekannt ist, statt "0 von 25" zu behaupten. Eine Null
     wäre keine Untertreibung, sondern eine falsche Messung - niemand
-    hat gezählt.
+    hat gezählt. Und meldet der Bot den Termin, aber keine Rollen
+    (ältere Fassung), steht dort ein einziger Streifen "zugesagt"
+    statt drei geschätzter.
     """
 
     def __init__(self, parent=None):
 
         super().__init__(parent=parent)
 
-        self.setMinimumHeight(150)
+        self.setMinimumHeight(170)
 
         header = QHBoxLayout()
 
@@ -162,7 +266,22 @@ class RosterCard(Card):
 
         header.addStretch(1)
 
-        self.count = Chip("KEINE DATEN", "neutral")
+        #
+        # Die Zahl als schlichte Zeile und nicht mehr als Chip: sie
+        # steht jetzt über den Streifen, die den Zustand ohnehin
+        # zeigen. Ein zweites farbiges Zeichen daneben wäre dieselbe
+        # Auskunft ein drittes Mal - der Chip, der Streifen und der
+        # Satz darunter sagten zu dritt "10 von 25".
+        #
+
+        self.count = QLabel("")
+
+        self.count.setFont(font("small"))
+
+        restyle(
+            self.count,
+            f"color:{tokens.TEXT['secondary']};background:transparent;",
+        )
 
         header.addWidget(self.count)
 
@@ -210,9 +329,17 @@ class RosterCard(Card):
 
         text.addWidget(self.when)
 
+        self.strip = RosterStrip()
+
+        self.strip.setVisible(False)
+
+        text.addSpacing(tokens.SPACE[1])
+
+        text.addWidget(self.strip)
+
         self.explanation = QLabel(
             "Sobald im Discord ein Termin steht, erscheint er hier - "
-            "mit Datum, Uhrzeit und der Zahl der Zusagen."
+            "mit Datum, Uhrzeit und der Aufstellung."
         )
 
         self.explanation.setFont(font("small"))
@@ -274,14 +401,14 @@ class RosterCard(Card):
 
             self.when.setVisible(False)
 
+            self.strip.setVisible(False)
+
             self.explanation.setText(
                 "Sobald im Discord ein Termin steht, erscheint er "
-                "hier - mit Datum, Uhrzeit und der Zahl der Zusagen."
+                "hier - mit Datum, Uhrzeit und der Aufstellung."
             )
 
-            self.count.setText("KEINE DATEN")
-
-            self.count.setVariant("neutral")
+            self.count.setText("")
 
             return
 
@@ -293,37 +420,53 @@ class RosterCard(Card):
 
         self.when.setVisible(True)
 
+        self.count.setText(count_text(day, schedule.raid_size))
+
+        groups = _slot_groups(schedule, day)
+
+        self.strip.setGroups(groups)
+
+        self.strip.setVisible(bool(groups))
+
         self.explanation.setText(
-            signup_text(day, schedule.raid_size)
-            + (
-                " · Anmeldung geschlossen"
-                if schedule.signup_status == "locked"
-                else ""
-            )
+            self._explanation(schedule, day, bool(groups))
         )
 
-        #
-        # Der Chip nennt die Zusagen des nächsten Tages. "ok" erst,
-        # wenn die Raidgröße erreicht ist - alles darunter ist noch
-        # offen, und ein grünes Zeichen bei 12 von 25 würde das
-        # Gegenteil sagen.
-        #
+    # --------------------------------------------------
 
-        if schedule.raid_size:
+    def _explanation(self, schedule, day, has_strip: bool) -> str:
+        """
+        Die Zeile unter den Streifen.
 
-            self.count.setText(
-                f"{day.active} / {schedule.raid_size} ZUGESAGT"
-            )
+        Mit Streifen sagt sie, **was** fehlt (die Zahl steht schon
+        oben rechts); ohne Streifen bleibt es bei der alten Zeile mit
+        der Zahl, sonst stünde unter dem Termin gar nichts. "Vielleicht"
+        und "Ersatzbank" hängen in beiden Fällen hinten dran - sie
+        gehören neben die Zusagen, nicht hinein.
+        """
 
-            self.count.setVariant(
-                "ok" if day.active >= schedule.raid_size else "warn"
-            )
+        parts = []
 
-            return
+        if has_strip:
 
-        self.count.setText(f"{day.active} ZUGESAGT")
+            parts.append(composition_text(schedule, day))
 
-        self.count.setVariant("info")
+        else:
+
+            parts.append(signup_text(day, schedule.raid_size))
+
+        if has_strip:
+
+            if day.tentative:
+                parts.append(f"{day.tentative} vielleicht")
+
+            if day.bench:
+                parts.append(f"{day.bench} Ersatzbank")
+
+        if schedule.signup_status == "locked":
+            parts.append("Anmeldung geschlossen")
+
+        return " · ".join(part for part in parts if part)
 
 
 class UpdateRow(QFrame):
@@ -571,19 +714,34 @@ class LastPullCard(Card):
     """
     Dein letzter Pull: Ergebnis, schwächster Bereich, eine Lektion.
 
-    Gelesen wird aus `RaidDataService.history()` - denselben
-    `PullSummary`-Einträgen, die auch WeintTVs Verlauf speist. Ohne
-    einen abgeschlossenen Pull in dieser Sitzung bleibt die Karte
-    leer und sagt, woran es liegt.
+    **Woher er kommt, und warum das eine Korrektur war.** Bis 2.0.6
+    las diese Karte allein `RaidDataService.history()`. Die füllt sich
+    aber ausschließlich mit Pulls, die *in dieser Sitzung* endeten,
+    während WeintTV oder die Academy offen waren - nach jedem Neustart
+    ist sie leer. Am Tag nach einem Raidabend stand hier deshalb "Noch
+    kein Pull", und das war keine vorsichtige Auskunft, sondern eine
+    falsche: der Kampf hat stattgefunden, die App hat nur an der
+    falschen Stelle nachgesehen.
+
+    Seit 2.0.7 ist die Sitzung nur noch die erste von zwei Quellen.
+    Findet sich dort nichts, tritt der letzte Pull aus dem
+    WarcraftLogs-Archiv an ihre Stelle (`core/last_pull_sync.py`),
+    abgeholt im gewöhnlichen Sync-Takt und zwischengespeichert. Die
+    Reihenfolge ist Absicht: ein Pull, der gerade eben endete, ist der
+    letzte, auch wenn WarcraftLogs ihn noch nicht kennt.
+
+    Was ein Pull aus dem Archiv **nicht** mitbringt, ist die
+    Bewertung: dafür müsste der ganze Kampf geladen werden, und das
+    kostet den Bot Minuten. Die Sternreihe bleibt dann leer und die
+    Lektionskarte sagt, wo die Auswertung zu haben ist - statt einen
+    schwächsten Bereich zu nennen, den niemand gemessen hat.
     """
 
     academyRequested = Signal()
 
-    def __init__(self, service, parent=None):
+    def __init__(self, parent=None):
 
         super().__init__(parent=parent)
-
-        self.service = service
 
         header = QHBoxLayout()
 
@@ -768,35 +926,81 @@ class LastPullCard(Card):
 
     # --------------------------------------------------
 
-    def refresh(self):
+    def apply(self, pull):
+        """
+        `pull` ist ein `LastPull` - aus der Sitzung oder aus dem
+        Archiv, die Karte behandelt beide gleich.
 
-        history = self.service.history()
+        Der Leerzustand ist der Fall "es gibt wirklich keinen": kein
+        Pull in dieser Sitzung, kein Bericht beim Bot, kein
+        Zwischenspeicher. Er sagt weiterhin, woran es liegt.
+        """
 
-        if not history:
+        if pull is None or not pull.known:
+
+            self.timestamp.setText("")
+
+            self.boss.setText("Noch kein Pull")
+
+            self.result.setText(
+                "Sobald ein Kampf endet, steht sein Ergebnis hier."
+            )
+
+            self.sparkline.setValues([])
+
+            self.lesson_title.setText("Die Academy schlägt sie vor.")
+
+            self.lesson_reason.setText(
+                "Nach dem ersten ausgewerteten Pull steht hier, woran "
+                "zu arbeiten sich am meisten lohnt - mit den "
+                "Messwerten, aus denen sich das ergibt."
+            )
+
             return
 
-        last = history[-1]
+        self.timestamp.setText(when_text(pull))
 
-        boss = getattr(last, "boss", "") or "Kampf"
+        self.boss.setText(pull.boss or "Kampf")
 
-        self.boss.setText(boss)
+        self.result.setText(result_text(pull))
 
         #
-        # Die Sparkline zeigt die Bosslebenspunkte der letzten Pulls -
-        # die eine Kurve, die "wird es besser?" beantwortet.
+        # Die Kurve zeigt den geschafften Bossanteil der letzten
+        # Versuche an demselben Boss - die eine Linie, die "wird es
+        # besser?" beantwortet.
         #
 
-        values = []
+        self.sparkline.setValues(list(pull.trend))
 
-        for entry in history[-8:]:
+        if pull.live:
 
-            percent = getattr(entry, "boss_percent", None)
+            self.lesson_title.setText("Die Academy schlägt sie vor.")
 
-            if percent is not None:
+            self.lesson_reason.setText(
+                "Der Pull ist ausgewertet - in der Academy steht, "
+                "woran zu arbeiten sich am meisten lohnt, mit den "
+                "Messwerten, aus denen sich das ergibt."
+            )
 
-                values.append(100.0 - float(percent))
+            return
 
-        self.sparkline.setValues(values)
+        #
+        # Ein Pull aus dem Archiv ist nicht ausgewertet, und das steht
+        # hier auch so. Ein "schwächster Bereich" ohne Auswertung wäre
+        # geraten, und die leere Sternreihe daneben sähe ohne diesen
+        # Satz wie ein Urteil aus.
+        #
+
+        source = source_text(pull)
+
+        self.lesson_title.setText("Dieser Pull ist noch nicht bewertet.")
+
+        self.lesson_reason.setText(
+            f"Er stammt aus dem Archiv ({source}). Öffne ihn in der "
+            "Academy unter \"Archiv\", um Bewertung und Lektion dazu "
+            "zu bekommen - die vollständige Auswertung eines Pulls "
+            "holt der Bot erst auf Anforderung."
+        )
 
 
 class PreparationCard(Card):
@@ -1372,7 +1576,7 @@ class OverviewPage(Page):
 
         self.row.setVerticalSpacing(20)
 
-        self.last_pull = LastPullCard(self.service)
+        self.last_pull = LastPullCard()
 
         self.last_pull.academyRequested.connect(self._open_academy)
 
@@ -1745,11 +1949,37 @@ class OverviewPage(Page):
 
             self.row.addWidget(self.preparation, 0, 1)
 
+    def _last_pull(self) -> LastPull:
+        """
+        Der letzte Pull - erst die Sitzung, dann das Archiv.
+
+        Die Reihenfolge ist die Aussage: was gerade eben endete, ist
+        der letzte Kampf, auch wenn WarcraftLogs ihn noch nicht kennt.
+        Das Archiv ist der Rückfall für alles davor - und der Grund,
+        warum hier nicht mehr "Noch kein Pull" steht, nur weil die App
+        seit dem Raid einmal neu gestartet wurde.
+
+        Über `getattr`, wie `_schedule()`: `refresh()` läuft auch aus
+        Tests und aus dem Aufbau der Seite heraus, wo der Manager ein
+        einfacher Platzhalter sein kann.
+        """
+
+        live = from_history(self.service.history())
+
+        if live.known:
+            return live
+
+        sync = getattr(self.manager, "last_pull_sync", None)
+
+        pull = getattr(sync, "pull", None)
+
+        return pull if pull is not None else LastPull()
+
     def refresh(self):
 
         self.system.refresh()
 
-        self.last_pull.refresh()
+        self.last_pull.apply(self._last_pull())
 
         #
         # Der Raidtermin liegt bereits im `RaidScheduleSync` - gelesen
