@@ -27,6 +27,8 @@ stehen jeweils an Ort und Stelle.
 
 from __future__ import annotations
 
+import threading
+
 from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
@@ -48,6 +50,7 @@ from core.backend_config import TARGET_URL, app_url, roster_target
 from core.browser import open_url
 from core.changelog_reader import format_changelog_body
 from core.changelog_source import ADDON, COMPANION, LABELS, latest_entry
+from core.greeting import greeting, headline
 from core.last_pull import (
     LastPull,
     from_history,
@@ -1493,16 +1496,48 @@ class OverviewPage(Page):
 
     playerRequested = Signal(str)
 
+    #
+    # Das Ende der Update-Prüfung kommt aus einem Hintergrund-Thread
+    # zurück in den Hauptthread - der Knopf ist ein Widget und darf
+    # von dort nicht angefasst werden (dieselbe Regel wie bei
+    # `CompanionManager.state_changed`).
+    #
+
+    checkFinished = Signal()
+
     def __init__(self, manager, parent=None):
 
         super().__init__(
             manager,
-            "HEUTE",
+            greeting(),
             "Willkommen zurück.",
             parent,
         )
 
         self.service = manager.raid_data
+
+        #
+        # "Erneut prüfen" - derselbe Knopf wie unter "Addon &
+        # Updates". Er steht hier, weil die Übersicht die Seite ist,
+        # auf der ein wartendes Update angekündigt wird (Karte,
+        # Systemzeile, Abzeichen): wer dort nachsehen will, ob
+        # inzwischen etwas dazugekommen ist, musste dafür bisher die
+        # Seite wechseln.
+        #
+
+        self.check_button = QPushButton("Erneut prüfen")
+
+        self.check_button.setObjectName("secondary")
+
+        self.check_button.setCursor(Qt.PointingHandCursor)
+
+        self.check_button.clicked.connect(self.check_updates)
+
+        self.header.addAction(self.check_button)
+
+        self._check_thread = None
+
+        self.checkFinished.connect(self._on_check_finished)
 
         #
         # Countdown rechts im Kopf. Ohne Raidtermin trägt er "kein
@@ -1520,6 +1555,12 @@ class OverviewPage(Page):
         # pro Sekunde für eine Angabe, die sich alle sechzig ändert,
         # ist reine Arbeit ohne Bild.
         #
+        # Derselbe Takt trägt die Begrüßung: "Morgen ist Raid" wird um
+        # Mitternacht zu "Heute", und "Guten Tag" um 18 Uhr zu "Guten
+        # Abend". Beides ohne Zutun - eine Anwendung, die den ganzen
+        # Abend offen steht, soll nicht mit dem Nachmittag im Kopf
+        # dastehen.
+        #
         # Der Zeitgeber läuft nur, solange die Seite sichtbar ist -
         # `on_enter`/`on_leave` schalten ihn, wie WeintTV und die
         # Academy es mit dem Datenstrom halten.
@@ -1529,7 +1570,7 @@ class OverviewPage(Page):
 
         self._clock.setInterval(60_000)
 
-        self._clock.timeout.connect(self._refresh_countdown)
+        self._clock.timeout.connect(self._tick)
 
         #
         # Der Update-Hinweis steht **über** der Aufstellung, weil er
@@ -1889,6 +1930,174 @@ class OverviewPage(Page):
             else "ok" if day.is_running() else "accent"
         )
 
+    def _tick(self):
+        """
+        Der Minutentakt: Countdown und Begrüßung.
+
+        Beides hängt allein an der Uhr und liest keine neuen Daten -
+        was hier passiert, ist Zeichnen und nichts sonst.
+        """
+
+        self._refresh_countdown()
+
+        self._refresh_greeting()
+
+    def _user_name(self) -> str:
+        """
+        Wen die Anwendung grüßt.
+
+        Erste Wahl ist der **im Spiel angemeldete Charakter**: den
+        meldet das Addon seit WeintCodex 1.3.3.0 von sich aus (siehe
+        `core/character_report_sync.py`) und er ist die einzige
+        Antwort, die niemand geraten hat. Bewusst *nicht*
+        `academy_player_name` - das ist die Auswahl der Academy und
+        kann auf einem Kollegen stehen, dessen Zahlen man sich einmal
+        angesehen hat.
+
+        Danach der Discord-Name, der ohnehin unten in der Navigation
+        steht. Ist auch der nicht bekannt, grüßt die App ohne Namen,
+        statt sich einen zu suchen.
+        """
+
+        config = getattr(self.manager, "config", None)
+
+        if config is not None:
+
+            name = str(
+                config.data.get("academy_ingame_character", "") or ""
+            ).strip()
+
+            if name:
+                return name
+
+        store = getattr(self.manager, "discord_account", None)
+
+        if store is not None:
+
+            try:
+                account = store.load()
+
+            except Exception:
+
+                #
+                # Eine unlesbare discord_account.json ist kein Grund,
+                # gar nicht mehr zu grüßen.
+                #
+
+                account = None
+
+            if account:
+
+                name = str(account.get("username", "") or "").strip()
+
+                if name:
+                    return name
+
+        state = getattr(self.manager, "state", None)
+
+        name = str(getattr(state, "discord_name", "") or "").strip()
+
+        #
+        # "-" ist der Anfangswert von `AppState.discord_name` und
+        # heißt "nicht bekannt", nicht "so heißt der Nutzer".
+        #
+
+        return "" if name in ("", "-") else name
+
+    def _refresh_greeting(self):
+        """
+        Rubrik und Titel - die beiden Zeilen im Kopf.
+
+        Welcher Satz dasteht, entscheidet `core/greeting.py`; hier
+        wird er nur gesetzt. Die Trennung ist dieselbe wie bei
+        `roster_target()`: die Entscheidung ist prüfbar, ohne ein
+        Fenster zu bauen.
+        """
+
+        schedule = self._schedule()
+
+        day = schedule.next_day() if schedule is not None else None
+
+        state = self.manager.state
+
+        self.header.setEyebrow(greeting(self._user_name()))
+
+        self.header.setTitle(
+            headline(
+                day,
+                addon_update=state.update_available,
+                app_update=state.companion_update_available,
+                wow_found=state.wow_found,
+            )
+        )
+
+    # --------------------------------------------------
+    # Erneut nach Updates sehen
+    # --------------------------------------------------
+
+    def check_updates(self):
+        """
+        Beide Update-Kanäle noch einmal gegen GitHub prüfen.
+
+        In einem eigenen kurzlebigen Thread - wie bei
+        `ConnectionsPage.sync_now()` und den Archiv-Abrufen. Die
+        Prüfung geht zweimal ins Netz, und das gehört nicht in einen
+        Klick-Handler: das Fenster stünde für die Dauer still.
+
+        Die Anzeige zieht danach von selbst nach, weil
+        `refresh_update_status()` am Ende `state_changed` meldet und
+        das Fenster daraufhin die sichtbare Seite neu zeichnet - hier
+        wird deshalb nichts direkt aktualisiert.
+        """
+
+        if self._check_thread is not None and self._check_thread.is_alive():
+
+            #
+            # Zweimal drücken soll nicht zwei Durchgänge starten.
+            #
+
+            return
+
+        self.manager.logger.info("Prüfe GitHub auf neue Versionen...")
+
+        self.check_button.setEnabled(False)
+
+        self.check_button.setText("Wird geprüft …")
+
+        self._check_thread = threading.Thread(
+            target=self._check_worker,
+            daemon=True,
+            name="OverviewUpdateCheck",
+        )
+
+        self._check_thread.start()
+
+    def _check_worker(self):
+
+        try:
+
+            self.manager.refresh_update_status()
+
+            self.manager.logger.success("GitHub erfolgreich geprüft.")
+
+        except Exception as exc:
+
+            self.manager.logger.error(
+                f"Update-Prüfung fehlgeschlagen: {exc}"
+            )
+
+        finally:
+
+            self.checkFinished.emit()
+
+    def _on_check_finished(self):
+
+        self.check_button.setEnabled(True)
+
+        self.check_button.setText("Erneut prüfen")
+
+    # --------------------------------------------------
+
     def on_enter(self):
 
         self._clock.start()
@@ -2008,22 +2217,9 @@ class OverviewPage(Page):
 
         self._refresh_updates()
 
-        state = self.manager.state
+        #
+        # Zuletzt der Kopf: er fasst zusammen, was die Karten darunter
+        # im einzelnen zeigen, und liest dafür denselben Zustand.
+        #
 
-        if state.update_available:
-
-            self.header.setTitle(
-                "Für das Addon liegt eine neue Version bereit."
-            )
-
-            return
-
-        if not state.wow_found:
-
-            self.header.setTitle(
-                "World of Warcraft wurde noch nicht gefunden."
-            )
-
-            return
-
-        self.header.setTitle("Alles bereit für den nächsten Raid.")
+        self._refresh_greeting()

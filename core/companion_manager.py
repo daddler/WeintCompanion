@@ -737,7 +737,17 @@ class CompanionManager(QObject):
         verfügbar ist - ohne die App neu zu starten. Macht dieselben
         Anfragen wie full_refresh(), aber ohne Discord-Status/Sync,
         die für eine reine "nach Updates suchen"-Aktion irrelevant sind.
+
+        Beide Zwischenspeicher werden vorher verworfen: hier steht
+        immer ein Nutzer hinter der Prüfung, der von einer neuen
+        Fassung gehört hat. Eine Antwort aus dem Speicher von vor
+        zehn Minuten wäre für ihn nicht von einem kaputten Knopf zu
+        unterscheiden.
         """
+
+        self.github.invalidate_cache()
+
+        self.companion_updater.github.invalidate_cache()
 
         try:
 

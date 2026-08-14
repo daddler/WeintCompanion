@@ -172,6 +172,23 @@ class GitHubUpdater:
 
     # --------------------------------------------------
 
+    def invalidate_cache(self):
+        """
+        Die nächste Abfrage geht wieder wirklich zu GitHub.
+
+        Der Zwischenspeicher hält eine Veröffentlichung 15 Minuten
+        fest, und das ist für den Takt im Hintergrund richtig. Für den
+        Knopf "Erneut prüfen" ist es falsch: wer ihn drückt, weiß
+        gerade von einer neuen Fassung und bekommt trotzdem die
+        Antwort von vorhin - ein Knopf, der nachweislich nichts tut.
+        """
+
+        self._cached_release = None
+
+        self._last_check = None
+
+    # --------------------------------------------------
+
     def get_latest_release(self):
 
         #

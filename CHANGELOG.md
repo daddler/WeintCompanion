@@ -2,6 +2,49 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.0.8
+
+**Die Übersicht begrüßt dich jetzt persönlich.** Statt der festen
+Rubrik "HEUTE" steht dort die Tageszeit und, wenn die App ihn kennt,
+dein Name: "Guten Abend, Krallenwut". Welcher Charakter das ist,
+meldet das Addon beim Anmelden im Spiel — geraten wird nichts, ohne
+bekannten Namen grüßt die App eben ohne. Beides zieht im Minutentakt
+nach, solange die Übersicht offen ist: aus "Guten Tag" wird um 18 Uhr
+"Guten Abend", ohne dass die App dafür neu gestartet werden müsste.
+
+**Der Satz darunter sagt, wann der nächste Raid ist** — und zwar in
+Tagen, nicht in Stunden: "Morgen um 20:00 Uhr ist Raid.",
+"Übermorgen um 20:00 Uhr ist Raid.", "Noch vier Tage bis zum nächsten
+Raid." Der Countdown-Chip rechts nennt die Restzeit weiterhin auf die
+Minute genau; was er nicht sagt, ist, ob "in 2 T 5 STD" nun ein Grund
+ist, heute noch etwas vorzubereiten. Läuft der Raid gerade, steht das
+da. Ist kein Termin bekannt, bleibt es bei "Alles bereit für den
+nächsten Raid." — ein erfundener Mittwoch wäre von einem echten
+Termin nicht zu unterscheiden.
+
+Wartet nebenbei ein Update, hängt es als Halbsatz hinten dran
+("Morgen ist Raid - ein Update wartet."), statt den Termin zu
+verdrängen. Die Update-Karte steht ohnehin unmittelbar darunter,
+nennt Addon und App beim Namen und trägt den Knopf dazu.
+
+**"Erneut prüfen" gibt es jetzt auch auf der Übersicht.** Der Knopf
+sitzt oben rechts neben dem Countdown und stößt dieselbe Prüfung an
+wie der unter "Addon & Updates": beide Kanäle, Addon und Companion,
+gegen GitHub. Bisher war die Übersicht die Seite, die ein wartendes
+Update *ankündigt* (Karte, Systemzeile, Abzeichen), aber die einzige,
+auf der man nicht nachsehen konnte, ob inzwischen etwas dazugekommen
+ist.
+
+Die Prüfung läuft dabei in einem eigenen Thread — ein Netzdurchgang
+im Klick-Handler hätte das Fenster für seine Dauer eingefroren.
+
+**Eine manuelle Prüfung fragt wirklich nach.** Die Antwort von GitHub
+wird 15 Minuten lang zwischengespeichert, und das ist für die Prüfung
+im Hintergrund richtig. Für den Knopf war es falsch: wer ihn drückt,
+weiß gerade von einer neuen Fassung und bekam trotzdem die Antwort
+von vorhin — ein Knopf, der nachweislich nichts tut. "Erneut prüfen"
+verwirft den Zwischenspeicher jetzt, auf beiden Seiten.
+
 ## 2.0.7
 
 **Die Aufstellung auf der Übersicht zeigt jetzt, wer fehlt** — nicht

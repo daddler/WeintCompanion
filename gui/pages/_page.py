@@ -84,6 +84,16 @@ class PageHeader(QWidget):
 
     def setEyebrow(self, text: str):
 
+        #
+        # Vergleichen wie in setTitle(): die Übersicht setzt ihre
+        # Begrüßung im Minutentakt und bei jeder Zustandsmeldung neu,
+        # und `setText()` verwirft die Stilrechnung des Labels auch
+        # dann, wenn derselbe Text ankommt (siehe gui/theme/restyle.py).
+        #
+
+        if self.eyebrow.text() == text:
+            return
+
         self.eyebrow.setText(text)
 
     def setTitle(self, text: str):
