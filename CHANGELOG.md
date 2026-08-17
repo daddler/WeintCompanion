@@ -2,6 +2,50 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.0.10
+
+**Der Raidlead kann Discord-Konten jetzt selbst mit Charakteren
+verbinden.** Der Kalender-Invite in WeintCodex lädt echte
+Charakternamen ein. Der Bot kannte sie bisher nur von Spielern, die
+die Companion verknüpft **und** ihre Twinkverwaltung gepflegt haben -
+drei Voraussetzungen, von denen Gildenfremde die erste kaum erfüllen
+können. Für alle anderen schickte er den Discord-Anzeigenamen weiter.
+Den gibt es im Spiel nicht: die Einladung lief ins Leere, und weil
+der Client den Fehlschlag nicht meldet, zählte sie sogar als
+erfolgreich mit. Auffallen konnte die Lücke damit frühestens am
+leeren Kalender.
+
+Die neue Rubrik **Charakterzuordnung** schließt sie. Sie zeigt für
+jede Anmeldung des laufenden Raids, mit welchem Charakter der Invite
+sie erreicht und woher dieser Name stammt - offene Zuordnungen
+zuerst, denn das ist die Frage, mit der man die Seite öffnet. Ein
+fehlender Name lässt sich direkt in der Zeile eintragen, wahlweise
+für eine bestimmte Klasse oder für jede, mit der sich der Account
+anmeldet.
+
+Zwei Regeln dahinter sind wichtig zu kennen. Die genauere Angabe
+gewinnt vor der pauschalen: wer seine Twinks selbst gemeldet hat,
+bekommt für seinen Magier nicht den eingetragenen Krieger eingeladen.
+Und bei gleicher Genauigkeit gewinnt die Hand des Raidleads, denn sie
+ist die Korrektur von eben, während eine Meldung Wochen alt sein
+kann - ohne diesen Vorrang wäre ein falscher Twink in der Meldung
+eines Spielers gar nicht mehr zu berichtigen.
+
+Dieselben Zuordnungen lassen sich auch in Discord pflegen
+(`/weintcharakter setzen`, `/weintcharakter liste`); beide schreiben
+dieselbe Tabelle im Bot. Die Seite steht bei allen in der Spalte und
+erklärt ohne die Raidlead-Rolle, wofür sie da wäre, statt zu
+verschwinden - ein Bereich, den man nicht sieht, lässt sich weder
+erklären noch danach fragen.
+
+**Dazu gehört WeintCodex 2.0.1.0.** Der Bot sagt dem Addon jetzt zu
+jeder Anmeldezeile, ob dort ein echter Charaktername steht. Das Addon
+zeichnet solche Zeilen als offen, zählt in der Kalender-Vorschau
+"21 von 25" statt "25 gesamt" und überspringt sie beim Erstellen des
+Eintrags, statt eine Einladung abzuschicken, die nie ankommt. Bot und
+Companion allein ändern daran nichts, das Addon allein auch nicht -
+die Angabe ist in beide Richtungen verträglich.
+
 ## 2.0.9
 
 **"Meine Charaktere" zeigt jetzt ein Bild.** Jede Karte trägt links

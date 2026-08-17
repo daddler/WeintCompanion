@@ -59,15 +59,16 @@ class PageId(IntEnum):
 
     CHARACTERS = 4
     PREPARATION = 5
+    CHARACTER_LINKS = 6
 
     #
     # SYSTEM
     #
 
-    ADDON = 6
-    CONNECTIONS = 7
-    SETTINGS = 8
-    LOGS = 9
+    ADDON = 7
+    CONNECTIONS = 8
+    SETTINGS = 9
+    LOGS = 10
 
 
 #
@@ -140,6 +141,7 @@ def build_page_specs() -> tuple[PageSpec, ...]:
     from gui.pages.academy import AcademyPage
     from gui.pages.addon import AddonPage
     from gui.pages.archive import ArchivePage
+    from gui.pages.character_links import CharacterLinksPage
     from gui.pages.characters import CharactersPage
     from gui.pages.connections import ConnectionsPage
     from gui.pages.logs import LogsPage
@@ -228,6 +230,28 @@ def build_page_specs() -> tuple[PageSpec, ...]:
             icon="vorbereitung",
             page_factory=PreparationPage,
             attribute="preparation",
+        ),
+
+        #
+        # Die Charakterzuordnung ist Werkzeug der Raidleitung, steht
+        # aber bei allen in der Spalte: ohne die Rolle antwortet der
+        # Bot mit 403, und dann erklaert die Seite, wofuer sie da
+        # waere. Dieselbe Regel wie im Addon (core/access.lua:
+        # "lock, don't hide") - ein Bereich, der je nach Rolle
+        # verschwindet, laesst sich weder erklaeren noch danach
+        # fragen. Sie haengt an CHARAKTER und nicht an RAID, weil sie
+        # von Charakteren handelt und weil die Gruppe RAID die
+        # Auswertungsbereiche zusammenhaelt.
+        #
+
+        PageSpec(
+            page_id=PageId.CHARACTER_LINKS,
+            label="Charakterzuordnung",
+            group=GROUP_CHARACTER,
+            icon="charaktere",
+            page_factory=CharacterLinksPage,
+            scroll=False,
+            attribute="character_links",
         ),
 
         PageSpec(

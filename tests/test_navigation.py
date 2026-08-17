@@ -40,6 +40,7 @@ def test_expected_navigation_order():
         "ARCHIVE",
         "CHARACTERS",
         "PREPARATION",
+        "CHARACTER_LINKS",
         "ADDON",
         "CONNECTIONS",
         "SETTINGS",
@@ -53,5 +54,14 @@ def test_page_id_behaves_like_int():
     ein int - PageId muss dort ohne Umwandlung einsetzbar bleiben.
     """
 
-    assert PageId.SETTINGS == 8
+    #
+    # Bewusst gegen die Position in der Aufzaehlung geprueft und nicht
+    # gegen eine feste Zahl: welche Reihenfolge gilt, haelt der Test
+    # darueber fest. Zwei Stellen mit derselben Zahl waeren beim
+    # naechsten neuen Bereich wieder auseinandergelaufen, und dieser
+    # Test haette dann etwas gemeldet, mit dem er gar nichts zu tun
+    # hat.
+    #
+
+    assert PageId.SETTINGS == list(PageId).index(PageId.SETTINGS)
     assert isinstance(PageId.SETTINGS, int)
