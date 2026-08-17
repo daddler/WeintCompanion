@@ -2,6 +2,27 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.0.9
+
+**"Meine Charaktere" zeigt jetzt ein Bild.** Jede Karte trägt links
+das Wappen ihrer Klasse in Klassenfarbe - an derselben Stelle und in
+derselben Rolle wie das Porträt im Kopf der Charakterrubrik von
+WeintCodex. Die Liste liest sich damit auf einen Blick statt Zeile
+für Zeile: Wer fünf Twinks gemeldet hat, findet den richtigen an der
+Farbe und am Zeichen, nicht am Namen.
+
+Das 3D-Modell aus dem Spiel lässt sich auf dem Desktop nicht zeigen -
+die Grafiken des Clients liegen nicht als Datei vor, und die
+Ausrüstungsmeldung des Addons trägt weder Volk noch Geschlecht, aus
+denen sich ein Abbild bauen ließe. Was sie trägt, ist die Klasse, und
+die ist genau die Auskunft, die ein Porträt auf einen Blick gibt. Die
+elf Wappen sind eigene Zeichnungen.
+
+Meldet das Addon keine Klasse, bleibt die Kachel stehen und zeigt ein
+neutrales Zeichen: Ein geratenes Wappen wäre von einem gemeldeten
+nicht zu unterscheiden - dieselbe Regel, nach der ein Ring ohne
+Messung "KEINE PRÜFUNG" sagt statt 0 %.
+
 ## 2.0.8
 
 **Die Übersicht begrüßt dich jetzt persönlich.** Statt der festen

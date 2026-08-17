@@ -23,6 +23,13 @@ Zwei Dinge, die die Seite über ihre Daten sagt und nicht verschweigt:
 * **Der Leerzustand bleibt**, für den Fall, dass noch nichts geliefert
   wurde. Er nennt jetzt aber den nächsten Schritt ("einmal im Spiel
   anmelden") statt "wird nicht übertragen".
+
+Seit 2.0.9 trägt jede Karte links ein **Klassenbild**
+(`gui/widgets/class_avatar.py`), an derselben Stelle und in derselben
+Rolle wie das Porträt im Kopf der Charakterrubrik von WeintCodex. Das
+3D-Modell des Spiels gibt es auf dem Desktop nicht - was hier vorliegt,
+ist die Klasse, und die ist genau das, was ein Porträt auf einen Blick
+beantwortet.
 """
 
 from __future__ import annotations
@@ -46,6 +53,7 @@ from gui.theme.restyle import restyle
 from gui.theme.wow_colors import class_color, class_label
 from gui.widgets.card import Card
 from gui.widgets.chip import Chip
+from gui.widgets.class_avatar import ClassAvatar
 from gui.widgets.empty_state import EmptyState
 from gui.widgets.eyebrow import eyebrow_label
 from gui.widgets.wrapped_label import enable_wrap
@@ -58,6 +66,17 @@ from gui.widgets.wrapped_label import enable_wrap
 #
 
 COLUMNS = 3
+
+
+#
+# Das Klassenbild links des Namens - dieselbe Anordnung wie im Kopf
+# der Charakterrubrik von WeintCodex, wo links das Porträt und rechts
+# daneben Spezialisierung, Titel und Unterzeile stehen. 56 px, weil
+# drei Karten nebeneinander bei 960 px Fensterbreite rund 230 px breit
+# sind; die 86 px des Spiels würden dort den Namen umbrechen.
+#
+
+AVATAR = 56
 
 
 def _ago(stamp: int) -> str:
@@ -108,6 +127,26 @@ class CharacterCard(Card):
         self.setEdgeColor(tokens.tint(color, 0.34))
 
         #
+        # Kopf: Klassenbild, daneben Name und Beschreibung.
+        #
+
+        head = QHBoxLayout()
+
+        head.setContentsMargins(0, 0, 0, 0)
+
+        head.setSpacing(tokens.SPACE[2])
+
+        self.avatar = ClassAvatar(sheet.get("class", ""), AVATAR)
+
+        head.addWidget(self.avatar, alignment=Qt.AlignTop)
+
+        titles = QVBoxLayout()
+
+        titles.setContentsMargins(0, 0, 0, 0)
+
+        titles.setSpacing(2)
+
+        #
         # Name
         #
 
@@ -117,7 +156,7 @@ class CharacterCard(Card):
 
         restyle(self.name, f"color:{color};background:transparent;")
 
-        self.addWidget(self.name)
+        titles.addWidget(self.name)
 
         #
         # Klasse, Spezialisierung, Realm
@@ -148,7 +187,13 @@ class CharacterCard(Card):
             f"color:{tokens.TEXT['secondary']};background:transparent;",
         )
 
-        self.addWidget(self.subtitle)
+        titles.addWidget(self.subtitle)
+
+        titles.addStretch(1)
+
+        head.addLayout(titles, 1)
+
+        self.addLayout(head)
 
         self.addSpacing(tokens.SPACE[1])
 

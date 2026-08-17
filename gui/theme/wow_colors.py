@@ -65,6 +65,38 @@ CLASS_LABELS: dict[str, str] = {
 
 #
 # --------------------------------------------------
+# Klassenwappen
+# --------------------------------------------------
+#
+# Der Dateiname unter `resources/icons/`, ohne Endung. Die Symbole
+# sind **eigene Zeichnungen** und keine Blizzard-Grafik: die
+# Klassensymbole des Spiels liegen in CASC und nicht als Datei vor,
+# und eine Kopie wäre fremdes Material im Installationspaket.
+#
+# Der Schlüssel ist wieder der englische Anzeigename, damit dieselbe
+# Normalisierung wie bei Farbe und Bezeichnung greift - das Addon
+# meldet `PALADIN`, WarcraftLogs "Paladin".
+#
+
+CLASS_ICONS: dict[str, str] = {
+
+    "Death Knight": "class_deathknight",
+    "Druid": "class_druid",
+    "Hunter": "class_hunter",
+    "Mage": "class_mage",
+    "Monk": "class_monk",
+    "Paladin": "class_paladin",
+    "Priest": "class_priest",
+    "Rogue": "class_rogue",
+    "Shaman": "class_shaman",
+    "Warlock": "class_warlock",
+    "Warrior": "class_warrior",
+
+}
+
+
+#
+# --------------------------------------------------
 # Rollen
 # --------------------------------------------------
 #
@@ -147,6 +179,19 @@ def class_label(class_name: str) -> str:
     class_name = normalize_class(class_name)
 
     return CLASS_LABELS.get(class_name, class_name)
+
+
+def class_icon(class_name: str) -> str | None:
+    """
+    Der Name des Klassenwappens, oder `None` bei unbekannter Klasse.
+
+    `None` heißt hier "keine Angabe", nicht "kein Wappen vorhanden" -
+    dieselbe Unterscheidung wie überall sonst im Projekt. Der Aufrufer
+    zeichnet dafür ein neutrales Zeichen und behauptet keine Klasse,
+    die er nicht kennt.
+    """
+
+    return CLASS_ICONS.get(normalize_class(class_name))
 
 
 def role_label(role: str) -> str:
