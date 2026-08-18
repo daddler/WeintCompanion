@@ -1,11 +1,22 @@
 import requests
 
+from core.backend_config import BOT_BASE_URL
+
 
 class SyncClient:
 
     def __init__(self):
 
-        self.url = "https://weintcodex-a1d.b.jrnm.app/sync"
+        #
+        # Über BOT_BASE_URL statt fest verdrahtet: die Adresse des
+        # Bots ändert sich bei einem Serverumzug, und sie stand hier
+        # als zweite Kopie neben der zentralen - genau der Fall, vor
+        # dem der Kommentar in core/backend_config.py warnt. Beim
+        # Umzug auf weintcodex-bot.e.jrnm.app blieben diese beiden
+        # Stellen prompt auf der alten Adresse stehen.
+        #
+
+        self.url = f"{BOT_BASE_URL}/sync"
 
     # --------------------------------------------------
 

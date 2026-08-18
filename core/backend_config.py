@@ -1,11 +1,120 @@
+import os
+from pathlib import Path
+
+from core.paths import Paths
+
+
 #
 # Basis-URL des WeintCodex-Bot-Backends. Zentral an dieser einen
 # Stelle gepflegt, damit ein künftiger Umzug des Bots (neue Domain,
 # neues Hosting) nicht an einer von mehreren duplizierten Stellen
-# vergessen werden kann.
+# vergessen werden kann - acht Module lesen sie.
+#
+# **Warum sie sich überschreiben lässt.** Der Bot liegt bei einem
+# Anbieter, der den Rechner bestimmt, auf dem die Anwendung läuft, und
+# den Rechner in den Hostnamen schreibt. Ein Umzug - erzwungen etwa
+# durch einen ausgefallenen Bauserver - ändert die Adresse also, ohne
+# dass am Bot selbst irgendetwas anders wäre. Stünde sie hier nur fest
+# verdrahtet, kostete jeder solche Umzug eine neue Fassung der
+# Companion, die alle erst installieren müssten - und bis dahin
+# erreicht keine einzige den Bot mehr. Genau das ist einmal passiert.
+#
+# Zwei Wege, in dieser Reihenfolge:
+#
+#   1. die Umgebungsvariable WEINTCODEX_BOT_URL - für einen schnellen
+#      Versuch, ohne eine Datei anzulegen;
+#   2. eine Datei `bot_url.txt` im Konfigurationsverzeichnis, die nur
+#      die Adresse enthält - das ist der Weg für den Dauerbetrieb,
+#      und er lässt sich per Anleitung weitergeben.
+#
+# Ohne beides gilt der eingebaute Wert. Eine unbrauchbare Angabe wird
+# **übergangen**, nicht übernommen: eine kaputte Adresse würde jeden
+# einzelnen Abruf stillschweigend scheitern lassen, und der eingebaute
+# Wert ist immer noch der bessere Rateversuch.
 #
 
-BOT_BASE_URL = "https://weintcodex-a1d.b.jrnm.app"
+DEFAULT_BOT_BASE_URL = "https://weintcodex-bot.e.jrnm.app"
+
+BOT_URL_ENV = "WEINTCODEX_BOT_URL"
+
+BOT_URL_FILE = "bot_url.txt"
+
+
+def normalize_bot_url(value) -> str:
+    """
+    Eine brauchbare Basis-URL - oder "".
+
+    Verlangt wird ein Schema (http/https) und ein Rest dahinter; der
+    abschließende Schrägstrich fällt weg, weil jede Aufrufstelle ihren
+    Pfad mit führendem Schrägstrich anhängt und daraus sonst ein
+    doppelter würde.
+    """
+
+    text = str(value or "").strip().rstrip("/")
+
+    if not text:
+        return ""
+
+    for schema in ("https://", "http://"):
+
+        if text.lower().startswith(schema) and len(text) > len(schema):
+            return text
+
+    return ""
+
+
+def bot_url_override_path() -> Path:
+    """
+    Wo die Datei mit der abweichenden Adresse liegt.
+
+    Bewusst über `Paths.base()` zusammengesetzt und nicht über
+    `Paths.config()`: jene Funktion legt das Verzeichnis an, und ein
+    Modulimport darf keine Verzeichnisse erzeugen - schon gar nicht im
+    Benutzerprofil, nur weil irgendwo eine Konstante gelesen wurde.
+    """
+
+    return Paths.base() / "config" / BOT_URL_FILE
+
+
+def resolve_bot_base_url() -> str:
+
+    aus_umgebung = normalize_bot_url(os.environ.get(BOT_URL_ENV))
+
+    if aus_umgebung:
+        return aus_umgebung
+
+    try:
+        pfad = bot_url_override_path()
+
+        if pfad.is_file():
+
+            aus_datei = normalize_bot_url(
+                pfad.read_text(encoding="utf-8")
+            )
+
+            if aus_datei:
+                return aus_datei
+
+    except OSError:
+
+        #
+        # Nicht lesbar, falsche Rechte, Datenträger weg: kein Grund,
+        # den Start abzubrechen. Der eingebaute Wert trägt weiter.
+        #
+
+        pass
+
+    return DEFAULT_BOT_BASE_URL
+
+
+#
+# Einmal beim Import bestimmt. Die acht lesenden Module holen sich den
+# Wert selbst beim Import ab; eine spätere Änderung greift deshalb
+# nach einem Neustart der Companion, nicht mitten im Betrieb - was für
+# einen Serverumzug genau die richtige Körnung ist.
+#
+
+BOT_BASE_URL = resolve_bot_base_url()
 
 #
 # Die Discord-Gilde des Projekts, als ZEICHENKETTE - eine Snowflake

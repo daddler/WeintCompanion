@@ -2,6 +2,33 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.0.12
+
+**Der Bot ist umgezogen - die Companion findet ihn wieder.** Sein
+Hoster war stundenlang nicht in der Lage, die Anwendung neu zu bauen
+("the server this operation needs isn't available"), sodass der Bot
+auf einen anderen Rechner musste. Der Anbieter schreibt den Rechner in
+den Hostnamen, also änderte sich die Adresse - am Bot selbst war
+nichts anders. Die Companion trug die alte fest verdrahtet und lief
+damit bei allem ins Leere, was über den Bot geht: Discord-Login,
+Charaktere melden, Raidtermin, Aufstellung, WeintTV und Archiv,
+Zugriffsprofil, Charakterzuordnung.
+
+**Damit das nicht wieder eine Version kostet**, lässt sich die Adresse
+jetzt überschreiben, ohne die Companion neu zu bauen: entweder über
+die Umgebungsvariable `WEINTCODEX_BOT_URL` für einen schnellen
+Versuch, oder dauerhaft über eine Datei `bot_url.txt` im
+Konfigurationsverzeichnis, die nichts als die Adresse enthält. Ohne
+beides gilt weiterhin der eingebaute Wert. Eine unbrauchbare Angabe
+wird übergangen statt übernommen - eine kaputte Adresse ließe jeden
+einzelnen Abruf stillschweigend scheitern, und der eingebaute Wert ist
+immer noch der bessere Rateversuch.
+
+Der Umzug war nötig, weil ein Bot ohne erreichbaren Bauserver keine
+Aktualisierung mehr annimmt. Wer die Companion nicht aktualisiert,
+erreicht den Bot bis dahin nicht mehr - die alte Adresse gibt es
+nicht mehr.
+
 ## 2.0.11
 
 **Im Discord dürfen jetzt mehrere Raids gleichzeitig laufen - die
