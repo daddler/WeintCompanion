@@ -112,6 +112,8 @@ Authorization: Bearer <companion_token>
 | `days[].signups.roles` | **optional**: Ersatzform, nur Zahlen je Rolle |
 | `composition` | **optional**: Sollstärke je Rolle |
 | `discord` | Fundort der Anmeldung; optional, alle IDs als **Zeichenkette** |
+| `raid_ids` | alle gleichzeitig laufenden Raids, der nächste zuerst |
+| `others` | **optional**: die übrigen laufenden Raids, siehe unten |
 
 ## Die Aufstellung (`roster`, `composition`)
 
@@ -158,6 +160,72 @@ Discord"**; fehlt er (ältere Bot-Fassung), fällt sie auf den
 Anmelde-Kanal der Projektgilde zurück (`DISCORD_RAID_CHANNEL_ID` in
 `core/backend_config.py`).
 
+## Mehrere Raids gleichzeitig (`others`)
+
+Im Discord dürfen mehrere Anmeldungen **nebeneinander** laufen — ein
+10er für die Mains und ein 25er für die Twinks, oder ein Sonderraid
+neben dem Wochentermin. Die Übersicht hat dafür genau einen
+Termin-Platz.
+
+**Deshalb bleibt der nächste Raid, wo er war.** Alle Felder oben
+beschreiben weiterhin genau einen Raid, nämlich den mit dem frühesten
+Termin. Die übrigen hängen als `others` daran:
+
+```json
+{
+  "status": "ok",
+  "raid_id": 8,
+  "title": "10er Mains",
+  "raid_ids": [8, 7],
+  "others": [
+    {
+      "raid_id": 7,
+      "title": "25er Twinks",
+      "raid_type": "standard",
+      "raid_size": 25,
+      "signup_status": "open",
+      "days": [ … ],
+      "discord": { … }
+    }
+  ]
+}
+```
+
+Das war eine bewusste Entscheidung gegen eine neue Antwortform. Eine
+Liste an der Wurzel hätte jede ausgelieferte Companion-Fassung auf
+einen Schlag blind gemacht; so sieht eine ältere Fassung genau das,
+was sie vorher sah — den nächsten Termin — und ignoriert ein Feld,
+das sie nicht kennt.
+
+- Ein Eintrag in `others` trägt **dieselben Felder** wie die Antwort
+  selbst, nur ohne `status`. Die Companion liest ihn deshalb durch
+  dieselbe Funktion (`_parse_others()` ruft `parse_schedule()`) und
+  bekommt einen vollwertigen `RaidSchedule` — ein zweiter Datentyp
+  würde ab der ersten Änderung anders rechnen als der erste.
+- **`others` verschachtelt nicht.** Der Bot schickt das Feld im
+  inneren Eintrag nicht, und die Companion entfernt es dort
+  ausdrücklich: läse sie es, bestimmte die Antwort die
+  Rekursionstiefe.
+- Sortiert wird nach dem frühesten Termin. Ein Raid, dessen Datum
+  nicht lesbar ist (Sonderraid mit unbrauchbarer Angabe), steht **am
+  Ende statt gar nicht da** — es gibt ihn, nur sein Termin ist
+  unbekannt.
+- Die Grenze des Vertrags bleibt: auch `others` trägt Titel, Größe,
+  Termine und Zahlen — **keine Namen, keine Discord-Nutzer-IDs**.
+
+Die Companion zeigt daraus eine Zeile unter der Aufstellung
+(`others_text()`): „Außerdem offen: 25er Twinks (Donnerstag, 14.08. um
+20:00 Uhr)". Ohne diesen Hinweis wäre ein parallel laufender Raid in
+der App unsichtbar — man sähe nicht, dass man sich noch woanders
+eintragen kann.
+
+Die übrigen Endpunkte nehmen den Raid als Parameter, wo die Auswahl
+nötig ist: `?raid=<id>` bei `/companion/raid-roster`,
+`/companion/raid-signups` und `/companion/character-links`, `raid_id`
+im Rumpf von `/companion/raid-signups/restore`. **Ohne Angabe ist es
+der nächste Raid** — genau das Verhalten, mit dem eine ausgelieferte
+Fassung rechnet.
+
 ## Antwort — kein Raid
 
 ```json
@@ -167,6 +235,11 @@ Anmelde-Kanal der Projektgilde zurück (`DISCORD_RAID_CHANNEL_ID` in
 **HTTP 200, nicht 404.** Die Companion fragt im Sync-Takt; ein ruhiger
 Mittwoch darf nicht als Störung ankommen — dieselbe Haltung wie bei
 `/companion/warcraftlogs/live`.
+
+Läuft **kein** Raid, reicht der Bot die Begründung des ersten
+geprüften Datensatzes durch, statt sie durch ein pauschales „Kein
+aktiver Raid" zu ersetzen: „die Anmeldenachricht ist weg" sagt dem
+Raidlead, dass er von Hand gelöscht hat, was der Bot noch kennt.
 
 ## Antwort — Raid nur noch in der Datenbank
 

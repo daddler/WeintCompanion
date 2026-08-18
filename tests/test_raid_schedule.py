@@ -14,6 +14,7 @@ from core.raid_schedule import (
     countdown_text,
     day_text,
     open_slots,
+    others_text,
     parse_schedule,
     signup_text,
 )
@@ -502,3 +503,164 @@ def test_a_signup_that_is_gone_is_not_a_raid():
     assert schedule.next_day() is None
 
     assert "Anmelde-Kanal" in schedule.detail
+
+
+# --------------------------------------------------
+# Mehrere Raids gleichzeitig
+# --------------------------------------------------
+#
+# Im Discord dürfen seit Bot-Seite 2.0.11 mehrere Anmeldungen
+# nebeneinander laufen. Die Übersicht hat genau einen Termin-Platz -
+# dort steht weiter der nächste, die übrigen kommen als `others`
+# hinterher. Ohne diese Zeile wäre ein zweiter Raid in der App
+# unsichtbar: man sähe nicht, dass man sich noch woanders eintragen
+# kann.
+
+
+WEITERER = {
+    "raid_id": 8,
+    "title": "25er Twinks",
+    "raid_type": "standard",
+    "signup_status": "locked",
+    "raid_size": 25,
+    "days": [
+        {
+            "key": "thursday",
+            "label": "Donnerstag",
+            "starts_at": "2026-08-13T20:00:00+02:00",
+            "signups": {"active": 20, "tentative": 0, "bench": 0, "absent": 2},
+        }
+    ],
+}
+
+
+def test_ein_einzelner_raid_hat_keine_weiteren():
+    """Der Normalfall - und der Zustand bei einer älteren Bot-Fassung."""
+
+    schedule = parse_schedule(PAYLOAD)
+
+    assert schedule.others == ()
+
+    assert others_text(schedule) == ""
+
+    assert [r.title for r in schedule.all_raids()] == ["Siege of Orgrimmar"]
+
+
+def test_weitere_raids_werden_vollstaendig_gelesen():
+
+    schedule = parse_schedule({**PAYLOAD, "others": [WEITERER]})
+
+    assert len(schedule.others) == 1
+
+    weiterer = schedule.others[0]
+
+    #
+    # Derselbe Datentyp wie der Hauptraid, also auch dieselben
+    # Rechnungen - ein zweiter Typ würde irgendwann anders rechnen.
+    #
+
+    assert weiterer.known
+
+    assert weiterer.title == "25er Twinks"
+
+    assert weiterer.raid_size == 25
+
+    assert weiterer.signup_status == "locked"
+
+    # Die Uhr wird übergeben - sonst hinge der Test am Kalender.
+    jetzt = _moment("2026-08-10T12:00:00+02:00")
+
+    assert weiterer.next_day(jetzt) is not None
+
+    assert weiterer.next_day(jetzt).active == 20
+
+
+def test_der_hauptraid_bleibt_unberuehrt():
+    """
+    Die übrigen Raids dürfen an der Auskunft über den nächsten nichts
+    ändern - sie stehen daneben, nicht darin.
+    """
+
+    ohne = parse_schedule(PAYLOAD)
+
+    mit = parse_schedule({**PAYLOAD, "others": [WEITERER]})
+
+    assert mit.title == ohne.title
+
+    assert mit.raid_size == ohne.raid_size
+
+    assert mit.days == ohne.days
+
+    assert mit.next_day(_moment("2026-08-10T12:00:00+02:00")) == ohne.next_day(
+        _moment("2026-08-10T12:00:00+02:00")
+    )
+
+
+def test_die_zeile_nennt_namen_und_termin():
+
+    schedule = parse_schedule({**PAYLOAD, "others": [WEITERER]})
+
+    zeile = others_text(schedule, _moment("2026-08-10T12:00:00+02:00"))
+
+    assert zeile.startswith("Außerdem offen:")
+
+    assert "25er Twinks" in zeile
+
+    assert "Donnerstag" in zeile
+
+
+def test_ein_raid_ohne_lesbaren_termin_steht_trotzdem_da():
+    """
+    Der Bot sortiert ihn ans Ende, weil sein Datum unlesbar ist - den
+    Raid gibt es aber. "Es läuft noch etwas, dessen Termin ich nicht
+    kenne" ist eine bessere Auskunft als Schweigen.
+    """
+
+    schedule = parse_schedule({
+        **PAYLOAD,
+        "others": [{"raid_id": 9, "title": "Sonderraid", "days": []}],
+    })
+
+    assert len(schedule.others) == 1
+
+    zeile = others_text(schedule, _moment("2026-08-10T12:00:00+02:00"))
+
+    assert "Sonderraid" in zeile
+
+
+def test_kaputte_eintraege_kosten_nur_sich_selbst():
+
+    for kaputt in (None, "nein", 5, {}, [1, 2]):
+
+        schedule = parse_schedule({**PAYLOAD, "others": kaputt})
+
+        assert schedule.title == "Siege of Orgrimmar"
+
+        assert schedule.others == ()
+
+
+def test_ohne_raid_gibt_es_auch_keine_weiteren():
+
+    schedule = parse_schedule({"status": "idle", "detail": "Kein aktiver Raid."})
+
+    assert schedule.others == ()
+
+    assert schedule.all_raids() == ()
+
+    assert others_text(schedule) == ""
+
+
+def test_eine_verschachtelte_antwort_wird_nicht_weiterverfolgt():
+    """
+    Der Bot schickt `others` im verschachtelten Eintrag nicht. Läse die
+    Companion es trotzdem, bestimmte die Antwort die Rekursionstiefe.
+    """
+
+    schedule = parse_schedule({
+        **PAYLOAD,
+        "others": [{**WEITERER, "others": [WEITERER, WEITERER]}],
+    })
+
+    assert len(schedule.others) == 1
+
+    assert schedule.others[0].others == ()

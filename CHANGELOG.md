@@ -2,6 +2,51 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.0.11
+
+**Im Discord dürfen jetzt mehrere Raids gleichzeitig laufen - die
+Übersicht sagt es.** Bisher ging genau einer, und zwar mit Gewalt: der
+Bot löschte beim Anlegen eines zweiten den ersten samt allen
+Anmeldungen und ließ dessen Anmeldenachricht als funktionslosen
+Knopfblock im Kanal stehen. Wer ein 10er-Main- und ein
+25er-Twinkgefüge nebeneinander wollte, konnte das nicht.
+
+Die Übersicht hat für den Termin genau einen Platz, und dort steht
+weiterhin der nächste Raid - mit Datum, Zusagen und der Aufstellung wie
+gehabt. Neu ist die Zeile darunter: *"Außerdem offen: 25er Twinks
+(Donnerstag, 14.08. um 20:00 Uhr)"*. Ohne sie wäre ein parallel
+laufender Raid in der App schlicht unsichtbar - man sähe nicht, dass
+man sich noch woanders eintragen kann, und würde den Unterschied nie
+bemerken.
+
+Was dabei **nicht** passiert ist: die Antwort des Bots hat ihre Form
+behalten. Eine Liste an der Wurzel hätte jede ausgelieferte
+Companion-Fassung auf einen Schlag blind gemacht; die weiteren Raids
+hängen deshalb als eigenes Feld daran, das eine ältere Fassung einfach
+übergeht. Auch die Grenze des Vertrags bleibt, wo sie war: Titel,
+Größe, Termine und Zahlen - keine Namen, keine Discord-IDs. Wer die
+Namensliste will, braucht weiterhin die Raidlead-Rolle.
+
+**Dazu gehört WeintCodex Bot vom selben Tag.** Dort liegt der eigentliche
+Umbau: der Anmeldebestand hängt jetzt am Raid statt am Spieler, sodass
+eine Abmeldung im 10er den 25er nicht mehr mitnimmt und derselbe
+Spieler im einen heilen und im anderen Schaden fahren kann. Ein
+dauerhaftes Menü im Anmelde-Channel macht die Raiderstellung außerdem
+ohne Slash-Befehl möglich - jeder im Kanal darf einen Raid aufmachen,
+verwalten darf ihn, wer ihn erstellt hat.
+
+**Zwei Reminder-Fehler sind mit weg**, beide ohne sichtbares Symptom
+und beide alt. Der Bot schickte nach jedem Neustart binnen einer Minute
+eine Erinnerung für einen längst vergangenen Raid und pingte dabei alle
+Member an: seine Datenbank lag versehentlich in der Versionierung, jeder
+Deploy brachte damit den Raid des letzten Commits zurück, und die
+Nachhol-Logik für verpasste Termine kannte keine Obergrenze - "der
+Montag liegt hinter uns" trifft auf jeden vergangenen Montag zu.
+Nachgeholt wird jetzt nur noch am Tag des Termins, und bei der
+Raiderstellung lässt sich die Erinnerung ganz abschalten. Der zweite:
+wer sich abgemeldet hatte, stand nach einem Neustart wieder als "keine
+Rückmeldung" da - und bekam prompt den nächsten Reminder ab.
+
 ## 2.0.10
 
 **Der Raidlead kann Discord-Konten jetzt selbst mit Charakteren

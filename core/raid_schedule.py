@@ -304,7 +304,31 @@ class RaidSchedule:
 
     signup: dict = field(default_factory=dict)
 
+    #
+    # Die übrigen Raids, wenn im Discord mehrere gleichzeitig laufen.
+    # Jeder als eigenes `RaidSchedule` - dieselben Felder, dieselben
+    # Rechnungen (`next_day()`, `day_text()`), kein zweiter Datentyp,
+    # der irgendwann anders rechnet als der erste.
+    #
+    # Leer, solange der Bot den Block nicht schickt. Das ist der
+    # Normalfall bei einem einzigen Raid und der Zustand bei einer
+    # älteren Bot-Fassung - beides sieht gleich aus und soll es auch.
+    #
+
+    others: tuple["RaidSchedule", ...] = field(default_factory=tuple)
+
     # --------------------------------------------------
+
+    def all_raids(self) -> tuple["RaidSchedule", ...]:
+        """
+        Dieser Raid und die übrigen, in der Reihenfolge des Bots -
+        der nächste zuerst.
+        """
+
+        if not self.known:
+            return ()
+
+        return (self,) + tuple(self.others)
 
     def next_day(self, now: datetime | None = None) -> RaidDay | None:
         """
@@ -418,7 +442,51 @@ def parse_schedule(data) -> RaidSchedule:
         days=tuple(days),
         composition=_parse_composition(data.get("composition")),
         signup=_parse_signup(data.get("discord")),
+        others=_parse_others(data.get("others")),
     )
+
+
+def _parse_others(rows) -> tuple[RaidSchedule, ...]:
+    """
+    Die weiteren gleichzeitig laufenden Raids.
+
+    **Warum das rekursiv über `parse_schedule()` läuft.** Ein Eintrag
+    in `others` trägt dieselben Felder wie die Antwort selbst, nur
+    ohne `status`. Ihn hier von Hand nachzubauen hieße, die Regeln aus
+    `parse_schedule()` ein zweites Mal aufzuschreiben - und ab der
+    ersten Änderung würde der zweite Raid anders gelesen als der
+    erste, ohne dass es jemandem auffiele.
+
+    Ein Eintrag ohne Termin fliegt nicht heraus: der Bot sortiert ihn
+    ans Ende, weil sein Datum unlesbar ist - der Raid existiert
+    trotzdem, und "es läuft noch etwas, dessen Termin ich nicht kenne"
+    ist eine bessere Auskunft als Schweigen.
+    """
+
+    if not isinstance(rows, (list, tuple)):
+        return ()
+
+    weitere = []
+
+    for row in rows:
+
+        if not isinstance(row, dict):
+            continue
+
+        #
+        # `others` wird beim verschachtelten Eintrag ausdrücklich
+        # entfernt. Der Bot schickt es dort nicht, aber eine Antwort,
+        # die sich selbst enthält, würde sonst so tief einlesen, wie
+        # sie geschachtelt ist - eine Rekursion, deren Tiefe von
+        # außen bestimmt wird.
+        #
+
+        eintrag = parse_schedule({**row, "status": "ok", "others": None})
+
+        if eintrag.known:
+            weitere.append(eintrag)
+
+    return tuple(weitere)
 
 
 def _parse_roster(rows, roles) -> tuple[RosterSlot, ...]:
@@ -781,3 +849,45 @@ def composition_text(
         return head
 
     return f"{head} · {', '.join(parts)}"
+
+
+def others_text(
+    schedule: RaidSchedule | None,
+    now: datetime | None = None,
+) -> str:
+    """
+    Die Zeile über die weiteren gleichzeitig laufenden Raids.
+
+    "Außerdem offen: 25er Twinks (Donnerstag, 14.08. um 20:00 Uhr)" -
+    leer, solange nur einer läuft.
+
+    **Warum das überhaupt eine Zeile bekommt.** Die Übersicht hat
+    genau einen Termin-Platz, und der bleibt beim nächsten Raid. Ohne
+    diesen Hinweis wäre ein zweiter, parallel laufender Raid in der
+    App schlicht unsichtbar - man sähe nicht, dass man sich noch
+    woanders eintragen kann, und würde den Unterschied nie bemerken.
+    Ein Raid ohne lesbaren Termin steht mit Namen da, ohne Datum: dass
+    es ihn gibt, ist die Auskunft, das Datum kennt der Bot eben nicht.
+    """
+
+    if schedule is None or not getattr(schedule, "known", False):
+        return ""
+
+    teile = []
+
+    for weiterer in schedule.others:
+
+        tag = weiterer.next_day(now)
+
+        beschriftung = day_text(tag)
+
+        teile.append(
+            f"{weiterer.title} ({beschriftung})"
+            if beschriftung
+            else weiterer.title
+        )
+
+    if not teile:
+        return ""
+
+    return "Außerdem offen: " + " · ".join(teile)

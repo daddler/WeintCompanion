@@ -67,6 +67,7 @@ from core.raid_schedule import (
     countdown_text,
     day_text,
     open_slots,
+    others_text,
     signup_text,
 )
 from gui.dialogs.changelog_dialog import show_changelog
@@ -356,6 +357,29 @@ class RosterCard(Card):
 
         text.addWidget(self.explanation)
 
+        #
+        # Die weiteren gleichzeitig laufenden Raids. Eigene Zeile und
+        # nicht angehängt an die Erklärung darüber: die spricht über
+        # DIESEN Termin (was fehlt, wie viele zugesagt haben), und ein
+        # zweiter Raid gehört nicht in denselben Satz. Unsichtbar,
+        # solange nur einer läuft - das ist der Normalfall.
+        #
+
+        self.parallel = QLabel("")
+
+        self.parallel.setFont(font("small"))
+
+        enable_wrap(self.parallel)
+
+        restyle(
+            self.parallel,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+        self.parallel.setVisible(False)
+
+        text.addWidget(self.parallel)
+
         text.addStretch(1)
 
         body.addLayout(text, 1)
@@ -413,6 +437,8 @@ class RosterCard(Card):
 
             self.count.setText("")
 
+            self.parallel.setVisible(False)
+
             return
 
         self.title.setText(schedule.title)
@@ -434,6 +460,12 @@ class RosterCard(Card):
         self.explanation.setText(
             self._explanation(schedule, day, bool(groups))
         )
+
+        weitere = others_text(schedule)
+
+        self.parallel.setText(weitere)
+
+        self.parallel.setVisible(bool(weitere))
 
     # --------------------------------------------------
 
