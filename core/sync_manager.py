@@ -18,6 +18,7 @@ LOCAL_MESSAGE_TYPES = {
     "dummy_practice_session",
     "character_report",
     "character_sheet",
+    "weakaura_catalog",
 }
 
 
@@ -174,6 +175,44 @@ class SyncManager:
                         f"{sheet['name']}"
                         + (f"-{sheet['realm']}" if sheet["realm"] else "")
                         + (f" ({sheet['spec']})" if sheet["spec"] else "")
+                    )
+
+                self.reader.remove_message(
+                    message["id"]
+                )
+
+                continue
+
+            #
+            # Welche WeakAuras kennt das Addon? Seit WeintCodex
+            # 2.1.0.0. Bleibt lokal: es ist eine Auskunft ueber die
+            # eigene Installation, kein Gildenwissen - und die Seite
+            # "WeakAuras" ist die einzige Leserin. Ohne sie koennte
+            # sie nur die Auren auflisten, die sie selbst angelegt
+            # hat, und "eine vorhandene aktualisieren" waere genau
+            # darauf beschraenkt.
+            #
+
+            if message.get("type") == "weakaura_catalog":
+
+                store = getattr(self.manager, "weakauras", None)
+
+                changed = (
+                    store.apply_catalog(message.get("payload") or "")
+                    if store else False
+                )
+
+                #
+                # Nur bei einer Aenderung protokollieren. Der Katalog
+                # ist ueber eine Spielsitzung hinweg konstant; eine
+                # Zeile bei jeder Anmeldung waere Rauschen.
+                #
+
+                if changed:
+
+                    self.manager.logger.info(
+                        f"WeakAuras im Addon: "
+                        f"{len(store.catalog())} bekannt."
                     )
 
                 self.reader.remove_message(

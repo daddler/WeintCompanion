@@ -59,16 +59,17 @@ class PageId(IntEnum):
 
     CHARACTERS = 4
     PREPARATION = 5
-    CHARACTER_LINKS = 6
+    WEAKAURAS = 6
+    CHARACTER_LINKS = 7
 
     #
     # SYSTEM
     #
 
-    ADDON = 7
-    CONNECTIONS = 8
-    SETTINGS = 9
-    LOGS = 10
+    ADDON = 8
+    CONNECTIONS = 9
+    SETTINGS = 10
+    LOGS = 11
 
 
 #
@@ -148,6 +149,7 @@ def build_page_specs() -> tuple[PageSpec, ...]:
     from gui.pages.overview import OverviewPage
     from gui.pages.preparation import PreparationPage
     from gui.pages.settings import SettingsPage
+    from gui.pages.weakauras import WeakAurasPage
     from gui.pages.weinttv import WeintTvPage
 
     return (
@@ -230,6 +232,31 @@ def build_page_specs() -> tuple[PageSpec, ...]:
             icon="vorbereitung",
             page_factory=PreparationPage,
             attribute="preparation",
+        ),
+
+        #
+        # WeakAuras stehen bei CHARAKTER und nicht bei RAID: sie
+        # gehoeren zu dem, was man sich fuer den Raid einrichtet -
+        # dieselbe Gruppe wie "Vorbereitung", direkt daneben. Ingame
+        # hat der Bereich eine eigene Rubrik in der Navigationsspalte;
+        # dass er hier bei den Charaktersachen liegt, ist kein
+        # Widerspruch, sondern folgt der Gruppierung dieser App.
+        #
+
+        PageSpec(
+            page_id=PageId.WEAKAURAS,
+            label="WeakAuras",
+            group=GROUP_CHARACTER,
+            icon="weakauras",
+            page_factory=WeakAurasPage,
+            #
+            # Ohne Seiten-Wrapper: Liste und Bearbeitungsspalte haben
+            # ihre eigenen Scrollbereiche und sollen unter einem
+            # stehenden Kopf laufen, nicht mit ihm zusammen - dieselbe
+            # Ueberlegung wie bei der Charakterzuordnung.
+            #
+            scroll=False,
+            attribute="weakauras",
         ),
 
         #

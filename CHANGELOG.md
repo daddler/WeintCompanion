@@ -2,6 +2,57 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.1.0
+
+**Eine WeakAura lässt sich jetzt hier eintragen und steht im Spiel zur
+Auswahl.** Bis 2.0.12 ging das nur auf einem Weg: eine Lua-Datei im
+Addon anlegen, sie in die `.toc` eintragen, eine Version schneiden, ein
+Release veröffentlichen und warten, bis alle es installiert haben. Für
+eine Aura, die zum nächsten Mittwoch gebraucht wird, ist das kein Weg.
+
+Der neue Bereich **WeakAuras** (unter *Charakter*) nimmt Name, Rubrik,
+Version, Beschreibung und den Export-String aus WeakAuras entgegen. Ein
+Klick auf *Fertig* legt sie ab und stellt sie sofort ins Addon; im
+Spiel steht sie nach dem nächsten `/reload` in derselben Liste wie die
+mitgelieferten Auren und wird mit demselben Knopf installiert.
+
+**Auch eine vorhandene Aura lässt sich aktualisieren, und zwar auch
+eine mitgelieferte.** Das Addon meldet neuerdings, welche Auren es
+kennt - ohne diese Meldung könnte diese Seite nur die Einträge
+anbieten, die sie selbst angelegt hat, obwohl der häufigste Fall gerade
+ein mitgeliefertes Klassenpaket mit einer neuen Fassung ist. Eine
+Aktualisierung behält die Kennung der bisherigen Aura: im Spiel gewinnt
+sie damit, statt daneben zu stehen.
+
+### Was daran nicht Geschmack ist
+
+- **Zugestellt wird immer die ganze Liste.** Eine gelöschte Aura
+  verschwindet im Spiel dadurch, dass sie in der nächsten Zustellung
+  fehlt. Eine Einzelnachricht könnte "es gibt mich nicht mehr" gar
+  nicht ausdrücken, weil das Addon seine Inbox bei jedem Login leert.
+  Deshalb wird auch eine leer gewordene Bibliothek zugestellt statt
+  übersprungen - sonst bliebe genau die eine Aura für immer stehen,
+  die ausdrücklich weg sollte.
+- **„Im Spiel nach dem nächsten /reload" steht auf der Seite**, nicht
+  in der Dokumentation. WoW liest seine gespeicherten Daten nur beim
+  Laden; wer das nicht weiß, sucht die Aura und findet einen Fehler,
+  wo keiner ist.
+- **Der Export-String wird von Leerraum befreit, nicht abgewiesen.**
+  Wer ihn aus Discord kopiert, bringt Zeilenumbrüche mit; ein
+  WeakAuras-Export enthält selbst keine.
+- **Ein fehlender `!WA:`-Vorspann ist ein Hinweis, keine Ablehnung.**
+  Ältere WeakAuras-Versionen exportieren so, und ob eine Zeichenkette
+  wirklich importierbar ist, weiß allein WeakAuras. Eine Prüfung, die
+  richtige Eingaben abweist, ist schlimmer als eine, die eine falsche
+  durchlässt.
+- **Löschen fragt nach.** Der Importstring steht nur hier und im Spiel
+  dessen, der ihn gebaut hat.
+
+Braucht **WeintCodex 2.1.0.0**. Ältere Addon-Versionen kennen die
+Nachricht nicht und ignorieren sie; die Katalogmeldung schickt das
+Addon umgekehrt erst ab dieser Companion-Version. Der Vertrag steht in
+`docs/weakaura-bridge.md`.
+
 ## 2.0.12
 
 **Der Bot ist umgezogen - die Companion findet ihn wieder.** Sein

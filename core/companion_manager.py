@@ -29,6 +29,8 @@ from core.addon_analysis_sync import AddonAnalysisSync
 from core.raid_data_service import RaidDataService
 from core.academy_service import AcademyService
 from core.character_store import CharacterStore
+from core.weakaura_store import WeakAuraStore
+from core.weakaura_sync import WeakAuraSync
 
 
 class _AutoSyncStarter(QObject):
@@ -170,6 +172,26 @@ class CompanionManager(QObject):
         #
 
         self.characters = CharacterStore(self)
+
+        #
+        # Die WeakAura-Bibliothek: was auf der Seite "WeakAuras"
+        # eingetragen wurde, plus der zuletzt gemeldete Katalog des
+        # Addons. Liest beim Erzeugen ihre Datei und macht sonst
+        # nichts.
+        #
+
+        self.weakauras = WeakAuraStore(self)
+
+        #
+        # Und ihre Zustellung ins Addon. Eigener Kanal in der Inbox
+        # wie jeder andere Absender.
+        #
+
+        self.weakaura_sync = WeakAuraSync(
+            self,
+            self.addon_inbox,
+            self.weakauras,
+        )
 
         #
         # Stellt die zuletzt ausgewertete Auswertung samt Lernpfad ins
@@ -406,6 +428,22 @@ class CompanionManager(QObject):
             )
 
         #
+        # Die WeakAura-Bibliothek ins Addon. Eigener try/except wie
+        # jeder Schritt; sie ist rein lokal (keine Netzrunde) und
+        # schreibt nur, wenn sich etwas geaendert hat.
+        #
+
+        try:
+
+            self.weakaura_sync.process()
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"WeakAura-Zustellung fehlgeschlagen: {exc}"
+            )
+
+        #
         # Wieder eigener try/except: eine fehlerhafte Auswertung darf
         # weder den Material-Sync noch den Roster-Abruf mitreissen.
         #
@@ -470,10 +508,12 @@ class CompanionManager(QObject):
         #
         if classic_path != self.state.wow_path:
 
-            sync = getattr(self, "addon_analysis_sync", None)
+            for attribute in ("addon_analysis_sync", "weakaura_sync"):
 
-            if sync is not None:
-                sync.invalidate()
+                sync = getattr(self, attribute, None)
+
+                if sync is not None:
+                    sync.invalidate()
 
         self.state.wow_path = classic_path
         self.state.wow_found = classic_path is not None
