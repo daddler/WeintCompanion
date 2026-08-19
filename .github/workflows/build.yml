@@ -221,6 +221,23 @@ jobs:
           # "tag"-Input würde die Action mangels Tag-Kontext fehlschlagen.
           #
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          #
+          # Bei einem Tag-Push existiert der Tag schon und das hier ist
+          # wirkungslos. Beim manuellen workflow_dispatch legt die
+          # Action den Tag dagegen selbst an - und zwar ohne diese
+          # Angabe auf dem STANDARDBRANCH, nicht auf dem Stand, gegen
+          # den gerade gebaut wurde. Genau so bekamen v2.1.0 und v2.2.0
+          # beim Nachziehen der fehlenden Releases Tags, die auf den
+          # Stand von 2.3.0 zeigten: die Artefakte waren richtig (der
+          # Checkout nimmt die Dispatch-Ref), der Tag zeigte woanders
+          # hin. Nichts schlaegt dabei fehl - auffallen kann es nur
+          # dem, der spaeter einen Tag auscheckt.
+          #
+          # Das Addon-Repo macht es an derselben Stelle richtig
+          # (--target "${{ github.sha }}" in manual-release.yml); nur
+          # hier fehlte es.
+          #
+          target_commitish: ${{ github.sha }}
           body_path: release-notes.md
           fail_on_unmatched_files: false
           files: |
