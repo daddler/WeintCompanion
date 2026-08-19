@@ -1137,6 +1137,25 @@ class PreparationCard(Card):
 
             self.chip.setVariant("neutral")
 
+            #
+            # Gemeldet, aber nur Twinks: dann fehlt keine Meldung,
+            # sondern eine Höchststufe. Der allgemeine Satz schickte
+            # hier jemanden das Addon prüfen, an dem nichts ist.
+            #
+
+            hidden = summary.get("hidden", 0)
+
+            if hidden and not summary.get("characters"):
+
+                self.note.setText(
+                    f"Bisher {'hat' if hidden == 1 else 'haben'} sich "
+                    f"nur {hidden} Charakter{'e' if hidden != 1 else ''} "
+                    f"unter Höchststufe gemeldet - geprüft werden die, "
+                    f"mit denen du in den Raid gehst."
+                )
+
+                return
+
             self.note.setText(
                 "Verzauberungen, Sockel und BiS-Plätze meldet das "
                 "Addon beim Anmelden im Spiel."

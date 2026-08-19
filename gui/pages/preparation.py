@@ -29,6 +29,14 @@ einer anderen Stelle:
   nicht abstellen kann. Sie stehen als eigene Zeile daneben.
 * Ist für eine Spezialisierung gar keine BiS-Liste gepflegt, sagt die
   Zeile das, statt "0 offen" zu zeigen.
+
+Wie "Meine Charaktere" führt die Seite seit 2.3.1 **nur Charaktere auf
+hoher Stufe** - beide lesen dieselbe `CharacterStore.characters()`,
+und die Kachel auf der Übersicht dieselbe
+`preparation_summary()`. Eine fehlende Verzauberung auf einem Twink der
+Stufe 34 ist keine offene Stelle, sondern der Normalfall; sie hier
+mitzuzählen hiesse, die Vorbereitung für einen Raidabend an einem
+Charakter zu messen, der nicht mitkommt.
 """
 
 from __future__ import annotations
@@ -467,20 +475,28 @@ class PreparationPage(Page):
 
         sheets = store.characters() if store is not None else []
 
-        signature = tuple(
-            (
-                sheet.get("name"),
-                sheet.get("realm"),
-                sheet.get("updated"),
-            )
-            for sheet in sheets
+        hidden = len(store.hidden()) if store is not None else 0
+
+        minimum = store.min_level() if store is not None else 0
+
+        signature = (
+            tuple(
+                (
+                    sheet.get("name"),
+                    sheet.get("realm"),
+                    sheet.get("updated"),
+                )
+                for sheet in sheets
+            ),
+            hidden,
+            minimum,
         )
 
         if signature != self._signature:
 
             self._signature = signature
 
-            self._fill(sheets)
+            self._fill(sheets, hidden, minimum)
 
         self._apply_title(sheets, store)
 
@@ -517,7 +533,7 @@ class PreparationPage(Page):
             f"in deiner Ausrüstung."
         )
 
-    def _fill(self, sheets: list[dict]):
+    def _fill(self, sheets: list[dict], hidden: int = 0, minimum: int = 0):
 
         while self.grid.count():
 
@@ -531,6 +547,44 @@ class PreparationPage(Page):
         if not sheets:
 
             self.grid_host.hide()
+
+            #
+            # Dieselbe Unterscheidung wie in "Meine Charaktere": es ist
+            # etwas gemeldet worden, es passt nur nicht zur Frage der
+            # Seite. "Noch keine Daten" wäre dort schlicht falsch.
+            #
+
+            if hidden:
+
+                self.empty.update_texts(
+                    eyebrow="NUR TWINKS GEMELDET",
+                    title=(
+                        f"{hidden} Charakter{'e' if hidden != 1 else ''} "
+                        f"unter Stufe {minimum}."
+                    ),
+                    explanation=(
+                        f"Die Vorbereitung wird für die Charaktere "
+                        f"geprüft, mit denen du in den Raid gehst - "
+                        f"deshalb ab Stufe {minimum}. Melde dich einmal "
+                        f"mit einem an, danach steht sein Stand hier."
+                    ),
+                    action="",
+                )
+
+            else:
+
+                self.empty.update_texts(
+                    eyebrow="NOCH KEINE DATEN",
+                    title="Das Addon hat noch keine Ausrüstung gemeldet.",
+                    explanation=(
+                        "Verzauberungen, Sockel und offene BiS-Plätze "
+                        "kommen aus dem Spiel. WeintCodex prüft sie beim "
+                        "Anmelden und nach jedem Ausrüstungswechsel - "
+                        "melde dich einmal an, danach steht der Stand "
+                        "hier."
+                    ),
+                    action="Addon prüfen",
+                )
 
             self.empty.show()
 

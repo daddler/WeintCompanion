@@ -24,6 +24,19 @@ Zwei Dinge, die die Seite über ihre Daten sagt und nicht verschweigt:
   wurde. Er nennt jetzt aber den nächsten Schritt ("einmal im Spiel
   anmelden") statt "wird nicht übertragen".
 
+Seit 2.3.1 zeigt die Seite **nur Charaktere auf hoher Stufe**
+(`CharacterStore.min_level()`, in MoP Classic die 90). Die Frage vor
+dieser Seite ist "womit gehe ich in den Raid", und die stellt sich für
+einen Twink der Stufe 34 nicht; vier Karten, die sie nicht
+beantworten, machen die eine, die es tut, unauffindbar. Zwei Dinge
+gehören dazu, sonst wäre das Ausblenden von einem Fehler nicht zu
+unterscheiden:
+
+* **Die Fußzeile sagt, wie viele ausgeblendet sind**, und warum.
+* **"Nur Twinks gemeldet" ist ein eigener Leerzustand.** Der alte Satz
+  ("Das Addon hat noch keinen Charakter gemeldet.") wäre dort schlicht
+  falsch - gemeldet wurde etwas, es passt nur nicht zur Frage.
+
 Seit 2.0.9 trägt jede Karte links ein **Klassenbild**
 (`gui/widgets/class_avatar.py`), an derselben Stelle und in derselben
 Rolle wie das Porträt im Kopf der Charakterrubrik von WeintCodex. Das
@@ -375,18 +388,36 @@ class CharactersPage(Page):
 
     # --------------------------------------------------
 
+    def _store(self):
+
+        return getattr(self.manager, "characters", None)
+
     def _sheets(self) -> list[dict]:
 
-        store = getattr(self.manager, "characters", None)
+        store = self._store()
 
         if store is None:
             return []
 
         return store.characters()
 
+    def _hidden(self) -> tuple[int, int]:
+        """
+        Wie viele Twinks ausgeblendet sind - und ab welcher Stufe.
+        """
+
+        store = self._store()
+
+        if store is None:
+            return (0, 0)
+
+        return (len(store.hidden()), store.min_level())
+
     def refresh(self):
 
         sheets = self._sheets()
+
+        hidden, minimum = self._hidden()
 
         #
         # `refresh()` läuft bei jedem Seitenwechsel und bei jedem
@@ -396,14 +427,18 @@ class CharactersPage(Page):
         # Auswahlfelder deshalb im Sekundentakt zuklappten.
         #
 
-        signature = tuple(
-            (
-                sheet.get("name"),
-                sheet.get("realm"),
-                sheet.get("updated"),
-                sheet.get("item_level_equipped"),
-            )
-            for sheet in sheets
+        signature = (
+            tuple(
+                (
+                    sheet.get("name"),
+                    sheet.get("realm"),
+                    sheet.get("updated"),
+                    sheet.get("item_level_equipped"),
+                )
+                for sheet in sheets
+            ),
+            hidden,
+            minimum,
         )
 
         if signature == self._signature:
@@ -412,7 +447,7 @@ class CharactersPage(Page):
 
         self._signature = signature
 
-        self._fill(sheets)
+        self._fill(sheets, hidden, minimum)
 
         self._apply_title(sheets)
 
@@ -433,6 +468,33 @@ class CharactersPage(Page):
 
         if name:
 
+            #
+            # Ist der angemeldete Charakter selbst ein ausgeblendeter
+            # Twink, sagt der Titel das. "Im Spiel angemeldet: Twinki."
+            # über einer Liste ohne Twinki sähe sonst nach einem Fehler
+            # aus - und der Grund stünde nur in der Fußzeile.
+            #
+
+            store = self._store()
+
+            hidden_names = (
+                {
+                    (sheet.get("name") or "").strip().lower()
+                    for sheet in store.hidden()
+                }
+                if store is not None
+                else set()
+            )
+
+            if name.strip().lower() in hidden_names:
+
+                self.header.setTitle(
+                    f"Im Spiel angemeldet: {name} - noch unter Stufe "
+                    f"{store.min_level()}."
+                )
+
+                return
+
             self.header.setTitle(f"Im Spiel angemeldet: {name}.")
 
             return
@@ -448,7 +510,7 @@ class CharactersPage(Page):
 
         self.header.setTitle("Deine Charaktere sammeln sich hier.")
 
-    def _fill(self, sheets: list[dict]):
+    def _fill(self, sheets: list[dict], hidden: int = 0, minimum: int = 0):
 
         while self.grid.count():
 
@@ -464,6 +526,47 @@ class CharactersPage(Page):
             self.grid_host.hide()
 
             self.note.hide()
+
+            #
+            # "Noch keine Daten" wäre hier falsch, wenn Daten da sind
+            # und nur nicht zur Frage der Seite passen. Der Unterschied
+            # ist der ganze Punkt: im einen Fall fehlt eine Anmeldung,
+            # im anderen fehlt eine Höchststufe.
+            #
+
+            if hidden:
+
+                self.empty.update_texts(
+                    eyebrow="NUR TWINKS GEMELDET",
+                    title=(
+                        f"{hidden} Charakter{'e' if hidden != 1 else ''} "
+                        f"unter Stufe {minimum}."
+                    ),
+                    explanation=(
+                        f"Diese Seite zeigt, womit du in den Raid gehst, "
+                        f"und führt deshalb nur Charaktere ab Stufe "
+                        f"{minimum}. Melde dich einmal mit einem an - "
+                        f"danach steht er hier, auch wenn du ihn längere "
+                        f"Zeit nicht spielst."
+                    ),
+                    action="",
+                )
+
+            else:
+
+                self.empty.update_texts(
+                    eyebrow="NOCH KEINE DATEN",
+                    title="Das Addon hat noch keinen Charakter gemeldet.",
+                    explanation=(
+                        "WeintCodex übergibt beim Anmelden im Spiel, "
+                        "welcher Charakter gespielt wird, samt "
+                        "Gegenstandsstufe, Verzauberungen und Sockeln. "
+                        "Melde dich einmal im Spiel an - danach steht der "
+                        "Charakter hier, auch wenn du ihn längere Zeit "
+                        "nicht spielst."
+                    ),
+                    action="Addon prüfen",
+                )
 
             self.empty.show()
 
@@ -498,10 +601,28 @@ class CharactersPage(Page):
 
         self.grid_host.show()
 
-        self.note.setText(
+        text = (
             "Ein Charakter erscheint hier, sobald du dich mit ihm im "
             "Spiel angemeldet hast - die Liste ist die Summe deiner "
             "Anmeldungen, nicht die deines Accounts."
         )
+
+        #
+        # Ausgeblendete Twinks werden benannt. Ein Charakter, der aus
+        # einer Liste verschwindet, in der er gestern noch stand, ist
+        # sonst nicht von einem Fehler zu unterscheiden - und wer ihn
+        # sucht, sucht ihn im Addon.
+        #
+
+        if hidden:
+
+            text += (
+                f" {hidden} Charakter{'e' if hidden != 1 else ''} unter "
+                f"Stufe {minimum} {'sind' if hidden != 1 else 'ist'} "
+                f"ausgeblendet, damit hier steht, womit du in den Raid "
+                f"gehst."
+            )
+
+        self.note.setText(text)
 
         self.note.show()

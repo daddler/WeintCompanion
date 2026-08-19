@@ -25,7 +25,11 @@ from core.character_sheet_sync import (
     readiness,
     sheet_key,
 )
-from core.character_store import CharacterStore
+from core.character_store import (
+    MIN_LEVEL,
+    CharacterStore,
+    is_high_level,
+)
 from core.paths import Paths
 
 
@@ -61,10 +65,17 @@ class _Logger:
         self.messages.append(message)
 
 
+class _Config:
+
+    def __init__(self, **values):
+        self.data = dict(values)
+
+
 class _Manager:
 
-    def __init__(self):
+    def __init__(self, **config):
         self.logger = _Logger()
+        self.config = _Config(**config)
 
 
 @pytest.fixture
@@ -353,4 +364,112 @@ def test_the_summary_averages_only_the_checked_characters(store):
     assert summary["characters"] == 2
     assert summary["rated"] == 1
     assert summary["ratio"] == pytest.approx(15 / 17)
+    assert summary["open"] == 2
+
+
+# --------------------------------------------------
+# Stufenfilter
+# --------------------------------------------------
+
+
+def test_only_high_level_characters_are_listed(store):
+    """
+    Die Seite fragt, womit man in den Raid geht - ein Twink der Stufe
+    34 beantwortet das nicht und macht die Liste unübersichtlich.
+    """
+
+    store.apply(FULL)
+    store.apply("Twinki|Everlook|MAGE|34|||0|0|0||0|0|900")
+
+    assert [sheet["name"] for sheet in store.characters()] == ["Njiah"]
+
+    assert [sheet["name"] for sheet in store.hidden()] == ["Twinki"]
+
+
+def test_a_hidden_twink_is_kept_and_still_found(store):
+    """
+    Ausgeblendet heisst nicht gelöscht: wer den Twink hochspielt, soll
+    ihn am Tag der Höchststufe mit seiner Vorgeschichte wiederfinden -
+    und `apply()` muss ihn währenddessen über `get()` treffen, sonst
+    entstünde bei jeder Anmeldung ein zweiter Eintrag.
+    """
+
+    store.apply("Twinki|Everlook|MAGE|34|||0|0|0||0|0|900")
+
+    assert store.get("Twinki") is not None
+
+    assert [sheet["name"] for sheet in store.all_characters()] == ["Twinki"]
+
+    store.apply("Twinki|Everlook|MAGE|90|||0|0|0||0|0|901")
+
+    assert len(store.all_characters()) == 1
+
+    assert [sheet["name"] for sheet in store.characters()] == ["Twinki"]
+
+
+def test_a_missing_level_counts_as_high(store):
+    """
+    Die 0 heisst "nicht gemeldet", nicht "Stufe 0" - eine ältere
+    Addon-Version liesse den Charakter sonst spurlos verschwinden.
+    Dieselbe Linie wie `stars == 0` und `readiness() is None`.
+    """
+
+    assert is_high_level({"level": 0})
+    assert is_high_level({})
+    assert is_high_level({"level": "unfug"})
+
+    assert not is_high_level({"level": 89})
+    assert is_high_level({"level": MIN_LEVEL})
+
+    store.apply("Ohne|Everlook|MAGE")
+
+    assert [sheet["name"] for sheet in store.characters()] == ["Ohne"]
+
+
+def test_the_minimum_level_follows_the_configuration(tmp_path, monkeypatch):
+    """
+    Eine Zahl, die sich mit dem Spiel ändern kann, soll ohne ein
+    Release änderbar bleiben - dieselbe Überlegung wie bei
+    `access_role_map`.
+    """
+
+    monkeypatch.setattr(Paths, "config", staticmethod(lambda: tmp_path))
+
+    store = CharacterStore(_Manager(characters_min_level=85))
+
+    store.apply("Alt|Everlook|MAGE|85|||0|0|0||0|0|900")
+
+    assert store.min_level() == 85
+
+    assert [sheet["name"] for sheet in store.characters()] == ["Alt"]
+
+
+def test_an_unusable_minimum_level_is_ignored(tmp_path, monkeypatch):
+    """
+    Eine 0 hiesse "alles anzeigen", ein Text gar nichts - übernommen
+    sähe beides wie eine kaputte Seite aus.
+    """
+
+    monkeypatch.setattr(Paths, "config", staticmethod(lambda: tmp_path))
+
+    for value in (0, -5, "", "neunzig", None):
+
+        store = CharacterStore(_Manager(characters_min_level=value))
+
+        assert store.min_level() == MIN_LEVEL
+
+
+def test_the_summary_ignores_the_twinks(store):
+    """
+    Kachel und Seite lesen dieselbe Zusammenfassung und dürfen sich
+    nicht darin unterscheiden, wen sie meinen.
+    """
+
+    store.apply(FULL)
+    store.apply("Twinki|Everlook|MAGE|34|||0|0|0||0|0|900")
+
+    summary = store.preparation_summary()
+
+    assert summary["characters"] == 1
+    assert summary["hidden"] == 1
     assert summary["open"] == 2

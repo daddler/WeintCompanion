@@ -33,6 +33,18 @@ class Config:
             "character_roster_sync_enabled": True,
 
             #
+            # Ab welcher Stufe ein Charakter in "Meine Charaktere" und
+            # "Vorbereitung" erscheint. 90 ist die Hoechststufe von
+            # MoP Classic: die Seiten fragen, ob man raidfertig ist,
+            # und das fragt sich nur fuer Charaktere, die mitkoennen.
+            # Wer seine 85er mitzaehlen will, setzt die Zahl herunter;
+            # ein unbrauchbarer Wert wird ignoriert
+            # (core/character_store.py).
+            #
+
+            "characters_min_level": 90,
+
+            #
             # Zugriffsprofil: holt die Discord-Rollen beim Bot ab und
             # stellt dem Addon daraus Rang und Freigaben zu
             # (core/access_profile_sync.py). Ohne zugestelltes Profil
@@ -173,6 +185,7 @@ class Config:
                     "sync_interval": 5,
                     "roster_sync_enabled": True,
                     "character_roster_sync_enabled": True,
+                    "characters_min_level": 90,
                     "addon_analysis_sync_enabled": True,
                     "start_on_boot": False,
                     "minimize_to_tray": False,

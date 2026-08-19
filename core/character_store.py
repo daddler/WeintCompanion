@@ -24,6 +24,12 @@ Zwei Regeln, die nicht nach Geschmack sind:
 * **Nur der Zeitstempel entscheidet über die Reihenfolge**, nicht die
   Reihenfolge der Verarbeitung. Sonst hinge "zuletzt gespielt" daran,
   wann die App lief.
+* **Gezeigt werden nur Charaktere auf hoher Stufe**, siehe
+  `MIN_LEVEL` weiter unten. Twinks bleiben gespeichert - sie werden
+  nur nicht ausgegeben, und `all_characters()` liefert sie weiterhin.
+  Wegwerfen wäre das Falsche: wer einen Twink hochspielt, soll ihn am
+  Tag der Höchststufe mit seiner Vorgeschichte wiederfinden und nicht
+  als Neuzugang.
 """
 
 from __future__ import annotations
@@ -41,6 +47,53 @@ from core.paths import Paths
 
 
 CHARACTERS_FILE = "characters.json"
+
+
+#
+# Ab welcher Stufe ein Charakter in "Meine Charaktere" und
+# "Vorbereitung" auftaucht.
+#
+# Beide Seiten beantworten dieselbe Frage - "kann ich damit in den
+# Raid" -, und die stellt sich nur für Charaktere, die mitkommen
+# können. Bis 2.3.0 bekam jede Anmeldung eine Karte: wer nebenher
+# vier Twinks hochspielt, fand die eine Höchststufe, um die es geht,
+# zwischen vier Zeilen, die nichts mit dem nächsten Raidabend zu tun
+# haben.
+#
+# MoP Classic endet bei 90, "hohe Stufe" heißt hier deshalb
+# Höchststufe. `characters_min_level` in der Konfiguration setzt den
+# Wert herunter, wer seine 85er mitzählen will - dieselbe Überlegung
+# wie bei `access_role_map`: eine Zahl, die sich mit dem Spiel ändert,
+# soll ohne ein Release änderbar bleiben.
+#
+
+MAX_LEVEL = 90
+
+MIN_LEVEL = MAX_LEVEL
+
+
+def is_high_level(sheet: dict, minimum: int = MIN_LEVEL) -> bool:
+    """
+    **Eine fehlende Stufe zählt als hohe.**
+
+    Die 0 steht hier für "nicht gemeldet" und nicht für "Stufe 0" -
+    eine ältere Addon-Version, ein abgeschnittenes Feld, ein Eintrag
+    aus einer Zeit vor diesem Feld. Wer sie als Twink läse, ließe
+    einen Charakter verschwinden, über den nichts bekannt ist; das ist
+    dieselbe Linie wie `stars == 0` und `readiness() is None`: aus
+    einer Datenlücke wird kein Befund.
+    """
+
+    try:
+        level = int(sheet.get("level") or 0)
+
+    except (TypeError, ValueError):
+        return True
+
+    if level <= 0:
+        return True
+
+    return level >= minimum
 
 
 class CharacterStore:
@@ -172,9 +225,37 @@ class CharacterStore:
     # Lesen
     # --------------------------------------------------
 
-    def characters(self) -> list[dict]:
+    def min_level(self) -> int:
         """
-        Alle bekannten Charaktere, zuletzt gespielter zuerst.
+        Die eingestellte Mindeststufe. Ein unbrauchbarer Wert wird
+        **ignoriert und nicht übernommen** - eine 0 in der
+        Konfiguration hiesse sonst "alles anzeigen", und eine 200
+        "nichts anzeigen"; beides sieht aus wie eine kaputte Seite.
+        """
+
+        config = getattr(self.manager, "config", None)
+
+        value = (
+            config.data.get("characters_min_level")
+            if config is not None
+            else None
+        )
+
+        try:
+            minimum = int(value)
+
+        except (TypeError, ValueError):
+            return MIN_LEVEL
+
+        if minimum < 1:
+            return MIN_LEVEL
+
+        return minimum
+
+    def all_characters(self) -> list[dict]:
+        """
+        Alle bekannten Charaktere, zuletzt gespielter zuerst -
+        einschliesslich der Twinks.
         """
 
         return sorted(
@@ -182,6 +263,37 @@ class CharacterStore:
             key=lambda sheet: sheet.get("updated", 0),
             reverse=True,
         )
+
+    def characters(self) -> list[dict]:
+        """
+        Die Charaktere, die die Seiten zeigen: hohe Stufe, zuletzt
+        gespielter zuerst.
+        """
+
+        minimum = self.min_level()
+
+        return [
+            sheet
+            for sheet in self.all_characters()
+            if is_high_level(sheet, minimum)
+        ]
+
+    def hidden(self) -> list[dict]:
+        """
+        Die ausgeblendeten Twinks.
+
+        Sie werden gebraucht, um das Ausblenden **zu benennen**: ein
+        Charakter, der aus einer Liste verschwindet, in der er gestern
+        noch stand, ist sonst nicht von einem Fehler zu unterscheiden.
+        """
+
+        minimum = self.min_level()
+
+        return [
+            sheet
+            for sheet in self.all_characters()
+            if not is_high_level(sheet, minimum)
+        ]
 
     def get(self, name: str, realm: str = "") -> dict | None:
 
@@ -201,7 +313,15 @@ class CharacterStore:
 
             bare = (name or "").strip().lower()
 
-            for sheet in self.characters():
+            #
+            # Über `all_characters()`, nicht über `characters()`: die
+            # Ausblendung gilt der Anzeige. Ein Twink, der gerade eine
+            # Ausrüstung meldet, muss auch gefunden werden - sonst
+            # legte `apply()` bei jeder Anmeldung einen zweiten
+            # Eintrag an.
+            #
+
+            for sheet in self.all_characters():
 
                 if sheet.get("name", "").strip().lower() == bare:
                     return sheet
@@ -242,6 +362,13 @@ class CharacterStore:
         Verzauberungen oder Sockel gemeldet hat. Eine Null stünde dort
         für "alles offen" und wäre eine Messung, die es nicht gab -
         dieselbe Trennung wie `stars == 0` im Analyzer.
+
+        Gezählt wird über `characters()`, also **ohne die Twinks**:
+        die Kachel auf der Übersicht und die Seite "Vorbereitung"
+        lesen dieselbe Zusammenfassung und dürfen sich nicht darin
+        unterscheiden, wen sie meinen. Eine fehlende Verzauberung auf
+        einem Charakter der Stufe 34 ist ausserdem keine offene
+        Stelle, sondern der Normalfall.
         """
 
         sheets = self.characters()
@@ -269,4 +396,5 @@ class CharacterStore:
             "rated": len(ratios),
             "ratio": (sum(ratios) / len(ratios)) if ratios else None,
             "open": open_count,
+            "hidden": len(self.hidden()),
         }

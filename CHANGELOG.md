@@ -2,6 +2,42 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.3.1
+
+**"Meine Charaktere" zeigt nur noch Charaktere auf Höchststufe.**
+Bisher bekam jede Anmeldung im Spiel eine Karte - auch die des Twinks,
+der gerade Stufe 34 erreicht hat. Wer nebenher vier Twinks hochspielt,
+suchte die eine Höchststufe, um die es geht, zwischen vier Karten, die
+mit dem nächsten Raidabend nichts zu tun haben. Dieselbe Regel gilt
+für **Vorbereitung** und für die Kachel auf der Übersicht: alle drei
+lesen dieselbe Liste und dürfen sich nicht darin unterscheiden, wen
+sie meinen. Eine fehlende Verzauberung auf einem Twink ist keine
+offene Stelle, sondern der Normalfall.
+
+Vier Dinge gehören dazu, damit aus dem Ausblenden kein Fehlerbild
+wird:
+
+- **Ausgeblendet heisst nicht gelöscht.** Die Twinks bleiben
+  gespeichert; wer einen hochspielt, findet ihn am Tag der
+  Höchststufe mit seiner Vorgeschichte wieder und nicht als Neuzugang.
+- **Die Fußzeile sagt, wie viele ausgeblendet sind**, und warum. Ein
+  Charakter, der aus einer Liste verschwindet, in der er gestern noch
+  stand, ist sonst von einem Fehler nicht zu unterscheiden.
+- **"Nur Twinks gemeldet" ist ein eigener Leerzustand.** Der alte Satz
+  ("Das Addon hat noch keinen Charakter gemeldet.") wäre dort schlicht
+  falsch: gemeldet wurde etwas, es passt nur nicht zur Frage der
+  Seite. Ist der gerade angemeldete Charakter selbst ein Twink, sagt
+  das auch der Titel.
+- **Eine fehlende Stufe zählt als hohe.** Die 0 im Feld heisst "nicht
+  gemeldet" und nicht "Stufe 0" - eine ältere Addon-Version liesse
+  einen Charakter sonst spurlos verschwinden. Dieselbe Linie wie
+  `stars == 0` in der Academy: aus einer Datenlücke wird kein Befund.
+
+Die Grenze liegt bei 90, der Höchststufe von MoP Classic. Wer seine
+85er mitzählen will, setzt `characters_min_level` in der
+`config.json`; ein unbrauchbarer Wert dort wird ignoriert statt
+übernommen.
+
 ## 2.3.0
 
 **Die Anmeldungen kamen im Spiel nicht an - und es lag nicht am Bot.**

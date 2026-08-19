@@ -86,7 +86,7 @@ verbleibenden Nachrichten zurückschreibt.
 | 0 | `name` | Charaktername (**Pflicht** — ohne ihn wird die Meldung verworfen) |
 | 1 | `realm` | Realm, darf leer bleiben |
 | 2 | `class` | `classFile` aus `UnitClass()`, z. B. `PALADIN` |
-| 3 | `level` | Stufe |
+| 3 | `level` | Stufe (entscheidet ab Companion 2.3.1 über die Anzeige, siehe unten) |
 | 4 | `spec_key` | Profilschlüssel, z. B. `PALADIN_RETRIBUTION` |
 | 5 | `spec` | Anzeigename der Spezialisierung, z. B. `Vergeltung` |
 | 6 | `item_level_equipped` | Gegenstandsstufe angelegt |
@@ -190,3 +190,18 @@ Feld, das die neue Meldung nicht mehr trägt, beschriebe einen Zustand,
 den es nicht mehr gibt — wer eine Verzauberung entfernt, soll sie
 nicht deshalb weiter als vorhanden angezeigt bekommen, weil die vorige
 Meldung sie noch kannte.
+
+## Stufe und Anzeige (ab Companion 2.3.1)
+
+`CharacterStore` speichert **jede** Meldung, zeigt aber nur
+Charaktere ab `min_level()` (Vorgabe 90, die Höchststufe von MoP
+Classic; `characters_min_level` in der `config.json` setzt den Wert
+herunter). "Meine Charaktere", "Vorbereitung" und die Kachel auf der
+Übersicht lesen dieselbe gefilterte Liste, damit sie nicht
+auseinanderlaufen.
+
+Für das Addon ändert sich dadurch nichts: es meldet weiterhin jeden
+angemeldeten Charakter, und ein **fehlendes** Feld 3 gilt als hohe
+Stufe. Eine 0 heisst dort "nicht gemeldet" und nicht "Stufe 0" - ein
+Addon-Stand, der das Feld noch nicht trägt, lässt seinen Charakter
+deshalb nicht verschwinden.
