@@ -2,6 +2,73 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.3.0
+
+**Die Anmeldungen kamen im Spiel nicht an - und es lag nicht am Bot.**
+Wer ingame auf *Anmeldungen abrufen* klickte, bekam den Stand vom
+Login zurück. Jedes Mal. Die Ursache liegt in WoW selbst und war von
+beiden Seiten aus unsichtbar:
+
+WoW liest seine gespeicherten Variablen beim Laden **einmal** in den
+Arbeitsspeicher. Bei einem `/reload` schreibt es sie **zuerst aus dem
+Speicher zurück in die Datei** und liest sie erst danach wieder ein.
+Genau dieses Zurückschreiben löscht alles, was die Companion in der
+Zwischenzeit zugestellt hat - bevor das Addon es je zu sehen bekommt.
+Der Knopf ingame löst ein `/reload` aus, konnte also prinzipiell nie
+neue Daten holen.
+
+Schlimmer als "nichts passiert": `DiscordRosterSync` merkt sich, was
+es zuletzt geschickt hat, und schickt einen unveränderten Roster kein
+zweites Mal. Die gelöschte Zustellung war damit **weg**, bis sich in
+Discord inhaltlich etwas änderte. Die Anmeldeliste im Spiel konnte so
+tage- bis wochenalt sein, ohne dass irgendwo etwas fehlte.
+
+**Die Zustellung liegt jetzt zusätzlich als Lua-Datei im
+Addon-Ordner** (`data/companion_live.lua`). Die führt WoW bei jedem
+`/reload` neu aus und schreibt sie niemals zurück - das ist die
+einzige Richtung Companion → Addon, die eine laufende Spielsitzung
+überhaupt erreichen kann. Braucht **WeintCodex 2.3.0.0**.
+
+Die gespeicherte Variable bleibt und wird weiter beschrieben: ein
+Addon-Stand vor 2.3.0.0 kennt die Brücke nicht. Die Gegenrichtung
+(Addon → Companion) war nie betroffen - dort ist WoW der Schreiber und
+die Companion die Leserin, also genau herum.
+
+### Was dabei nicht schiefgehen darf
+
+- **Zugestellt wird immer die ganze Warteschlange**, nie ein Zuwachs:
+  das Addon kann die Datei nicht leeren, ihr Inhalt *ist* der
+  vollständige Stand.
+- **Der Zeitstempel wandert nur bei inhaltlicher Änderung.** Sonst
+  arbeitete das Addon bei jedem `/reload` dieselbe Zustellung erneut
+  ein und meldete jeden Import ein weiteres Mal im Chat.
+- **Erst schreiben, dann umbenennen.** Ein `/reload` kann in den
+  Schreibvorgang fallen, und eine halb geschriebene Lua-Datei im
+  Addon-Ordner ist ein Ladefehler des Addons.
+- **Verglichen wird gegen die Datei, nicht gegen ein Gedächtnis.** Ein
+  Addon-Update entpackt den leeren Auslieferungsstand darüber; ein
+  reiner Speicher-Vergleich hielte die Zustellung danach für vorhanden
+  und schriebe sie nie wieder. `AddonInbox.reassert()` läuft einmal
+  pro Sync-Zyklus und zieht genau das nach - ohne belegten Kanal tut
+  sie nichts, sonst nähme sie beim App-Start dem Addon den gültigen
+  Stand des vorherigen Laufs weg.
+
+Voller Vertrag in `docs/live-bridge.md`.
+
+### Technisch
+
+- `addon/live_bridge.py` ist die schreibende Hälfte,
+  `addon/addon_inbox.py` bündelt beide Wege. Gerendert werden die
+  Nachrichten für beide von **derselben** Funktion
+  (`render_entries()` in `addon/inbox_writer.py`) - zwei Renderer
+  wären zwei Formate, sobald einer erweitert wird, und der
+  Unterschied fiele erst im Spiel auf
+- `tests/test_live_bridge.py` prüft mit einem echten Lua-Interpreter,
+  dass die geschriebene Datei gültiges Lua ist und die Nachrichten
+  trägt. Sie liegt im Addon-Ordner und wird als Programmcode
+  ausgeführt: ein Tippfehler im Serialisierer ist dort kein
+  unlesbarer Datensatz, sondern ein Ladefehler
+
 ## 2.2.0
 
 **Eine freigegebene WeakAura landet jetzt bei allen, nicht nur bei

@@ -493,6 +493,27 @@ class CompanionManager(QObject):
                 f"WeintTV/Academy-Zustellung fehlgeschlagen: {exc}"
             )
 
+        #
+        # Zum Schluss die Zustellung im Addon-Ordner nachziehen. Fast
+        # immer ein Vergleich ohne Schreibvorgang - noetig ist sie fuer
+        # den einen Fall, in dem uns die Datei aus der Hand genommen
+        # wird: ein Addon-Update entpackt den leeren
+        # Auslieferungsstand darueber. Ohne diesen Schritt bliebe die
+        # Zustellung danach verschwunden, bis sich beim Bot inhaltlich
+        # etwas aendert - die Absender oben schicken einen
+        # unveraenderten Stand kein zweites Mal.
+        #
+
+        try:
+
+            self.addon_inbox.reassert()
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"Nachziehen der Addon-Zustellung fehlgeschlagen: {exc}"
+            )
+
         finally:
 
             with self._sync_lock:

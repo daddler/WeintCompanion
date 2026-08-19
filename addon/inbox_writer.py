@@ -5,6 +5,61 @@ from core.lua_table import quote_lua_string, to_lua, upsert_variable
 from core.version import VERSION
 
 
+def render_entries(messages: list[dict]) -> str:
+    """
+    Die Nachrichten einer Zustellung als Lua-Tabelleneinträge.
+
+    Steht hier und nicht in InboxWriter, weil es zwei Wege ins Addon
+    gibt und beide exakt dieselbe Warteschlange tragen müssen: die
+    SavedVariable WeintCompanionInboxDB (dieser Writer) und die
+    Live-Brücke im Addon-Ordner (addon/live_bridge.py). Zwei
+    Renderer wären zwei Formate, sobald einer von beiden erweitert
+    wird - und der Unterschied fiele erst im Spiel auf.
+    """
+
+    entries = []
+
+    for message in messages:
+
+        payload = message.get("payload")
+
+        if not payload:
+            continue
+
+        if isinstance(payload, str):
+            rendered = quote_lua_string(payload)
+        else:
+            rendered = to_lua(payload, indent=0)
+
+        community = message.get("community")
+
+        community_line = ""
+
+        if community not in (None, ""):
+
+            #
+            # Immer als Zeichenkette: eine Discord-Snowflake ist zu
+            # groß für Luas 5.1-Zahlen und würde als Zahl
+            # geschrieben zu "1.23e+18" - im Addon passt das dann
+            # nie gegen die Dezimaldarstellung der Bindung.
+            #
+
+            community_line = (
+                f'["community"] = '
+                f'{quote_lua_string(str(community))},\n'
+            )
+
+        entries.append(
+            "{\n"
+            f'["type"] = {quote_lua_string(message["type"])},\n'
+            f"{community_line}"
+            f'["payload"] = {rendered},\n'
+            "},\n"
+        )
+
+    return "".join(entries)
+
+
 class InboxWriter:
     """
     Gegenrichtung zu SyncReader: schreibt Nachrichten von Companion
@@ -48,46 +103,6 @@ class InboxWriter:
         if file is None:
             return False
 
-        entries = []
-
-        for message in messages:
-
-            payload = message.get("payload")
-
-            if not payload:
-                continue
-
-            if isinstance(payload, str):
-                rendered = quote_lua_string(payload)
-            else:
-                rendered = to_lua(payload, indent=0)
-
-            community = message.get("community")
-
-            community_line = ""
-
-            if community not in (None, ""):
-
-                #
-                # Immer als Zeichenkette: eine Discord-Snowflake ist zu
-                # groß für Luas 5.1-Zahlen und würde als Zahl
-                # geschrieben zu "1.23e+18" - im Addon passt das dann
-                # nie gegen die Dezimaldarstellung der Bindung.
-                #
-
-                community_line = (
-                    f'["community"] = '
-                    f'{quote_lua_string(str(community))},\n'
-                )
-
-            entries.append(
-                "{\n"
-                f'["type"] = {quote_lua_string(message["type"])},\n'
-                f"{community_line}"
-                f'["payload"] = {rendered},\n'
-                "},\n"
-            )
-
         #
         # Die eigene Version mitschreiben - bei JEDEM Schreibvorgang,
         # auch bei leerer Queue.
@@ -109,7 +124,7 @@ class InboxWriter:
         body = (
             f'["companionVersion"] = {quote_lua_string(VERSION)},\n'
             '["queue"] = {\n'
-            + "".join(entries)
+            + render_entries(messages)
             + "},\n"
         )
 
