@@ -228,6 +228,24 @@ class DiscordSection(SectionContent):
 
         self.manager.discord_account.clear()
 
+        #
+        # Die WeakAuras der Gilde gehören der Gilde, nicht diesem
+        # Rechner. Sie nach dem Trennen weiter ins Addon zu stellen
+        # wäre dieselbe Vermischung, gegen die es `/wc access reset`
+        # gibt - und sie liessen sich ohne Konto auch nicht mehr
+        # aktualisieren. Die selbst eingetragenen bleiben: die hat
+        # niemand anderes.
+        #
+
+        store = getattr(self.manager, "weakauras", None)
+
+        if store is not None and store.clear_guild():
+
+            sync = getattr(self.manager, "weakaura_sync", None)
+
+            if sync is not None:
+                sync.publish_now()
+
         self.manager.logger.info(
             "Discord-Verknüpfung getrennt."
         )

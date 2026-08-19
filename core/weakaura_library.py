@@ -9,6 +9,13 @@ Kein Qt, kein `httpx`, keine Datei - aus demselben Grund wie bei
 Entscheidungen sind die Stelle, an der etwas falsch sein kann. Sie
 soll ohne Fenster prüfbar sein.
 
+Seit 2.2.0 gibt es dieselbe Aura in **zwei Reichweiten**: nur auf
+diesem Rechner, oder über den Discord-Bot für die ganze Gilde
+(`core/weakaura_guild_sync.py`). `WeakAura.scope` sagt, welche von
+beiden - und ist das einzige, was diese Datei davon wissen muss: die
+Prüfung ist dieselbe, die Kennung ist dieselbe, und der Weg ins Addon
+ist derselbe.
+
 Der Ablauf im Ganzen steht in `docs/weakaura-bridge.md`.
 
 Drei Regeln, die nicht nach Geschmack sind:
@@ -65,6 +72,34 @@ DEFAULT_CATEGORY = "utility"
 ORIGIN_ADDON = "addon"
 
 ORIGIN_COMPANION = "companion"
+
+#
+# Aus der Bibliothek der Gilde, vom Addon so zurueckgemeldet. Muss
+# hier stehen, obwohl niemand danach filtert: `from_addon` fragt
+# ausdruecklich nach `ORIGIN_ADDON` und nicht "alles ausser
+# companion", sonst zaehlte eine Gildenaura als mitgeliefert und
+# stuende in der Oberflaeche unter "mit dem Addon geliefert".
+#
+
+ORIGIN_GUILD = "guild"
+
+
+#
+# Wie weit eine Aura reicht.
+#
+# `local` heisst: sie liegt auf diesem Rechner und geht ins eigene
+# Addon. `guild` heisst: sie liegt zusaetzlich in der Bibliothek des
+# Bots, und jede verknuepfte Companion holt sie sich ab.
+#
+# Die Freigabe ist eine **eigene Handlung**, keine Voreinstellung.
+# Alles, was jemand tippt, ungefragt an 25 Leute zu schicken, waere
+# die Art Ueberraschung, die man nur einmal erlebt und danach die
+# Funktion meidet.
+#
+
+SCOPE_LOCAL = "local"
+
+SCOPE_GUILD = "guild"
 
 
 #
@@ -206,7 +241,34 @@ class WeakAura:
 
     replaces_addon: bool = False
 
+    #
+    # `SCOPE_LOCAL` oder `SCOPE_GUILD` - siehe oben. Ein Eintrag, der
+    # aus der Bibliothek des Bots stammt und hier nicht bearbeitet
+    # werden darf, traegt zusätzlich `foreign = True`.
+    #
+
+    scope: str = SCOPE_LOCAL
+
+    #
+    # Wem der Eintrag in der Gildenbibliothek gehört. Leer für alles,
+    # was nur hier liegt.
+    #
+
+    author_id: str = ""
+
+    #
+    # Aus der Bibliothek geholt und von jemand anderem. Solche
+    # Einträge werden zugestellt, aber nicht bearbeitet - dafür ist
+    # die Moderation da.
+    #
+
+    foreign: bool = False
+
     # --------------------------------------------------
+
+    @property
+    def shared(self) -> bool:
+        return self.scope == SCOPE_GUILD
 
     def payload(self) -> dict:
         """
@@ -241,6 +303,18 @@ class WeakAura:
 
         if self.icon:
             data["icon"] = self.icon
+
+        #
+        # Nur bei einer Gildenaura mitgeschickt. Das Addon zeichnet
+        # daraus "Gilde · <Autor>" statt "Companion · <Autor>" - wer
+        # eine Aura nicht selbst eingetragen hat, soll sehen, dass sie
+        # aus der Bibliothek kommt und wen er zu fragen hat. Ein
+        # fehlendes Feld heisst dort "vom eigenen Schreibtisch",
+        # genau wie vor 2.2.0.
+        #
+
+        if self.scope == SCOPE_GUILD:
+            data["scope"] = SCOPE_GUILD
 
         return data
 
@@ -345,7 +419,17 @@ class CatalogEntry:
 
     @property
     def from_addon(self) -> bool:
-        return self.origin != ORIGIN_COMPANION
+        """
+        Kam die Zeile mit dem Addon-ZIP?
+
+        Ausdruecklich ein Vergleich auf `ORIGIN_ADDON` und nicht
+        "alles ausser companion": seit es Gildenauren gibt, meldet das
+        Addon einen dritten Wert, und der ist keine mitgelieferte
+        Aura. Ein fehlendes Feld gilt weiterhin als mitgeliefert -
+        so meldete eine aeltere Addon-Version.
+        """
+
+        return self.origin == ORIGIN_ADDON
 
 
 def parse_catalog(payload: str) -> list[CatalogEntry]:

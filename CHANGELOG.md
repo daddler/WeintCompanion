@@ -2,6 +2,84 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.2.0
+
+**Eine freigegebene WeakAura landet jetzt bei allen, nicht nur bei
+dir.** 2.1.0 brachte die Seite, auf der sich eine Aura eintragen und
+ins eigene WeintCodex stellen lässt - das half genau einer Person: der,
+die sie getippt hat. Wer sie im Raid brauchte, bekam sie weiterhin als
+Zeichenkette in den Chat kopiert.
+
+Im Formular steht deshalb jetzt ein Schalter **„Für die Gilde
+freigeben"**. Ist er an, wandert die Aura zusätzlich in eine
+gemeinsame Bibliothek beim Discord-Bot; jede verknüpfte Companion holt
+sie sich ab und stellt sie ihrem WeintCodex zu. Ingame steht sie dann
+in derselben Liste wie die eigenen, mit dem Hinweis **„Gilde ·
+<Autor>"** - wer eine Aura nicht selbst eingetragen hat, soll sehen,
+woher sie kommt und wen er zu fragen hat.
+
+**Freigeben ist eine eigene Handlung, keine Voreinstellung.** Alles,
+was jemand tippt, ungefragt an 25 Leute zu schicken, wäre die Art
+Überraschung, die man einmal erlebt und danach die Funktion meidet.
+
+### Aufräumen, wenn jemand etwas falsch gemacht hat
+
+Die Raidleitung kann jede Aura der Bibliothek **umkategorisieren,
+umbenennen, sperren oder löschen** - in der Companion an der Zeile, in
+Discord über `/weintaura`:
+
+```
+/weintaura liste       [alle]
+/weintaura rubrik      kennung, rubrik
+/weintaura umbenennen  kennung, name, [beschreibung]
+/weintaura sperren     kennung
+/weintaura freigeben   kennung
+/weintaura loeschen    kennung
+```
+
+**Sperren ist der mildere Eingriff und meistens der richtige**: die
+Aura wird nicht mehr ausgeliefert, bleibt aber in der Bibliothek -
+inklusive des Belegs, was da eigentlich schiefging. Geloescht ist
+geloescht, und der Autor hat sie danach nur noch in seiner eigenen
+Companion.
+
+Der **Importstring** lässt sich dabei ausdrücklich nicht ändern. Er
+ist das Einzige, was außer dem Autor niemand nachprüfen kann; wer ihn
+ersetzen will, gibt die Aura neu frei und ist damit als Urheber der
+neuen Fassung sichtbar.
+
+### Was daran nicht Geschmack ist
+
+- **Ein nicht erreichbarer Bot löscht nichts.** Übernommen wird nur
+  eine erfolgreiche Antwort - sonst verschwänden bei jeder
+  Netzstörung sämtliche Gildenauren aus dem Spiel, ohne dass irgendwo
+  etwas kaputt wäre. Eine *leere* Antwort räumt sehr wohl: genau so
+  verschwindet eine gelöschte oder gesperrte Aura.
+- **Bei gleicher Kennung gewinnt die eigene Fassung.** Wer seine
+  eigene getippt hat, verliert sie nicht dadurch, dass jemand anderes
+  unter derselben Kennung etwas freigibt. Die Zeile sagt es
+  („eigene Fassung gewinnt"), sonst wäre nicht zu erklären, warum die
+  freigegebene Aura ingame anders aussieht.
+- **Eine vergebene Kennung wird benannt, nicht umgangen.** Der Bot
+  antwortet mit dem Namen des bisherigen Autors; danach lässt sich
+  „unter neuer Kennung freigeben" wählen. Still umzubenennen erzeugte
+  eine zweite Aura, die aussieht wie die erste, und niemand wüsste,
+  welche im Spiel gilt.
+- **Nach dem Trennen des Discord-Kontos gehen die Gildenauren.** Sie
+  gehören der Gilde, nicht diesem Rechner, und ließen sich ohne Konto
+  auch nicht mehr aktualisieren. Die selbst eingetragenen bleiben -
+  die hat niemand anderes.
+- **Die Moderationsknöpfe werden nicht versteckt.** Ohne die
+  Raidlead-Rolle antwortet der Bot mit 403, und das ist eine Antwort,
+  keine Störung - dieselbe Regel wie auf der Seite
+  Charakterzuordnung und im Addon (*lock, don't hide*).
+
+Braucht **WeintCodex 2.2.0.0** für die Herkunftszeile (ältere
+Addon-Versionen zeigen eine Gildenaura als eigene) und einen Bot mit
+der Bibliothek. Kennt der Bot sie noch nicht, sagt die Seite das und
+alles Lokale läuft unverändert weiter. Vertrag in
+`docs/weakaura-bridge.md`.
+
 ## 2.1.0
 
 **Eine WeakAura lässt sich jetzt hier eintragen und steht im Spiel zur

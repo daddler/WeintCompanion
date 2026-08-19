@@ -21,6 +21,10 @@ Drei Dinge, die nicht nach Geschmack sind:
   Zustellung bliebe genau die eine Aura für immer stehen, die
   ausdrücklich weg sollte. Der Kanal wird deshalb erst dann geleert,
   wenn nie etwas darin lag.
+* **Zugestellt wird `delivery()`, nicht `auras()`.** Also eigene *und*
+  Gildenauren. Mit der eigenen Liste bekäme jemand, der selbst nichts
+  eingetragen hat, aus der Bibliothek der Gilde nie etwas - obwohl sie
+  voll ist und genau dafür da wäre.
 * **Der Fingerabdruck bleibt bei einem fehlgeschlagenen Schreiben
   unangetastet.** `publish()` gibt `False` zurück, wenn keine
   SavedVariables-Datei gefunden wurde (WoW nie gestartet, falscher
@@ -104,7 +108,15 @@ class WeakAuraSync:
 
     def process(self):
 
-        auras = self.store.auras()
+        #
+        # `delivery()` und nicht `auras()`: zugestellt wird, was ins
+        # Addon geht - eigene UND Gildenauren. Mit der eigenen Liste
+        # bekäme jemand, der selbst nichts eingetragen hat, aus der
+        # Bibliothek nie etwas, obwohl sie voll ist. Und die Meldung
+        # im Protokoll nennte die falsche Zahl.
+        #
+
+        auras = self.store.delivery()
 
         if not auras and not self._delivered_once:
             return

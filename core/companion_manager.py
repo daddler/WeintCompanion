@@ -31,6 +31,7 @@ from core.academy_service import AcademyService
 from core.character_store import CharacterStore
 from core.weakaura_store import WeakAuraStore
 from core.weakaura_sync import WeakAuraSync
+from core.weakaura_guild_sync import WeakAuraGuildSync
 
 
 class _AutoSyncStarter(QObject):
@@ -190,6 +191,18 @@ class CompanionManager(QObject):
         self.weakaura_sync = WeakAuraSync(
             self,
             self.addon_inbox,
+            self.weakauras,
+        )
+
+        #
+        # Und die Gegenrichtung: die gemeinsame Bibliothek des Bots.
+        # Was jemand freigegeben hat, bekommen alle - der Bot ist
+        # dafuer das, was er in diesem Verbund ohnehin ist: die eine
+        # Stelle, an der Gildenwissen liegt.
+        #
+
+        self.weakaura_guild_sync = WeakAuraGuildSync(
+            self,
             self.weakauras,
         )
 
@@ -425,6 +438,23 @@ class CompanionManager(QObject):
 
             self.logger.error(
                 f"Abruf des letzten Pulls fehlgeschlagen: {exc}"
+            )
+
+        #
+        # Die gemeinsame WeakAura-Bibliothek beim Bot abholen. Traege
+        # (alle zehn Minuten, siehe REFRESH_SECONDS) und vor der
+        # Zustellung, damit eine neu freigegebene Aura im selben
+        # Durchgang beim Addon landet statt erst im naechsten.
+        #
+
+        try:
+
+            self.weakaura_guild_sync.process()
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"Abruf der WeakAura-Bibliothek fehlgeschlagen: {exc}"
             )
 
         #

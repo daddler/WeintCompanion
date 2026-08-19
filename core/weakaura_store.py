@@ -9,23 +9,36 @@ nicht `Paths.cache()` - dieselbe Überlegung wie bei
 Aufräumlauf, der die Liste löscht, wäre der Verlust einer
 Nachmittagsarbeit.
 
-Zwei Dinge liegen in derselben Datei:
+Drei Dinge liegen in derselben Datei:
 
 * **`auras`** - was diese Seite selbst angelegt hat. Sie geht als
   Ganzes ans Addon (`core/weakaura_sync.py`).
 * **`catalog`** - was das Addon zuletzt gemeldet hat, welche Auren es
-  also kennt (`weakaura_catalog`, siehe
-  `core/weakaura_catalog_sync.py`). Streng genommen ein
+  also kennt (`weakaura_catalog`). Streng genommen ein
   Zwischenspeicher; er liegt trotzdem hier, weil er sonst bei jedem
   Start leer wäre und die Seite bis zur nächsten Anmeldung im Spiel
   nicht sagen könnte, welche Auren es überhaupt zu aktualisieren
   gibt.
+* **`guild`** - die gemeinsame Bibliothek des Bots, zuletzt abgeholt
+  (`core/weakaura_guild_sync.py`). Ebenfalls ein Zwischenspeicher, und
+  aus demselben Grund hier: ohne ihn wären beim Start alle
+  Gildenauren weg, bis der erste Sync-Takt durch ist - und die
+  Zustellung ans Addon (die genau dann läuft) hätte sie schon
+  gelöscht.
 
 Die Liste **ersetzt** im Addon die dortige vollständig. Deshalb muss
 sie hier vollständig sein: eine gelöschte Aura verschwindet im Spiel
 dadurch, dass sie in der nächsten Zustellung nicht mehr vorkommt -
 eine Einzelnachricht könnte "es gibt mich nicht mehr" gar nicht
 ausdrücken.
+
+**Bei gleicher Kennung gewinnt der eigene Eintrag vor dem der Gilde**
+(`delivery()`). Von speziell nach allgemein, dieselbe Ordnung, mit der
+das Addon eine zugestellte Aura über eine mitgelieferte legt: der
+eigene Schreibtisch ist die ausdrücklichste Entscheidung, die
+Bibliothek die nächste, das Addon-ZIP die letzte. Wer seine eigene
+Fassung getippt hat, soll sie nicht dadurch verlieren, dass jemand
+anderes unter derselben Kennung etwas freigibt.
 """
 
 from __future__ import annotations
@@ -34,6 +47,8 @@ import json
 
 from core.paths import Paths
 from core.weakaura_library import (
+    SCOPE_GUILD,
+    SCOPE_LOCAL,
     CatalogEntry,
     WeakAura,
     normalize_category,
@@ -65,6 +80,12 @@ class WeakAuraStore:
         self._auras: dict[str, WeakAura] = {}
 
         self._catalog: list[CatalogEntry] = []
+
+        #
+        # Die zuletzt abgeholte Bibliothek des Bots, nach Kennung.
+        #
+
+        self._guild: dict[str, WeakAura] = {}
 
         self.load()
 
@@ -110,6 +131,14 @@ class WeakAuraStore:
             if aura is not None:
                 self._auras[aura.id] = aura
 
+        for raw in loaded.get("guild", []) or []:
+
+            aura = _aura_from_json(raw)
+
+            if aura is not None:
+                aura.scope = SCOPE_GUILD
+                self._guild[aura.id] = aura
+
         self._catalog = [
             CatalogEntry(
                 id=str(raw.get("id", "")),
@@ -136,6 +165,13 @@ class WeakAuraStore:
             payload = {
                 "version": PAYLOAD_VERSION,
                 "auras": [_aura_to_json(aura) for aura in self.auras()],
+                "guild": [
+                    _aura_to_json(aura)
+                    for aura in sorted(
+                        self._guild.values(),
+                        key=lambda entry: entry.id,
+                    )
+                ],
                 "catalog": [
                     {
                         "id": entry.id,
@@ -210,17 +246,150 @@ class WeakAuraStore:
         return [
             entry
             for entry in self.catalog()
-            if entry.from_addon and entry.id not in self._auras
+            if entry.from_addon
+            and entry.id not in self._auras
+            and entry.id not in self._guild
         ]
 
     def taken_ids(self) -> set[str]:
         """
-        Jede Kennung, die im Spiel schon belegt ist - eigene wie
-        gemeldete. Eine neue Aura darf keine davon bekommen, sonst
-        ersetzte sie unabsichtlich etwas.
+        Jede Kennung, die schon belegt ist - eigene, gemeldete und die
+        der Gildenbibliothek. Eine neue Aura darf keine davon
+        bekommen, sonst ersetzte sie unabsichtlich etwas.
         """
 
-        return set(self._auras) | {entry.id for entry in self._catalog}
+        return (
+            set(self._auras)
+            | {entry.id for entry in self._catalog}
+            | set(self._guild)
+        )
+
+    # --------------------------------------------------
+    # Die Bibliothek der Gilde
+    # --------------------------------------------------
+
+    def guild_auras(self) -> list[WeakAura]:
+        """
+        Was zuletzt vom Bot geholt wurde, in derselben Ordnung wie die
+        eigenen.
+        """
+
+        return sorted(
+            self._guild.values(),
+            key=lambda aura: (aura.category, aura.name.lower()),
+        )
+
+    def guild_aura(self, aura_id: str) -> WeakAura | None:
+
+        return self._guild.get(aura_id)
+
+    def own_ids(self) -> set[str]:
+        """
+        Die Kennungen der selbst angelegten Auren.
+
+        Die Seite braucht sie, um eine eigene freigegebene Aura nicht
+        zweimal aufzulisten - einmal als eigene und einmal als
+        Gildeneintrag.
+        """
+
+        return set(self._auras)
+
+    def set_guild_auras(self, auras) -> bool:
+        """
+        Die abgeholte Bibliothek übernehmen. Gibt zurück, ob sich
+        etwas geändert hat.
+
+        **Ersetzt die Liste vollständig.** Eine im Discord gelöschte
+        oder gesperrte Aura verschwindet hier dadurch, dass sie in der
+        Antwort nicht mehr vorkommt - genau wie eine gelöschte lokale
+        im Addon dadurch verschwindet, dass sie in der Zustellung
+        fehlt. Zusammenzuführen hiesse, dass nichts je wieder
+        weggeht.
+
+        Aufgerufen wird das ausschliesslich mit einer **erfolgreichen**
+        Antwort (siehe `core/weakaura_guild_sync.py`): ein nicht
+        erreichbarer Bot darf die Bibliothek nicht leeren, sonst
+        verschwänden bei jeder Netzstörung alle Gildenauren aus dem
+        Spiel.
+        """
+
+        incoming = {aura.id: aura for aura in auras}
+
+        def signature(entries):
+            return sorted(
+                (
+                    aura.id,
+                    aura.name,
+                    aura.category,
+                    aura.version,
+                    aura.description,
+                    aura.string,
+                    aura.author,
+                )
+                for aura in entries.values()
+            )
+
+        if signature(incoming) == signature(self._guild):
+            return False
+
+        self._guild = incoming
+
+        self.save()
+
+        return True
+
+    def clear_guild(self) -> bool:
+        """
+        Die Gildenauren vergessen - nach dem Trennen des
+        Discord-Kontos. Sie gehören der Gilde, nicht diesem Rechner;
+        sie danach weiter ins Addon zu stellen wäre dieselbe
+        Vermischung, gegen die es `/wc access reset` gibt.
+        """
+
+        if not self._guild:
+            return False
+
+        self._guild = {}
+
+        self.save()
+
+        return True
+
+    # --------------------------------------------------
+    # Was ans Addon geht
+    # --------------------------------------------------
+
+    def delivery(self) -> list[WeakAura]:
+        """
+        Eigene und Gildenauren als **eine** Liste, wie sie das Addon
+        bekommt.
+
+        Bei gleicher Kennung gewinnt der eigene Eintrag: von speziell
+        nach allgemein, dieselbe Ordnung, mit der das Addon eine
+        zugestellte Aura über eine mitgelieferte legt. Wer seine
+        eigene Fassung getippt hat, verliert sie nicht dadurch, dass
+        jemand anderes unter derselben Kennung etwas freigibt.
+        """
+
+        merged: dict[str, WeakAura] = dict(self._guild)
+
+        merged.update({aura.id: aura for aura in self._auras.values()})
+
+        return sorted(
+            merged.values(),
+            key=lambda aura: (aura.category, aura.name.lower()),
+        )
+
+    def shadowed_ids(self) -> set[str]:
+        """
+        Kennungen, die es hier **und** in der Bibliothek gibt.
+
+        Die Seite sagt es an der Zeile: sonst wäre nicht zu erkennen,
+        warum eine freigegebene Aura im Spiel anders aussieht als in
+        der Bibliothek.
+        """
+
+        return set(self._auras) & set(self._guild)
 
     # --------------------------------------------------
     # Schreiben
@@ -287,14 +456,15 @@ class WeakAuraStore:
 
     def payload(self, updated_at: int = 0) -> dict:
         """
-        Die vollständige Bibliothek in der Form, in der das Addon sie
-        erwartet (siehe `docs/weakaura-bridge.md`).
+        Alles, was ins Addon geht, in der Form, in der es das erwartet
+        (siehe `docs/weakaura-bridge.md`) - eigene und Gildenauren
+        zusammen.
         """
 
         return {
             "version": PAYLOAD_VERSION,
             "updatedAt": int(updated_at or 0),
-            "auras": [aura.payload() for aura in self.auras()],
+            "auras": [aura.payload() for aura in self.delivery()],
         }
 
     # --------------------------------------------------
@@ -322,6 +492,9 @@ def _aura_to_json(aura: WeakAura) -> dict:
         "string": aura.string,
         "updated_at": int(aura.updated_at or 0),
         "replaces_addon": bool(aura.replaces_addon),
+        "scope": aura.scope,
+        "author_id": aura.author_id,
+        "foreign": bool(aura.foreign),
     }
 
 
@@ -346,4 +519,11 @@ def _aura_from_json(raw) -> WeakAura | None:
         string=str(raw.get("string") or ""),
         updated_at=int(raw.get("updated_at") or 0),
         replaces_addon=bool(raw.get("replaces_addon")),
+        scope=(
+            SCOPE_GUILD
+            if raw.get("scope") == SCOPE_GUILD
+            else SCOPE_LOCAL
+        ),
+        author_id=str(raw.get("author_id") or ""),
+        foreign=bool(raw.get("foreign")),
     )
