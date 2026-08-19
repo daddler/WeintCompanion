@@ -62,10 +62,19 @@ jobs:
         with:
           python-version: "3.13"
 
+      #
+      # httpx gehoert dazu: die Tests der HTTP-Haelften (WeakAura-
+      # Bibliothek, letzter Pull, Discord-Verknuepfungen) ueberspringen
+      # sich ohne die Abhaengigkeit selbst. Das ist richtig fuer einen
+      # Lauf am Schreibtisch, in der CI aber ein stiller Verlust an
+      # Abdeckung - und wer den Riegel vergisst, bekommt statt eines
+      # Skips einen Abbruch beim Einsammeln.
+      #
+
       - name: Test-Abhängigkeiten installieren
         run: |
           python -m pip install --upgrade pip
-          pip install pytest
+          pip install pytest httpx
 
       - name: Tests ausführen
         run: python -m pytest tests/ -v

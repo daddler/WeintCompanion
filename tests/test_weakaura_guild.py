@@ -25,6 +25,17 @@ import types
 
 import pytest
 
+#
+# core.weakaura_client spricht HTTP und importiert httpx auf
+# Modulebene. Ohne diesen Riegel ist eine fehlende Abhängigkeit kein
+# uebersprungener Test, sondern ein Sammelfehler beim Einsammeln, der
+# den ganzen Lauf abbricht - genau so stand der Build-Workflow still,
+# der im Test-Job absichtlich nur pytest installiert. Dieselbe Zeile
+# steht aus demselben Grund in test_last_pull_sync.py.
+#
+
+pytest.importorskip("httpx")
+
 from core.weakaura_client import LibraryResult, aura_from_bot
 from core.weakaura_guild_sync import WeakAuraGuildSync
 from core.weakaura_library import SCOPE_GUILD, SCOPE_LOCAL, WeakAura
