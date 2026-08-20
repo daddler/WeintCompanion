@@ -108,15 +108,21 @@ class WarcraftLogsClient:
         if status == 401:
 
             #
-            # Der Bot kennt dieses Token nicht mehr (typischerweise
-            # nach einem Redeploy mit zurückgesetzter Datenbank).
-            # Dieselbe Behandlung wie im CharacterSyncClient: die
-            # lokale Verknüpfung aufheben, damit die Oberfläche nicht
-            # weiter "verbunden" behauptet und der Nutzer den
-            # richtigen nächsten Schritt sieht.
+            # Der Bot kennt dieses Token nicht mehr. Dieselbe
+            # Behandlung wie im CharacterSyncClient: die lokale
+            # Verknüpfung aufheben, damit die Oberfläche nicht weiter
+            # "verbunden" behauptet und der Nutzer den richtigen
+            # nächsten Schritt sieht.
+            #
+            #
+            # Nicht beim ersten Mal aufheben: siehe
+            # AUTH_REJECTIONS_BEFORE_UNLINK in core/discord_account.py.
+            # Ein einzelnes 401 kann ein gerade neu startender Bot
+            # sein; erst mehrere kurz hintereinander heissen, dass er
+            # dieses Token wirklich nicht mehr kennt.
             #
 
-            self.account_store.clear()
+            self.account_store.note_auth_rejected()
 
             return FetchResult(
                 reason=(

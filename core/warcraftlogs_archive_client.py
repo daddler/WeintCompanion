@@ -215,11 +215,18 @@ class WarcraftLogsArchiveClient:
 
             #
             # Dieselbe Behandlung wie in WarcraftLogsClient: ein vom
-            # Bot abgelehntes Token wird lokal sofort aufgehoben,
+            # Bot wiederholt abgelehntes Token wird lokal aufgehoben,
             # statt bei jedem weiteren Versuch erneut zu scheitern.
             #
+            #
+            # Nicht beim ersten Mal aufheben: siehe
+            # AUTH_REJECTIONS_BEFORE_UNLINK in core/discord_account.py.
+            # Ein einzelnes 401 kann ein gerade neu startender Bot
+            # sein; erst mehrere kurz hintereinander heissen, dass er
+            # dieses Token wirklich nicht mehr kennt.
+            #
 
-            self.account_store.clear()
+            self.account_store.note_auth_rejected()
 
             return 401, None, (
                 "Der Bot hat die Verknüpfung abgelehnt - bitte "

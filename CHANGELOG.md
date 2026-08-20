@@ -2,6 +2,37 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.3.2
+
+**Die Discord-Verknüpfung überlebt jetzt ein Update des Bots.**
+Bisher stand nach jedem Neustart des Bots in den Einstellungen wieder
+"Nicht verbunden", und zwar bei allen gleichzeitig. Das war weder ein
+Zufall noch ein Fehler dieser App: der Bot läuft auf einem Host ohne
+dauerhaften Speicher, seine Datenbank ist nach jedem Deploy leer - und
+in genau dieser Datenbank lag das Token, an dem er eine verknüpfte
+Companion wiedererkennt. Für die App sah das aus, als hätte jemand die
+Verbindung widerrufen, also hat sie das Konto lokal getrennt. Es gab
+nichts, was der Nutzer hätte falsch machen können, und nichts, was er
+hätte tun können, ausser sich wieder anzumelden.
+
+Der Bot stellt das Token nun so aus, dass es sich selbst ausweist: er
+prüft es an einer Signatur statt an einem Eintrag, den es nach einem
+Neustart nicht mehr gibt. Ein Deploy, ein Umzug auf einen anderen
+Rechner, ein geleertes Verzeichnis - die Verknüpfung bleibt.
+
+Diese Seite trägt die zweite Hälfte davon bei: **eine einzelne
+abgelehnte Anfrage hebt die Verknüpfung nicht mehr auf.** Ein "Token
+ungültig" kann auch ein Bot sein, der gerade neu anläuft, oder ein
+Serverfehler, der sich als Ablehnung ausgibt; beim Wort genommen
+kostete das die Verbindung. Erst mehrere Ablehnungen kurz
+hintereinander heissen zuverlässig, dass der Bot dieses Token wirklich
+nicht kennt - bei einem Sync-Takt von fünf Sekunden ist das eine Frage
+von Sekunden und verzögert die richtige Antwort nicht.
+
+Einmal muss die Verbindung noch von Hand hergestellt werden: die
+bereits ausgestellten Tokens der alten Art kann auch der neue Bot
+nicht wiederbeleben. Danach ist Schluss damit.
+
 ## 2.3.1
 
 **"Meine Charaktere" zeigt nur noch Charaktere auf Höchststufe.**
