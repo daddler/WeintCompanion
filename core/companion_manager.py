@@ -23,6 +23,7 @@ from core.discord_auth import DiscordAuth
 from core.access_profile_sync import AccessProfileSync
 from core.discord_roster_sync import DiscordRosterSync
 from core.raid_schedule_sync import RaidScheduleSync
+from core.update_watch import UpdateWatch
 from core.last_pull_sync import LastPullSync
 from addon.addon_inbox import AddonInbox
 from core.addon_analysis_sync import AddonAnalysisSync
@@ -141,6 +142,16 @@ class CompanionManager(QObject):
         #
 
         self.raid_schedule_sync = RaidScheduleSync(self)
+
+        #
+        # Sieht im Hintergrund nach, ob eine neue Fassung bereitliegt.
+        # Bis 2.3.2 geschah das genau zweimal - beim Start und auf
+        # Knopfdruck -, und damit erfuhr niemand von einer Fassung, die
+        # nach dem Öffnen der Anwendung erschien. Siehe
+        # core/update_watch.py.
+        #
+
+        self.update_watch = UpdateWatch(self)
 
         #
         # Der letzte Pull für die Übersicht. Ebenfalls kein Absender
@@ -352,6 +363,21 @@ class CompanionManager(QObject):
 
     def _run_sync_worker(self):
 
+        #
+        # Ob dieser Durchgang etwas geändert hat, das auf dem Bildschirm
+        # steht. Nur dann wird am Ende `state_changed` gemeldet - eine
+        # Meldung je Takt hiesse, die sichtbare Seite alle fünf Sekunden
+        # neu zu zeichnen und `MainWindow._announce_updates()` ebenso oft
+        # zu durchlaufen.
+        #
+        # Ohne diesen Weg blieb alles, was hier abgeholt wird, bis zum
+        # nächsten Seitenwechsel unsichtbar: `refresh()` einer Seite
+        # hängt am Wechsel und an `state_changed`, und das kam nach dem
+        # Start nur noch auf Knopfdruck ("Erneut prüfen").
+        #
+
+        dirty = False
+
         try:
 
             self.sync.process()
@@ -408,6 +434,25 @@ class CompanionManager(QObject):
             )
 
         #
+        # Nach einer neuen Fassung sehen. Traege (alle 15 Minuten,
+        # siehe update_watch.REFRESH_SECONDS) und mit eigenem
+        # try/except wie jeder Schritt - ein nicht erreichbares GitHub
+        # darf weder den Material-Sync noch die Zustellung ans Addon
+        # mitreissen.
+        #
+
+        try:
+
+            if self.update_watch.process():
+                dirty = True
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"Update-Pruefung fehlgeschlagen: {exc}"
+            )
+
+        #
         # Der Raidtermin der Uebersicht. Eigener try/except wie alle
         # anderen Schritte - eine nicht erreichbare Terminauskunft darf
         # weder den Material-Sync noch die Zustellung ans Addon
@@ -416,7 +461,8 @@ class CompanionManager(QObject):
 
         try:
 
-            self.raid_schedule_sync.process()
+            if self.raid_schedule_sync.process():
+                dirty = True
 
         except Exception as exc:
 
@@ -519,6 +565,21 @@ class CompanionManager(QObject):
             with self._sync_lock:
 
                 self._sync_busy = False
+
+        #
+        # Erst hier, und nur bei tatsaechlicher Aenderung: die
+        # Oberflaeche zieht daraufhin die sichtbare Seite und die
+        # Navigationsspalte nach (MainWindow._on_state_changed).
+        #
+        # Bewusst NACH dem Freigeben von `_sync_busy`, damit dieser
+        # Durchgang zum Zeitpunkt der Meldung wirklich beendet ist -
+        # zugestellt wird der Slot ohnehin ueber die Event-Loop des
+        # Hauptthreads (siehe den Docstring von `state_changed`).
+        #
+
+        if dirty:
+
+            self.state_changed.emit()
 
     # --------------------------------------------------
     # Automatische Synchronisation stoppen
@@ -655,7 +716,18 @@ class CompanionManager(QObject):
             .removeprefix("v")
         )
 
-    def check_github(self):
+    def check_github(self, quiet: bool = False):
+        """
+        `quiet` ist der Modus der Hintergrundwache (siehe
+        core/update_watch.py): dieselbe Prüfung, aber ohne die beiden
+        Zeilen, die nur den *Vollzug* melden. Alle fünfzehn Minuten
+        "WeintCodex ist aktuell." ins Protokoll zu schreiben, macht
+        aus der Protokollseite eine Liste von Nichtereignissen - und
+        ein nicht erreichbares GitHub ist im Hintergrund keine
+        Störung, sondern der Normalfall eines Rechners, der gerade
+        offline ist. Der Fund einer neuen Fassung wird auch leise
+        gemeldet: das ist ein Ereignis.
+        """
 
         release = self.github.get_latest_release()
 
@@ -670,9 +742,17 @@ class CompanionManager(QObject):
             self.state.github_sha256 = ""
             self.state.update_available = False
 
-            self.logger.error(
-                "GitHub konnte nicht erreicht werden."
-            )
+            if quiet:
+
+                self.logger.info(
+                    "GitHub konnte nicht erreicht werden."
+                )
+
+            else:
+
+                self.logger.error(
+                    "GitHub konnte nicht erreicht werden."
+                )
 
             return
 
@@ -702,7 +782,7 @@ class CompanionManager(QObject):
                 f"Neue Version gefunden ({release.version})."
             )
 
-        else:
+        elif not quiet:
 
             self.logger.success(
                 "WeintCodex ist aktuell."
@@ -796,6 +876,26 @@ class CompanionManager(QObject):
     # Vollständige Aktualisierung
     # --------------------------------------------------
 
+    def _note_update_check(self):
+        """
+        Der Hintergrundwache sagen, dass ihre beiden Endpunkte gerade
+        abgefragt wurden - ohne diesen Vermerk zoege sie fuenf Sekunden
+        nach dem Start ein zweites Mal los (siehe core/update_watch.py).
+
+        Ueber `getattr`, und das ist hier keine Vorsicht auf Verdacht:
+        der Aufruf steht im `finally` von `full_refresh()`, und dieses
+        `finally` hat genau eine Aufgabe - die Meldung an die
+        Oberflaeche darf unter keinen Umstaenden ausbleiben. Was dort
+        steht, darf also selbst nichts werfen koennen, auch nicht auf
+        einem nur teilweise aufgebauten Manager (so ruft
+        `tests/test_update_visibility.py` full_refresh() auf).
+        """
+
+        watch = getattr(self, "update_watch", None)
+
+        if watch is not None:
+            watch.note_checked()
+
     def full_refresh(self):
 
         try:
@@ -808,6 +908,8 @@ class CompanionManager(QObject):
             self.sync.process()
 
         finally:
+
+            self._note_update_check()
 
             #
             # Auch dann melden, wenn ein Schritt gescheitert ist: die
@@ -840,6 +942,16 @@ class CompanionManager(QObject):
 
         self.companion_updater.github.invalidate_cache()
 
+        #
+        # Auch der Raidtermin wird wieder freigegeben. Der Knopf sitzt
+        # auf der Uebersicht direkt neben der Aufstellung, und "erneut
+        # pruefen" heisst dort alles, was die Seite zeigt - abgeholt
+        # wird er im naechsten Sync-Takt (hoechstens fuenf Sekunden),
+        # denn eine Netzrunde gehoert nicht in diesen Aufruf.
+        #
+
+        self.raid_schedule_sync.invalidate()
+
         try:
 
             self.detect_addon()
@@ -847,6 +959,8 @@ class CompanionManager(QObject):
             self.companion_updater.check_for_update()
 
         finally:
+
+            self._note_update_check()
 
             self.state_changed.emit()
 

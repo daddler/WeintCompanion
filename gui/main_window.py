@@ -694,8 +694,19 @@ class MainWindow(QMainWindow):
         nicht bloß "schon gemeldet": nach einem Addon-Update soll die
         nächste Version wieder eine Meldung bekommen. Ohne dieses Gedenken
         würde eine zweite Prüfung dasselbe erneut ankündigen -
-        `state_changed` kommt beim Start und bei jedem Druck auf
-        "Erneut prüfen".
+        `state_changed` kommt beim Start, bei jedem Druck auf
+        "Erneut prüfen" und seit 2.3.3 aus der Hintergrundwache
+        (`core/update_watch.py`), also auch dann, wenn niemand gefragt
+        hat. Genau dafür ist das Gedenken gebaut: die Wache prüft alle
+        fünfzehn Minuten, meldet aber nur, wenn sich die Antwort
+        geändert hat, und dieselbe Fassung wird auch dann nur einmal
+        angekündigt.
+
+        Ist das Fenster im Tray geparkt, geht die Meldung zusätzlich als
+        Sprechblase des Tray-Symbols hinaus. Eine Einblendung unten
+        rechts in einem Fenster, das niemand sieht, ist keine Meldung -
+        und "in den Tray minimieren" ist genau die Betriebsart, in der
+        eine Fassung stundenlang bereitliegen kann.
         """
 
         state = self.manager.state
@@ -721,15 +732,53 @@ class MainWindow(QMainWindow):
 
             self._announced_updates[key] = version
 
-            toast = self.notify(
-                f"{label} {version} steht bereit.",
-                "warn",
-                "Öffnen",
-            )
+            text = f"{label} {version} steht bereit."
+
+            toast = self.notify(text, "warn", "Öffnen")
 
             if toast is not None and hasattr(toast, "actionTriggered"):
 
                 toast.actionTriggered.connect(self._open_addon_page)
+
+            self._announce_in_tray(text)
+
+    def _announce_in_tray(self, text: str):
+        """
+        Dieselbe Nachricht als Sprechblase - nur, wenn das Fenster
+        gerade nicht zu sehen ist.
+
+        `isVisible()` allein reicht nicht: ein in die Taskleiste
+        minimiertes Fenster gilt Qt weiterhin als sichtbar, ist für den
+        Nutzer aber ebenso weg wie ein geparktes.
+        """
+
+        if self.tray_icon is None or not self.tray_icon.isVisible():
+            return
+
+        if self.isVisible() and not self.isMinimized():
+            return
+
+        try:
+
+            self.tray_icon.showMessage(
+                "WeintCompanion",
+                text,
+                QSystemTrayIcon.Information,
+                10_000,
+            )
+
+        except Exception as exc:
+
+            #
+            # Sprechblasen sind nicht auf jedem Schreibtisch möglich
+            # (manche Linux-Umgebungen liefern gar keine). Das darf die
+            # Prüfung nicht in einen Absturz verwandeln - die
+            # Einblendung im Fenster steht ohnehin schon.
+            #
+
+            self.manager.logger.info(
+                f"Tray-Meldung nicht möglich: {exc}"
+            )
 
     def _open_addon_page(self):
 
@@ -1181,6 +1230,17 @@ class MainWindow(QMainWindow):
             self._on_tray_activated
         )
 
+        #
+        # Eine Sprechblase über ein wartendes Update ist ein Hinweis,
+        # den man anklicken können muss - sonst hat man ihn gelesen und
+        # sucht danach selbst. Gemeldet wird von hier aus nur das (siehe
+        # `_announce_updates`), also führt der Klick dorthin.
+        #
+
+        self.tray_icon.messageClicked.connect(
+            self._open_addon_page_from_tray
+        )
+
         self._apply_tray_visibility()
 
     def _apply_tray_visibility(self):
@@ -1230,6 +1290,12 @@ class MainWindow(QMainWindow):
         self.showNormal()
         self.raise_()
         self.activateWindow()
+
+    def _open_addon_page_from_tray(self):
+
+        self._restore_from_tray()
+
+        self.change_page(PageId.ADDON)
 
     def _quit_from_tray(self):
 

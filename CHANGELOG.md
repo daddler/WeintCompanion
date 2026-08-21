@@ -2,6 +2,49 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.3.3
+
+**Ein wartendes Update meldet sich jetzt von selbst.**
+Bisher wurde genau zweimal nachgesehen: einmal beim Start und danach
+nur noch, wenn jemand auf "Erneut prüfen" drückte. Wer die Anwendung
+morgens öffnete und abends damit raidete, erfuhr von einer mittags
+veröffentlichten Fassung nichts - nicht, weil die Anzeige fehlte,
+sondern weil niemand mehr nachgefragt hat. Die drei Stellen, die ein
+Update ansagen (die Systemzeile der Übersicht, das Abzeichen an
+"Addon & Updates" und die Einblendung unten rechts), waren die ganze
+Zeit da; sie hingen nur an einer Prüfung, die nicht mehr stattfand.
+
+Im Hintergrund läuft nun alle fünfzehn Minuten eine Prüfung mit, und
+sobald sie etwas Neues findet, ist es sofort auf dem Bildschirm -
+ohne einen Klick. Angekündigt wird jede Fassung genau einmal: eine
+Prüfung, die dasselbe Ergebnis liefert wie die letzte, sagt gar
+nichts. Steht das Fenster im Tray, kommt die Meldung zusätzlich als
+Sprechblase des Tray-Symbols, und ein Klick darauf holt das Fenster
+zurück und öffnet "Addon & Updates". Eine Einblendung in einem
+Fenster, das niemand sieht, ist keine Meldung - und "in den Tray
+minimieren" ist genau die Betriebsart, in der eine Fassung
+stundenlang bereitliegen kann.
+
+**Der Stand der Anmeldungen aktualisiert sich mit.**
+Die Aufstellung auf der Übersicht wurde zwar im Hintergrund abgeholt,
+aber niemand zeichnete sie neu - sichtbar wurde die neue Zahl erst,
+wenn man die Seite verliess und wieder betrat. Jetzt zieht die Karte
+nach, sobald sich etwas geändert hat, und nur dann.
+
+Der Takt richtet sich dabei nach dem Termin. Der *Termin* ändert sich
+einmal pro Woche, der *Stand der Anmeldungen* am Raidtag im
+Minutentakt - und genau dann sieht jemand hin. Ab sechs Stunden vor
+dem Raid und für seine ganze Dauer wird deshalb jede Minute gefragt,
+an den übrigen Tagen weiterhin träge alle fünf Minuten. Mitgezählt
+wird ausserdem mehr als vorher: dass die Anmeldung geschlossen wurde,
+dass sich der Sollbestand je Rolle geändert hat oder dass ein
+zweiter Raid dazugekommen ist, blieb bislang unsichtbar, obwohl die
+Karte all das anzeigt.
+
+"Erneut prüfen" auf der Übersicht holt jetzt auch die Aufstellung neu
+- der Knopf sitzt direkt daneben, und "erneut prüfen" heisst dort
+alles, was die Seite zeigt.
+
 ## 2.3.2
 
 **Die Discord-Verknüpfung überlebt jetzt ein Update des Bots.**

@@ -32,7 +32,12 @@ class CompanionUpdater:
     # Auf Updates prüfen
     # --------------------------------------------------
 
-    def check_for_update(self):
+    def check_for_update(self, quiet: bool = False):
+        """
+        `quiet`: dieselbe Prüfung ohne die Zeilen, die nur den Vollzug
+        melden - für die Hintergrundwache, die alle fünfzehn Minuten
+        fragt. Siehe `CompanionManager.check_github()`.
+        """
 
         state = self.manager.state
 
@@ -48,9 +53,17 @@ class CompanionUpdater:
             state.companion_sha256 = ""
             state.companion_update_available = False
 
-            self.manager.logger.error(
-                "Companion konnte nicht auf Updates geprüft werden."
-            )
+            if quiet:
+
+                self.manager.logger.info(
+                    "Companion konnte nicht auf Updates geprüft werden."
+                )
+
+            else:
+
+                self.manager.logger.error(
+                    "Companion konnte nicht auf Updates geprüft werden."
+                )
 
             return
 
@@ -70,7 +83,7 @@ class CompanionUpdater:
                 f"Neue Companion-Version verfügbar ({release.version})."
             )
 
-        else:
+        elif not quiet:
 
             self.manager.logger.success(
                 "Companion ist aktuell."
