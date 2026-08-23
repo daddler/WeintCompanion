@@ -62,6 +62,8 @@ def _builders():
     Jeder Baustein, der sich an ein Signal des ThemeManagers haengt.
     """
 
+    from gui.widgets.academy.history_card import LegendEntry
+    from gui.widgets.academy.progression_chart import ProgressionChart
     from gui.widgets.academy.star_rating import StarRating
     from gui.widgets.bar_row import BarRow
     from gui.widgets.card import Card
@@ -77,7 +79,9 @@ def _builders():
         "BarRow": BarRow,
         "Card": Card,
         "HeroButton": lambda: HeroButton("Speichern"),
+        "LegendEntry": lambda: LegendEntry(accent=True),
         "MeterBar": MeterBar,
+        "ProgressionChart": ProgressionChart,
         "ProgressRing": ProgressRing,
         "RosterStrip": RosterStrip,
         "SegmentedControl": lambda: SegmentedControl(
@@ -121,7 +125,9 @@ WIDGET_NAMES = (
     "BarRow",
     "Card",
     "HeroButton",
+    "LegendEntry",
     "MeterBar",
+    "ProgressionChart",
     "ProgressRing",
     "RosterStrip",
     "SegmentedControl",

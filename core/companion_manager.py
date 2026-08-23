@@ -29,6 +29,7 @@ from addon.addon_inbox import AddonInbox
 from core.addon_analysis_sync import AddonAnalysisSync
 from core.raid_data_service import RaidDataService
 from core.academy_service import AcademyService
+from core.academy_history import day_from_iso
 from core.character_store import CharacterStore
 from core.weakaura_store import WeakAuraStore
 from core.weakaura_sync import WeakAuraSync
@@ -174,6 +175,23 @@ class CompanionManager(QObject):
 
         self.raid_data = RaidDataService(self)
         self.academy = AcademyService(self)
+
+        #
+        # Die Lernkurve wird **hier** mitgeschrieben und nicht auf der
+        # Academy-Seite.
+        #
+        # Der Grund ist der Nutzungsablauf: wer den Abend über WeintTV
+        # laufen lässt und erst danach in die Academy sieht, hätte
+        # sonst genau einen Punkt in der Kurve - den letzten Pull. Der
+        # Snapshot-Strom läuft aber, sobald **irgendeine** der beiden
+        # Seiten angemeldet ist, und diese Stelle sieht ihn ganz.
+        #
+        # Ein gebundener Slot und keine Lambda: das Signal gehört
+        # einem Dienst, der so lange lebt wie das Programm (dieselbe
+        # Regel wie bei den Theme-Signalen, siehe CLAUDE.md).
+        #
+
+        self.raid_data.snapshotChanged.connect(self._note_academy_pull)
 
         #
         # Die Charakterliste sammelt die "character_sheet"-Meldungen
@@ -871,6 +889,96 @@ class CompanionManager(QObject):
 
         self.detect_wow()
         self.detect_addon()
+
+    # --------------------------------------------------
+    # Lernkurve
+    # --------------------------------------------------
+
+    def _note_academy_pull(self, snapshot):
+        """
+        Jeden beendeten Pull für die Lernkurve der Academy anbieten.
+
+        Hängt am `snapshotChanged` des Datendienstes und läuft damit
+        im Sekundentakt (in einer Wiedergabe viermal so oft). Die
+        Entscheidung, ob daraus ein Punkt wird, trifft
+        `AcademyService.note_snapshot()`; die billigen Prüfungen
+        stehen dort ganz vorn.
+
+        Was diese Stelle beisteuert, ist die **Herkunft**: aus welchem
+        Bericht und welchem Kampf der Snapshot stammt. Ohne sie wäre
+        derselbe archivierte Pull, zweimal geöffnet, zweimal in der
+        Kurve - und die Reihenfolge käme aus der Klickfolge statt aus
+        dem Raidabend.
+
+        Der ganze Aufruf steht unter `try/except`: er hängt am
+        Datenstrom von WeintTV, und eine Aufzeichnung, die scheitert,
+        darf niemals den laufenden Kampf mitnehmen.
+        """
+
+        try:
+
+            state = self.raid_data.archive_state()
+
+            origin = ""
+
+            day = ""
+
+            sequence = 0
+
+            #
+            # `browsing` und nicht bloss "ist ein Bericht gewählt":
+            # `show_live()` lässt die Archiv-Auswahl ausdrücklich
+            # stehen, damit ein Rücksprung ins Archiv wieder dort
+            # landet, wo man war. Ohne diese Bedingung bekäme der
+            # nächste **Live**-Pull die Kennung des zuletzt
+            # angesehenen Archivkampfes - und würde als dessen
+            # Doppelgänger verworfen. Der Punkt fehlte dann in der
+            # Kurve, ohne dass irgendetwas fehlschlägt.
+            #
+
+            if (
+                state.browsing
+                and state.selected_report
+                and state.selected_fight is not None
+            ):
+
+                origin = f"{state.selected_report}#{state.selected_fight}"
+
+                sequence = int(state.selected_fight)
+
+                day = self._report_day(state)
+
+            self.academy.note_snapshot(
+                snapshot,
+                origin=origin,
+                day=day,
+                sequence=sequence,
+                source=self.config.data.get("raid_data_source", ""),
+            )
+
+        except Exception as exc:
+
+            self.logger.warning(
+                f"Academy-Verlauf konnte nicht fortgeschrieben "
+                f"werden: {exc}"
+            )
+
+    def _report_day(self, state) -> str:
+        """
+        Der Raidtag des gewählten Berichts, aus seiner Liste.
+
+        Leer, wenn der Bericht nicht (mehr) in der Liste steht oder
+        keinen lesbaren Zeitstempel trägt - dann fällt die
+        Aufzeichnung auf den heutigen Tag zurück, was für einen
+        gerade gespielten Pull ohnehin stimmt.
+        """
+
+        for report in state.reports:
+
+            if report.code == state.selected_report:
+                return day_from_iso(report.start)
+
+        return ""
 
     # --------------------------------------------------
     # Vollständige Aktualisierung

@@ -46,6 +46,7 @@ from analyzer.academy.models import (
 )
 from analyzer.models import RaidSnapshot
 
+from core.raid_data_service import SOURCE_MOCK
 from core.resources import Resources
 
 from gui.navigation import PageId
@@ -104,6 +105,13 @@ class AcademyPage(QWidget):
         self._plan_signature = None
 
         self._roster_signature = None
+
+        #
+        # Die Kurve wird nur neu gezeichnet, wenn ein Pull dazugekommen
+        # ist - siehe `_apply_history()`.
+        #
+
+        self._history_signature = None
 
         self._profile = PlayerProfile()
 
@@ -578,11 +586,16 @@ class AcademyPage(QWidget):
         layout.addWidget(progress_card)
 
         #
-        # Verlauf über mehrere Raidabende (§6.3) - zeigt seinen
-        # Leerzustand, siehe gui/widgets/academy/history_card.py.
+        # Verlauf über mehrere Pulls (§6.3) - die Lernkurve. Sie
+        # kommt nicht aus dem gerade gezeigten Snapshot, sondern aus
+        # den aufgezeichneten Pulls dieses Charakters (siehe
+        # core/academy_history.py); gezeichnet wird sie in
+        # `_apply_history()`.
         #
 
-        layout.addWidget(HistoryCard())
+        self.history_card = HistoryCard()
+
+        layout.addWidget(self.history_card)
 
         layout.addStretch()
 
@@ -840,6 +853,8 @@ class AcademyPage(QWidget):
         self._plan = self.academy.build_plan(self._profile, snapshot)
 
         self._apply_overview()
+
+        self._apply_history()
 
         self._apply_plan()
 
@@ -1141,6 +1156,45 @@ class AcademyPage(QWidget):
 
     # --------------------------------------------------
 
+    def _apply_history(self):
+        """
+        Die Lernkurve zeichnen - die aufgezeichneten Pulls dieses
+        Charakters, nicht der gerade gezeigte Kampf.
+
+        **Erst vergleichen, dann zeichnen.** Diese Methode hängt an
+        `_apply_snapshot()` und läuft damit im Sekundentakt, in einer
+        Wiedergabe viermal je Sekunde - die Kurve ändert sich dagegen
+        höchstens einmal je Pull. Dieselbe Regel wie beim
+        `ArchivePicker` und der WeakAura-Liste.
+
+        Gefiltert wird nach **Datenquelle und Spezialisierung**: die
+        Simulation ist keine Lernkurve, und eine Rotationsbewertung
+        als Frost sagt nichts über die Rotation als Feuer. Beide
+        Filter greifen nur, wenn die Frage beantwortbar ist (siehe
+        `progression.select()`).
+        """
+
+        character = self.academy.player_name()
+
+        source = self.manager.config.data.get("raid_data_source", "")
+
+        records = self.academy.curve(
+            character,
+            source,
+            self._profile.spec,
+        )
+
+        signature = tuple(record.key for record in records)
+
+        if signature == self._history_signature:
+            return
+
+        self._history_signature = signature
+
+        self.history_card.apply(records, _source_note(source))
+
+    # --------------------------------------------------
+
     def _apply_plan(self):
 
         #
@@ -1397,3 +1451,20 @@ class AcademyPage(QWidget):
         self.service.seek_replay(seconds)
 
         self.service.set_replay_playing(False)
+
+
+def _source_note(source: str) -> str:
+    """
+    Der Zusatz unter der Kurve, wenn die Datenquelle ihn braucht.
+
+    Bei der Simulation ist er nicht Zierde: die Kurve sieht dort aus
+    wie eine echte, und ohne diesen Satz wäre nicht zu erkennen, dass
+    sie aus gerechneten Pulls besteht. Bei einer echten Quelle steht
+    dort nichts - eine Selbstverständlichkeit auszusprechen macht die
+    Zeile nur länger.
+    """
+
+    if source == SOURCE_MOCK:
+        return "Aus der Simulation - echte Pulls zählen getrennt."
+
+    return ""

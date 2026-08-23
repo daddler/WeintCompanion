@@ -20,13 +20,22 @@ from __future__ import annotations
 
 import json
 import os
+import time
 
 from analyzer.academy import evaluator
 from analyzer.academy.lessons import find_lesson, lessons_for_actor
 from analyzer.academy.models import PlayerProfile, TrainingPlan
+from analyzer.academy.progression import (
+    CURVE_LIMIT,
+    PullRecord,
+    pull_key,
+    qualifies,
+    record_from_profile,
+)
 from analyzer.models import RaidSnapshot
 from analyzer.names import match_name, names_equal
 
+from core.academy_history import AcademyHistory, today
 from core.paths import Paths
 
 
@@ -69,6 +78,15 @@ class AcademyService:
         self.data: dict = {"completed": {}, "excluded": {}, "dummy_practice": {}}
 
         self.load()
+
+        #
+        # Die Lernkurve liegt in einer **eigenen** Datei: hier stehen
+        # Angaben des Nutzers (erledigt, abgewählt), dort Messwerte
+        # des Programms. Ein Defekt in der einen darf die andere nicht
+        # mitnehmen - siehe core/academy_history.py.
+        #
+
+        self.history = AcademyHistory(manager)
 
     # --------------------------------------------------
     # Persistenz
@@ -491,6 +509,103 @@ class AcademyService:
             snapshot=snapshot,
             excluded=self.excluded_for(name),
         )
+
+    # --------------------------------------------------
+    # Lernkurve
+    # --------------------------------------------------
+
+    def note_snapshot(
+        self,
+        snapshot: RaidSnapshot,
+        *,
+        origin: str = "",
+        day: str = "",
+        sequence: int = 0,
+        source: str = "",
+    ) -> bool:
+        """
+        Einen **beendeten** Pull für die Lernkurve aufzeichnen. Gibt
+        zurück, ob dabei ein neuer Punkt entstanden ist.
+
+        Die Regeln, welcher Pull überhaupt zählt, stehen in
+        `analyzer/academy/progression.py`; hier steht die Reihenfolge,
+        in der gefragt wird - und die ist der Punkt: die teuren
+        Schritte (Profil bauen) kommen **nach** den billigen
+        (beendet? schon bekannt?). Diese Funktion hängt am
+        Snapshot-Strom und läuft damit im Sekundentakt, in der
+        Wiedergabe viermal je Sekunde.
+
+        Zwei Dinge werden hier bewusst **nicht** getan:
+
+        - **Kein Raten des Charakters.** `resolve_player_name()`
+          liefert die getroffene Auswahl oder "". Eine Kurve unter
+          einem geratenen Namen wäre die Kurve eines Fremden, und sie
+          fiele erst Wochen später auf.
+        - **Kein Aufzeichnen ohne Bewertung.** Ist der Spieler im Pull
+          gar nicht enthalten (er war nicht dabei, oder die Quelle
+          liefert ihn nicht), entsteht ein leeres Profil - und ein
+          Punkt daraus wäre eine Null, wo nichts gemessen wurde.
+        """
+
+        if not qualifies(snapshot):
+            return False
+
+        character = self.resolve_player_name(snapshot)
+
+        if not character:
+            return False
+
+        key = pull_key(snapshot, origin, day or today())
+
+        if self.history.knows(character, key):
+            return False
+
+        profile = self.build_profile(snapshot)
+
+        if not profile.has_data:
+            return False
+
+        record = record_from_profile(
+            profile,
+            snapshot,
+            key=key,
+            day=day or today(),
+            sequence=sequence,
+            source=source,
+            recorded_at=time.time(),
+        )
+
+        if not self.history.note(character, record):
+            return False
+
+        self.manager.logger.info(
+            f"Academy: {record.label} für {character} aufgezeichnet."
+        )
+
+        return True
+
+    def curve(
+        self,
+        character: str = "",
+        source: str = "",
+        spec: str = "",
+        limit: int = CURVE_LIMIT,
+    ) -> tuple[PullRecord, ...]:
+        """
+        Die Punkte der Lernkurve eines Charakters.
+
+        Ohne Namen die des gewählten Charakters - dieselbe Auswahl,
+        aus der auch das Profil entsteht.
+        """
+
+        return self.history.curve(
+            character or self.player_name(),
+            source,
+            spec,
+            limit,
+        )
+
+    # --------------------------------------------------
 
     def progress_for(self, profile: PlayerProfile) -> tuple[int, int]:
         """

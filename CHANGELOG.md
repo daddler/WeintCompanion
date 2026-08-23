@@ -33,6 +33,46 @@ Minutentakt, wer sich also im Discord einträgt, sieht es kurz darauf
 auch hier. Sichtbar wird das Ganze, sobald der Bot in der neuen Fassung
 läuft.
 
+**Die Academy erkennt jetzt eine Lernkurve.**
+Sie bewertete bisher ausschliesslich den Kampf, der gerade auf dem
+Bildschirm stand — und beantwortete damit die eine Frage nicht, wegen
+der es ein Lernzentrum gibt: *werde ich besser?* Drei Sterne in
+Mechaniken sind ein Befund; drei Sterne nach fünf und vier sind eine
+Entwicklung, und erst die zweite Auskunft sagt einem, ob sich das Üben
+lohnt. Die Verlaufskarte unten auf der Übersicht sagte deshalb bis
+jetzt ehrlich, dass es sie nicht gibt: eine Bewertung lebte nur für
+den Moment ihrer Anzeige und wurde nirgends aufgehoben.
+
+Ab dieser Fassung merkt sich die Anwendung jeden ausgewerteten Pull —
+den Boss, den Tag und die Sterne der sechs Bereiche — und zeichnet
+daraus die Kurve: die Gesamtbewertung durchgezogen, der über die
+letzten Pulls schwächste Bereich gestrichelt daneben, darüber ein Satz
+wie „Über 7 Pulls besser: 2,7 → 3,8 Sterne."
+
+Aufgezeichnet wird still im Hintergrund, sobald WeintTV **oder** die
+Academy geöffnet ist — wer den Abend über die Raidansicht laufen lässt
+und erst danach in die Academy sieht, findet den ganzen Abend vor und
+nicht nur den letzten Pull. Vier Regeln sorgen dafür, dass die Kurve
+etwas taugt:
+
+- **Nur beendete Pulls**, und nur ab einer halben Minute Kampf. Aus
+  der Mitte eines Kampfes abgelesen beschriebe ein Punkt einen Pull,
+  den es so nie gab; ein Wipe nach zwölf Sekunden misst den Pull und
+  nicht den Spieler.
+- **Jeder Pull genau einmal**, auch wenn man ihn im Archiv zweimal
+  öffnet oder danach abspielt.
+- **Keine erfundenen Punkte.** Ein Bereich, zu dem der Datenquelle die
+  Angaben fehlten, hat an diesem Tag keinen Punkt — statt einer Null,
+  die wie ein Einbruch aussähe.
+- **Simulation und echte Berichte bleiben getrennt**, ebenso zwei
+  Spezialisierungen: eine Rotationsbewertung als Frost sagt nichts
+  über die Rotation als Feuer, und eine Linie durch beide zeigte einen
+  Bruch, den nie jemand gespielt hat.
+
+Und die Reihenfolge kommt aus dem Raidabend, nicht aus der Klickfolge:
+wer im Archiv erst Pull 5 und dann Pull 2 ansieht, bekommt trotzdem
+keine Kurve, die einen Rückschritt zeigt, den es nie gab.
+
 ## 2.3.4
 
 **Die Aufstellung auf der Übersicht zeigt endlich die Klassenfarben.**
