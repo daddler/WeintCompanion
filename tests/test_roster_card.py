@@ -54,7 +54,7 @@ def _theme():
     init_theme(_Config())
 
 
-def _tag(key, label, starts_at, active, roster=None):
+def _tag(key, label, starts_at, active, roster=None, me=None):
 
     entry = {
         "key": key,
@@ -70,6 +70,9 @@ def _tag(key, label, starts_at, active, roster=None):
 
     if roster is not None:
         entry["roster"] = roster
+
+    if me is not None:
+        entry["me"] = me
 
     return entry
 
@@ -287,3 +290,117 @@ def test_a_shorter_answer_hides_the_leftover_block():
     assert blocks[0].when.text().startswith("Donnerstag")
 
     assert len(card._blocks) == 2
+
+
+# --------------------------------------------------
+# Die eigene Anmeldung
+# --------------------------------------------------
+
+
+def _own_states(payload):
+    """
+    Was in den Chips der sichtbaren Tage steht - leer, wo keiner
+    gezeigt wird.
+    """
+
+    card = _card(payload)
+
+    return [
+        block.own.text() if block.own.isVisibleTo(card) else ""
+        for block in _visible(card)
+    ]
+
+
+def _with_me(*states):
+
+    return {
+        **STANDARD,
+        "days": [
+            {**tag, **({"me": state} if state is not None else {})}
+            for tag, state in zip(STANDARD["days"], states)
+        ],
+    }
+
+
+def test_each_day_says_whether_i_am_signed_up_for_it():
+    """
+    Mittwoch und Donnerstag sind zwei Anmeldungen. Genau der Fall
+    "am Mittwoch dabei, am Donnerstag noch gar nicht geantwortet" ist
+    der, den eine gemeinsame Auskunft verschluckt hätte - und der
+    einzige, in dem noch etwas zu tun ist.
+    """
+
+    assert _own_states(_with_me("active", "none")) == [
+        "ANGEMELDET",
+        "NICHT ANGEMELDET",
+    ]
+
+
+def test_without_a_report_the_card_stays_silent_about_it():
+    """
+    Eine ältere Bot-Fassung meldet das Feld nicht. Kein Chip heisst
+    "dazu ist nichts bekannt"; ein Chip "NICHT ANGEMELDET" wäre von
+    einer echten fehlenden Anmeldung nicht zu unterscheiden.
+    """
+
+    assert _own_states(_with_me(None, None)) == ["", ""]
+
+
+def test_the_missing_signup_is_the_only_one_that_warns():
+    """
+    Abgesagt zu haben ist kein Fehler, sondern eine Antwort - und
+    darf deshalb nicht wie eine Störung aussehen.
+    """
+
+    card = _card(_with_me("absent", "none"))
+
+    abgesagt, offen = _visible(card)
+
+    assert abgesagt.own._variant == "neutral"
+
+    assert offen.own._variant == "warn"
+
+
+def test_the_chip_carries_the_whole_sentence_as_a_tooltip():
+    """
+    "NICHT ANGEMELDET" ist die kurze Fassung; die Frage stellt sich
+    jemand in ganzen Sätzen.
+    """
+
+    #
+    # Die Karte muss am Leben bleiben: ohne eigene Referenz sammelt
+    # Python sie zwischen den beiden Zeilen ein, und der Chip ist
+    # dann ein C++-Objekt, das es nicht mehr gibt.
+    #
+
+    card = _card(_with_me("none", "none"))
+
+    assert "Anmeldung" in _visible(card)[0].own.toolTip()
+
+
+def test_a_reused_block_does_not_keep_the_previous_days_chip():
+    """
+    Die Blöcke werden wiederverwendet und nur neu beschriftet (siehe
+    `_blocks_for()`). Bliebe der Chip eines vorherigen Tages stehen,
+    stünde eine fremde Anmeldung an einem Termin, zu dem der Bot
+    nichts gesagt hat.
+    """
+
+    from datetime import datetime
+
+    from core.raid_schedule import parse_schedule
+
+    card = _card(_with_me("none", "none"))
+
+    assert _visible(card)[0].own.isVisibleTo(card)
+
+    schedule = parse_schedule(_with_me(None, None))
+
+    card.apply(
+        schedule,
+        schedule.upcoming_days(
+            datetime.fromisoformat("2026-08-11T18:30:00+02:00")
+        ),
+    )
+
+    assert not _visible(card)[0].own.isVisibleTo(card)

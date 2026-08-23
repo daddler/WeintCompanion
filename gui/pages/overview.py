@@ -68,6 +68,9 @@ from core.raid_schedule import (
     day_text,
     open_slots,
     others_text,
+    own_signup_label,
+    own_signup_text,
+    own_signup_variant,
     signup_text,
 )
 from gui.dialogs.changelog_dialog import show_changelog
@@ -235,6 +238,14 @@ class DayBlock(QWidget):
     Die Zahl sitzt in der Zeile ueber *ihrem* Streifen und nicht mehr
     im Kopf der Karte: mit zwei Tagen gehoert "21 / 25" zu einem von
     beiden, und im Kopf waere nicht zu sehen, zu welchem.
+
+    Aus demselben Grund steht auch die **eigene Anmeldung** hier und
+    nicht im Kopf: der Chip neben dem Datum sagt, ob man selbst fuer
+    diesen Tag zugesagt, abgesagt oder noch gar nicht geantwortet hat.
+    "21 von 25 zugesagt" beantwortet diese Frage nicht - die Antwort
+    des Bots nennt bewusst keine Namen, es ist aus ihr also gar nicht
+    zu erkennen, wer von den 21 man selbst ist. Sie kommt deshalb als
+    eigenes Feld je Tag (`days[].me`, siehe `core/raid_schedule.py`).
     """
 
     def __init__(self, parent=None):
@@ -263,6 +274,25 @@ class DayBlock(QWidget):
         )
 
         head.addWidget(self.when)
+
+        #
+        # Der eigene Anmeldezustand, direkt neben dem Datum: er
+        # gehört zu **diesem** Tag und nicht zum Raid. Mittwoch und
+        # Donnerstag sind zwei Anmeldungen, und ein Hinweis im Kopf
+        # der Karte müsste offenlassen, welchen der beiden er meint -
+        # dieselbe Überlegung, die die Zahl der Zusagen aus dem Kopf
+        # in die Tageszeile geholt hat.
+        #
+        # Unsichtbar, solange der Bot nichts dazu meldet: kein Chip
+        # heisst "dazu ist nichts bekannt", und das ist etwas anderes
+        # als "nicht angemeldet".
+        #
+
+        self.own = Chip("", "neutral")
+
+        self.own.setVisible(False)
+
+        head.addWidget(self.own)
 
         head.addStretch(1)
 
@@ -305,6 +335,22 @@ class DayBlock(QWidget):
     def apply(self, schedule, day):
 
         self.when.setText(day_text(day))
+
+        label = own_signup_label(day)
+
+        self.own.setText(label)
+
+        self.own.setVariant(own_signup_variant(day))
+
+        #
+        # Der ganze Satz hängt am Chip: "NICHT ANGEMELDET" ist die
+        # kurze Fassung, "Deine Anmeldung für diesen Tag fehlt noch."
+        # die, in der die Frage gestellt wird.
+        #
+
+        self.own.setToolTip(own_signup_text(day))
+
+        self.own.setVisible(bool(label))
 
         self.count.setText(count_text(day, schedule.raid_size))
 

@@ -2,6 +2,37 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.3.5
+
+**Die Übersicht sagt jetzt, ob du selbst schon eingetragen bist.**
+Die Aufstellung stand da, die Zahlen standen da — nur die kleinste und
+häufigste Frage vor einem Raidabend beantwortete die Karte nicht: habe
+*ich* mich eigentlich schon angemeldet? „21 von 25 zugesagt" sagt das
+nicht, und es lag auch nicht am Zufall: die Antwort des Bots nennt
+bewusst keine Namen, es war aus ihr also gar nicht zu erkennen, wer von
+den 21 man selbst ist. Wer sichergehen wollte, ging trotz aller Zahlen
+noch einmal ins Discord.
+
+Neben jedem Raidtag steht deshalb jetzt der eigene Stand: **ANGEMELDET**,
+VIELLEICHT, ERSATZBANK, ABGEMELDET — oder, in Warnfarbe, **NICHT
+ANGEMELDET**. Je Tag und nicht je Raid, denn Mittwoch und Donnerstag
+sind zwei Anmeldungen: am Mittwoch zugesagt und am Donnerstag noch gar
+nicht geantwortet ist genau der Fall, den eine gemeinsame Auskunft
+verschluckt hätte.
+
+Zwei Feinheiten, die nicht zufällig so sind. **Abgesagt zu haben ist
+kein Fehler** und sieht deshalb auch nicht wie einer aus: eine Absage
+ist eine Antwort, der Raidleiter weiss Bescheid, und es gibt nichts
+mehr zu tun. In Warnfarbe steht allein die fehlende Anmeldung — der
+einzige Fall, in dem noch jemand handeln muss. Und meldet der Bot dazu
+nichts (ältere Fassung), steht dort **gar nichts**, statt eine fehlende
+Anmeldung zu behaupten, die niemand geprüft hat.
+
+Der Stand zieht sich von selbst nach: am Raidtag fragt die App im
+Minutentakt, wer sich also im Discord einträgt, sieht es kurz darauf
+auch hier. Sichtbar wird das Ganze, sobald der Bot in der neuen Fassung
+läuft.
+
 ## 2.3.4
 
 **Die Aufstellung auf der Übersicht zeigt endlich die Klassenfarben.**

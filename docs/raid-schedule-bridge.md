@@ -16,6 +16,11 @@ Companion schweigt dann und die Übersicht sagt weiterhin „kein Termin
 bekannt". Dasselbe Muster wie bei der WarcraftLogs- und der
 Zugriffsprofil-Brücke.
 
+**`days[].me` liefert der Bot seit derselben Änderung mit**, die
+diesen Abschnitt angelegt hat (Companion 2.3.5). Eine ältere
+Bot-Fassung schickt es nicht; die Übersicht sagt zur eigenen Anmeldung
+dann gar nichts, statt sie als fehlend auszugeben.
+
 **`days[].roster` liefert der Bot seit dieser Änderung mit** — vorher
 schickte er allein die Zahlen, und die Übersicht konnte daraus nur
 einen einfarbigen Streifen malen: die Klassen kannte sie nicht, und
@@ -90,7 +95,8 @@ Authorization: Bearer <companion_token>
         { "role": "tank",   "class": "WARRIOR" },
         { "role": "healer", "class": "PRIEST" },
         { "role": "dps",    "class": "MAGE" }
-      ]
+      ],
+      "me": "active"
     },
     {
       "key": "thursday",
@@ -98,7 +104,8 @@ Authorization: Bearer <companion_token>
       "date": "2026-08-13",
       "time": "20:00",
       "starts_at": "2026-08-13T20:00:00+02:00",
-      "signups": { "active": 20, "tentative": 0, "bench": 0, "absent": 2 }
+      "signups": { "active": 20, "tentative": 0, "bench": 0, "absent": 2 },
+      "me": "none"
     }
   ],
   "discord": {
@@ -119,6 +126,7 @@ Authorization: Bearer <companion_token>
 | `days[].starts_at` | ISO-8601 **mit Offset** |
 | `days[].signups` | `active` / `tentative` / `bench` / `absent` |
 | `days[].roster` | **optional**: je Zusage `role` und `class`, ohne Namen |
+| `days[].me` | **optional**: der eigene Anmeldezustand an diesem Tag |
 | `days[].signups.roles` | **optional**: Ersatzform, nur Zahlen je Rolle |
 | `composition` | **optional**: Sollstärke je Rolle |
 | `discord` | Fundort der Anmeldung; optional, alle IDs als **Zeichenkette** |
@@ -179,6 +187,50 @@ Die Companion macht daraus das Ziel des Knopfes **„Aufstellung im
 Discord"**; fehlt er (ältere Bot-Fassung), fällt sie auf den
 Anmelde-Kanal der Projektgilde zurück (`DISCORD_RAID_CHANNEL_ID` in
 `core/backend_config.py`).
+
+## Die eigene Anmeldung (`days[].me`)
+
+Die kleinste Frage vor einem Raidabend ist auch die häufigste: **habe
+ich mich eigentlich schon eingetragen?** Aus dieser Antwort liess sie
+sich lange nicht beantworten, und zwar gerade *weil* sie keine Namen
+nennt — aus „21 von 25 zugesagt" geht nicht hervor, wer von den 21 man
+selbst ist.
+
+`days[].me` beantwortet sie je Tag, und zwar für **den, der fragt**:
+der Bot liest die Discord-ID aus dem Companion-Token, mit dem die
+Anfrage ohnehin kommt. Jeder bekommt an dieser Stelle also eine andere
+Antwort, und niemand erfährt darüber etwas über jemand anderen — die
+Grenze „keine Namen, keine Discord-IDs" bleibt genau dort, wo sie war.
+Sie schützt Auskünfte über *andere*; hier steht eine über einen selbst.
+
+| Wert | Bedeutung | Anzeige |
+| --- | --- | --- |
+| `active` | zugesagt | `ANGEMELDET` (grün) |
+| `tentative` | vielleicht | `VIELLEICHT` |
+| `bench` | Ersatzbank | `ERSATZBANK` |
+| `absent` | abgesagt | `ABGEMELDET` (neutral) |
+| `none` | **nicht geantwortet** | `NICHT ANGEMELDET` (Warnfarbe) |
+
+Drei Regeln, und alle drei sind Unterscheidungen, die sonst verloren
+gingen:
+
+- **`absent` und `none` sind nicht dasselbe.** Eine Absage ist eine
+  Antwort — der Raidlead weiss Bescheid, und es gibt nichts mehr zu
+  tun. Wer gar nicht geantwortet hat, ist der einzige, der noch
+  handeln muss. Deshalb ist nur `none` in Warnfarbe und `absent`
+  neutral: abgesagt zu haben ist kein Fehler.
+- **Je Tag, nicht je Raid.** Mittwoch und Donnerstag sind zwei
+  Anmeldungen. Ein einzelner Hinweis für den ganzen Raid wäre genau
+  dann falsch, wenn es darauf ankommt.
+- **Fehlt das Feld, sagt die Companion nichts.** Eine ältere
+  Bot-Fassung kennt es nicht, und ein daraus abgeleitetes „nicht
+  angemeldet" wäre von einer echten fehlenden Anmeldung nicht zu
+  unterscheiden — bei einem Satz, auf den jemand hin handelt, ist das
+  der teurere Fehler. Dieselbe Linie wie `stars == 0` im Analyzer.
+
+Der Bot zählt eine Zeile ohne `signup_time` **nicht** als Antwort: so
+eine entsteht auch dann, wenn jemand nur einmal seine Klasse
+gespeichert hat.
 
 ## Mehrere Raids gleichzeitig (`others`)
 

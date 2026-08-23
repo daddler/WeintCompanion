@@ -55,6 +55,15 @@ Symbol im Anmelde-Beitrag. Zwei Regeln kommen hinzu:
   Sollstärke je Rolle. Ohne sie bleibt es bei "vier offene Plätze";
   mit ihr steht daneben, welche. Ein geratenes Soll (2 Tanks, 5
   Heiler) wäre für die halbe Gilde falsch.
+
+**Und die kleinste Frage von allen: bin ich selbst schon drin?** Sie
+liess sich aus dieser Antwort nicht beantworten, gerade *weil* sie
+keine Namen nennt - aus "21 von 25 zugesagt" geht nicht hervor, wer
+von den 21 man ist. Der Bot schickt sie deshalb je Tag als
+`days[].me`, abgeleitet aus dem Token, mit dem gefragt wird. Die
+Einzelheiten stehen beim Abschnitt "Der eigene Anmeldezustand" weiter
+unten; die Grenze des Vertrags bleibt unverändert, denn eine Auskunft
+über den Fragenden selbst ist keine über jemand anderen.
 """
 
 from __future__ import annotations
@@ -135,6 +144,116 @@ NUMBER_WORDS = {
     11: "Elf",
     12: "Zwölf",
 }
+
+
+#
+# --------------------------------------------------
+# Der eigene Anmeldezustand
+# --------------------------------------------------
+#
+# **Warum die Übersicht das überhaupt zeigt.** "21 von 25 zugesagt"
+# ist die Auskunft über den Raid; die Frage, wegen der die meisten
+# kurz ins Discord sehen, ist eine andere und viel kleinere: habe
+# *ich* mich eigentlich schon eingetragen? Sie stand in der App
+# nirgends, und beantworten liess sie sich hier auch nicht - die
+# Antwort des Bots nennt bewusst keine Namen, aus ihr geht also nicht
+# hervor, wer von den 21 man selbst ist.
+#
+# Der Bot beantwortet sie deshalb eigens, je Tag als `days[].me`: sie
+# folgt aus dem Token, mit dem gefragt wird, und ist damit eine
+# Auskunft über den Fragenden selbst. Die Grenze des Vertrags -
+# niemals ein Name - bleibt, wo sie war.
+#
+# Je Tag, und nicht je Raid: Mittwoch und Donnerstag sind zwei
+# Anmeldungen, und "du bist angemeldet" wäre über beide zusammen
+# genau dann falsch, wenn es darauf ankommt.
+#
+# Fünf Zustände, und der Unterschied zwischen den letzten beiden ist
+# der eigentliche Punkt: **eine Absage ist eine Antwort**, ein
+# Schweigen nicht. Wer abgesagt hat, hat getan, was von ihm erwartet
+# war; wer nichts getan hat, ist der einzige, der noch handeln muss.
+# Beides "nicht dabei" zu nennen wäre die bequeme Zusammenfassung und
+# genau die, die niemandem hilft.
+#
+
+OWN_ACTIVE = "active"
+
+OWN_TENTATIVE = "tentative"
+
+OWN_BENCH = "bench"
+
+OWN_ABSENT = "absent"
+
+OWN_NONE = "none"
+
+OWN_STATES = (
+    OWN_ACTIVE,
+    OWN_TENTATIVE,
+    OWN_BENCH,
+    OWN_ABSENT,
+    OWN_NONE,
+)
+
+#
+# Die Beschriftung des Chips - Versalien wie bei jedem Chip in dieser
+# Oberfläche. "NICHT ANGEMELDET" statt "OFFEN": der Chip steht neben
+# dem Datum und den Zahlen des Raids, und "offen" liesse sich ebenso
+# gut auf dessen Anmeldung beziehen wie auf die eigene.
+#
+
+OWN_LABELS = {
+    OWN_ACTIVE: "ANGEMELDET",
+    OWN_TENTATIVE: "VIELLEICHT",
+    OWN_BENCH: "ERSATZBANK",
+    OWN_ABSENT: "ABGEMELDET",
+    OWN_NONE: "NICHT ANGEMELDET",
+}
+
+#
+# Der ganze Satz - er hängt als Tooltip am Chip und beantwortet die
+# Frage in derselben Sprache, in der man sie stellt.
+#
+
+OWN_SENTENCES = {
+    OWN_ACTIVE: "Du bist für diesen Tag angemeldet.",
+    OWN_TENTATIVE: "Du stehst für diesen Tag auf „vielleicht“.",
+    OWN_BENCH: "Du stehst für diesen Tag auf der Ersatzbank.",
+    OWN_ABSENT: "Du hast für diesen Tag abgesagt.",
+    OWN_NONE: "Deine Anmeldung für diesen Tag fehlt noch.",
+}
+
+#
+# Die Farbe. Nur die fehlende Anmeldung ist eine Aufforderung und
+# trägt deshalb `warn`; eine Absage ist erledigt und bekommt die
+# neutrale Fläche, keine rote. Rot hiesse "hier stimmt etwas nicht",
+# und abgesagt zu haben ist kein Fehler - dieselbe Zurückhaltung, mit
+# der `Chip` seine Variante `neutral` für "keine Daten" reserviert.
+#
+
+OWN_VARIANTS = {
+    OWN_ACTIVE: "ok",
+    OWN_TENTATIVE: "info",
+    OWN_BENCH: "info",
+    OWN_ABSENT: "neutral",
+    OWN_NONE: "warn",
+}
+
+
+def normalize_own_state(value) -> str:
+    """
+    Der gemeldete Zustand - oder "", wenn keiner gemeldet wurde.
+
+    Der leere Wert ist der wichtige: er heisst **"der Bot hat dazu
+    nichts gesagt"** (eine ältere Fassung kennt das Feld nicht), und
+    die Übersicht schweigt daraufhin. Ihn auf "nicht angemeldet"
+    abzubilden wäre die übliche stille Lüge: ein Satz, auf den jemand
+    hin handelt, aus einer Auskunft, die es gar nicht gibt - dieselbe
+    Linie wie `stars == 0` und `readiness() is None`.
+    """
+
+    text = str(value or "").strip().lower()
+
+    return text if text in OWN_STATES else ""
 
 
 def normalize_role(value) -> str:
@@ -220,6 +339,15 @@ class RaidDay:
     #
 
     roster: tuple[RosterSlot, ...] = ()
+
+    #
+    # Der **eigene** Anmeldezustand an diesem Tag, so wie der Bot ihn
+    # meldet (`days[].me`). Leer heisst "nicht gemeldet" - eine
+    # ältere Bot-Fassung kennt das Feld nicht, und die Karte sagt dann
+    # dazu nichts, statt eine fehlende Anmeldung zu behaupten.
+    #
+
+    me: str = ""
 
     # --------------------------------------------------
 
@@ -485,6 +613,7 @@ def parse_schedule(data) -> RaidSchedule:
                 bench=int(counts.get("bench") or 0),
                 absent=int(counts.get("absent") or 0),
                 roster=_parse_roster(entry.get("roster"), counts.get("roles")),
+                me=normalize_own_state(entry.get("me")),
             )
         )
 
@@ -911,6 +1040,50 @@ def composition_text(
         return head
 
     return f"{head} · {', '.join(parts)}"
+
+
+# --------------------------------------------------
+# Die eigene Anmeldung
+# --------------------------------------------------
+
+
+def own_signup_label(day: RaidDay | None) -> str:
+    """
+    Die Beschriftung des Chips - "ANGEMELDET", "NICHT ANGEMELDET" …
+
+    Leer, wenn der Bot nichts gemeldet hat. Der Aufrufer blendet den
+    Chip dann aus: kein Chip heisst "dazu ist nichts bekannt", und das
+    ist etwas anderes als jede der fünf Antworten.
+    """
+
+    if day is None:
+        return ""
+
+    return OWN_LABELS.get(day.me, "")
+
+
+def own_signup_variant(day: RaidDay | None) -> str:
+    """
+    Die Farbe des Chips. `neutral`, solange nichts gemeldet ist - der
+    Chip wird dann ohnehin nicht gezeigt.
+    """
+
+    if day is None:
+        return "neutral"
+
+    return OWN_VARIANTS.get(day.me, "neutral")
+
+
+def own_signup_text(day: RaidDay | None) -> str:
+    """
+    Der ganze Satz: "Du bist für diesen Tag angemeldet." bzw. "Deine
+    Anmeldung für diesen Tag fehlt noch."
+    """
+
+    if day is None:
+        return ""
+
+    return OWN_SENTENCES.get(day.me, "")
 
 
 def others_text(

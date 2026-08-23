@@ -9,12 +9,16 @@ abend ein anderer als am Montag.
 from datetime import datetime
 
 from core.raid_schedule import (
+    OWN_STATES,
     composition_text,
     count_text,
     countdown_text,
     day_text,
     open_slots,
     others_text,
+    own_signup_label,
+    own_signup_text,
+    own_signup_variant,
     parse_schedule,
     signup_text,
 )
@@ -817,3 +821,139 @@ def test_a_special_raid_has_exactly_one_day():
     days = schedule.upcoming_days(_moment("2026-08-11T12:00:00+02:00"))
 
     assert [day.key for day in days] == ["special"]
+
+
+# --------------------------------------------------
+# Die eigene Anmeldung
+# --------------------------------------------------
+#
+# "21 von 25 zugesagt" beantwortet nicht, ob man selbst dabei ist -
+# die Antwort des Bots nennt keine Namen, es ist aus ihr also gar
+# nicht zu erkennen, wer von den 21 man ist. Der Bot schickt es
+# deshalb je Tag als `days[].me`.
+#
+
+
+def _with_me(*states):
+
+    tage = []
+
+    for index, state in enumerate(states):
+
+        tag = dict(PAYLOAD["days"][index])
+
+        if state is not None:
+            tag["me"] = state
+
+        tage.append(tag)
+
+    return parse_schedule({**PAYLOAD, "days": tage})
+
+
+def test_the_own_state_is_read_per_day():
+
+    schedule = _with_me("active", "none")
+
+    mittwoch, donnerstag = schedule.days
+
+    assert mittwoch.me == "active"
+
+    assert donnerstag.me == "none"
+
+    assert own_signup_label(mittwoch) == "ANGEMELDET"
+
+    assert own_signup_label(donnerstag) == "NICHT ANGEMELDET"
+
+
+def test_a_missing_field_says_nothing_at_all():
+    """
+    Eine ältere Bot-Fassung kennt das Feld nicht. Daraus "nicht
+    angemeldet" zu machen wäre von einer echten fehlenden Anmeldung
+    nicht zu unterscheiden - und das ist ein Satz, auf den jemand hin
+    handelt. Die leere Beschriftung blendet den Chip aus.
+    """
+
+    schedule = _with_me(None, None)
+
+    assert schedule.days[0].me == ""
+
+    assert own_signup_label(schedule.days[0]) == ""
+
+    assert own_signup_text(schedule.days[0]) == ""
+
+
+def test_an_unknown_value_is_treated_as_no_answer_at_all():
+    """
+    Additiv gedacht wie `normalize_role()`: ein Wert, den diese
+    Fassung nicht kennt, kostet die Auskunft - er erfindet keine.
+    """
+
+    schedule = _with_me("angemeldet")
+
+    assert schedule.days[0].me == ""
+
+
+def test_a_cancellation_is_an_answer_and_is_not_a_warning():
+    """
+    Der eigentliche Punkt: "abgesagt" heisst, der Raidlead weiss
+    Bescheid; "nicht geantwortet" heisst, er wartet. Nur das zweite
+    ist eine Aufforderung, und nur das zweite trägt deshalb die
+    Warnfarbe. Rot hiesse "hier stimmt etwas nicht", und abgesagt zu
+    haben ist kein Fehler.
+    """
+
+    abgesagt, offen = _with_me("absent", "none").days
+
+    assert own_signup_variant(abgesagt) == "neutral"
+
+    assert own_signup_variant(offen) == "warn"
+
+    assert own_signup_variant(_with_me("active").days[0]) == "ok"
+
+
+def test_every_state_carries_a_label_and_a_sentence():
+    """
+    Sonst bliebe ein Chip ohne Beschriftung stehen - und der wäre von
+    "nicht gemeldet" nicht zu unterscheiden, weil genau das den Chip
+    ausblendet.
+    """
+
+    for state in OWN_STATES:
+
+        tag = _with_me(state).days[0]
+
+        assert own_signup_label(tag)
+
+        assert own_signup_text(tag)
+
+        assert own_signup_variant(tag)
+
+
+def test_the_own_state_survives_the_parallel_raids():
+    """
+    `others` läuft durch dasselbe `parse_schedule()` - beim zweiten
+    Raid, an den man eher nicht denkt, ist die Frage sogar die
+    wichtigere.
+    """
+
+    weiterer = {
+        "title": "Twinkraid",
+        "raid_size": 10,
+        "days": [{**PAYLOAD["days"][0], "me": "none"}],
+    }
+
+    schedule = parse_schedule({**PAYLOAD, "others": [weiterer]})
+
+    assert schedule.others[0].days[0].me == "none"
+
+
+def test_the_state_reaches_the_comparison_the_card_redraws_on():
+    """
+    `RaidScheduleSync.process()` vergleicht den **ganzen** eingefrorenen
+    Stand und macht daraus ein `state_changed`. Trüge `me` nicht dazu
+    bei, bliebe der Chip auf "nicht angemeldet" stehen, nachdem man
+    sich im Discord gerade eingetragen hat - und das ist genau der
+    Augenblick, in dem jemand hinsieht.
+    """
+
+    assert _with_me("none") != _with_me("active")
