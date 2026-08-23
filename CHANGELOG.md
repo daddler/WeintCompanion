@@ -32,6 +32,29 @@ Wichtig: sichtbar wird das erst, wenn der Bot in der neuen Fassung
 läuft. Bis dahin bleibt es beim bisherigen einen Streifen - die
 Aufstellung stimmt dann, nur das Bild ist ärmer.
 
+**Und beide Raidtage stehen jetzt untereinander.**
+Mittwoch und Donnerstag sind zwei Anmeldungen - wer am Mittwoch
+zusagt, muss am Donnerstag nicht können. Die Übersicht nannte aber nur
+den nächsten Termin: am Dienstag also den Mittwoch, während der
+Donnerstag daneben halb leer sein konnte, ohne dass es jemand sah. Der
+Bot schickte beide Tage von Anfang an in derselben Antwort, sie
+standen nur nie auf dem Bildschirm.
+
+Jeder Tag hat nun seine eigene Zeile mit Datum und Uhrzeit, seine
+eigene Zahl, seine eigene Aufstellung und seinen eigenen Satz darunter.
+Die Zahl der Zusagen ist dafür aus dem Kopf der Karte in die Zeile
+ihres Tages gewandert - bei zwei Terminen wäre oben nicht zu sehen,
+welchen von beiden sie meint. Dass die Anmeldung geschlossen ist, steht
+weiterhin genau einmal oben rechts: das gilt für den Raid und nicht für
+einen seiner Tage.
+
+Ein bereits gelaufener Tag kommt dabei nicht als "nächste Woche"
+zurück. Der Bot nennt zu jedem Wochentag dessen nächstes Vorkommen, am
+Donnerstag steht der Mittwoch dort also schon auf der kommenden Woche -
+mit den Zusagen der vergangenen. Solange nur ein Termin angezeigt
+wurde, fiel das nicht auf; untereinander wäre es eine Aufstellung zu
+einem Datum, zu dem sie nicht gehört.
+
 ## 2.3.3
 
 **Ein wartendes Update meldet sich jetzt von selbst.**

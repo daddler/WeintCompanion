@@ -158,6 +158,26 @@ def normalize_role(value) -> str:
 RUNNING_MINUTES = 4 * 60
 
 
+#
+# Wie weit zwei Termine auseinanderliegen dürfen, um noch **derselbe
+# Raid** zu sein.
+#
+# Der Bot rechnet jeden Tag als *nächstes Vorkommen* seines
+# Wochentags: am Donnerstag steht der Mittwoch derselben Antwort
+# deshalb schon auf der kommenden Woche - mit den Zusagen des
+# vergangenen. Solange die Übersicht nur den nächsten Termin nannte,
+# fiel das nicht auf; untereinander stünde neben dem heutigen
+# Donnerstag ein Mittwoch in sechs Tagen mit Zahlen, die zu ihm nicht
+# gehören.
+#
+# Fünf Tage trennen die beiden Fälle sauber: die Tage eines Raids
+# liegen dicht beieinander (Mittwoch und Donnerstag einen Tag), ein
+# bereits gelaufener Tag ist immer mindestens sechs Tage voraus.
+#
+
+CYCLE_DAYS = 5
+
+
 @dataclass(frozen=True)
 class RosterSlot:
     """
@@ -330,31 +350,73 @@ class RaidSchedule:
 
         return (self,) + tuple(self.others)
 
+    def upcoming_days(
+        self,
+        now: datetime | None = None,
+    ) -> tuple[RaidDay, ...]:
+        """
+        Alle noch bevorstehenden Termine, der nächste zuerst.
+
+        **Warum die Uebersicht mehr als einen zeigt.** Der Standardraid
+        laeuft Mittwoch *und* Donnerstag, und die beiden Anmeldungen
+        sind nicht dieselbe: wer am Mittwoch zusagt, muss am Donnerstag
+        nicht koennen. Genannt wurde bisher nur der naechste - am
+        Dienstag also der Mittwoch, und ob der Donnerstag ueberhaupt
+        Leute hat, war in der App nicht zu sehen, obwohl der Bot beide
+        Tage in derselben Antwort schickt.
+
+        Ein laufender Termin zaehlt als bevorstehend, aus demselben
+        Grund wie in `next_day()`: er ist der, um den es gerade geht.
+
+        Ein Tag ohne lesbaren Zeitpunkt faellt heraus statt ans Ende -
+        anders als beim Raid selbst (`others`) gaebe es hier nichts
+        anzuzeigen ausser einer Reihe Kaestchen ohne Datum, und die
+        waere von einem Termin nicht zu unterscheiden.
+
+        **Und nur die Tage desselben Raids.** Der Bot nennt zu jedem
+        Wochentag dessen naechstes Vorkommen: am Donnerstag steht der
+        Mittwoch bereits auf der kommenden Woche - mit den Zusagen der
+        vergangenen, denn die Anmeldung ist dieselbe. Neben dem
+        heutigen Termin waere das eine Aufstellung zu einem Datum, zu
+        dem sie nicht gehoert. `CYCLE_DAYS` schneidet ihn ab.
+        """
+
+        upcoming = [
+            day
+            for day in self.days
+            if day.minutes_until(now) is not None
+            and (day.minutes_until(now) > 0 or day.is_running(now))
+        ]
+
+        upcoming.sort(key=lambda day: day.starts_at)
+
+        if not upcoming:
+            return ()
+
+        erster = upcoming[0].starts_at
+
+        return tuple(
+            day
+            for day in upcoming
+            if (day.starts_at - erster).days < CYCLE_DAYS
+        )
+
     def next_day(self, now: datetime | None = None) -> RaidDay | None:
         """
         Der nächste Termin: der erste, der noch nicht vorbei ist.
 
         Ein laufender Raid gilt als der nächste - deshalb wird gegen
         `is_running()` und nicht gegen "liegt in der Zukunft" geprüft.
+
+        Dieselbe Rechnung wie `upcoming_days()`, nur auf einen Termin
+        verkuerzt: der Countdown im Kopf und die Begruessung haben
+        genau einen Platz. Zwei Fassungen davon wuerden irgendwann
+        verschiedene Tage nennen.
         """
 
-        upcoming = None
+        days = self.upcoming_days(now)
 
-        for day in self.days:
-
-            minutes = day.minutes_until(now)
-
-            if minutes is None:
-                continue
-
-            if minutes > 0 or day.is_running(now):
-
-                if upcoming is None or (
-                    day.starts_at < upcoming.starts_at
-                ):
-                    upcoming = day
-
-        return upcoming
+        return days[0] if days else None
 
 
 def _parse_moment(value) -> datetime | None:

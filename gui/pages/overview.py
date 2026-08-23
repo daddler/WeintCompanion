@@ -220,6 +220,142 @@ def _slot_groups(schedule, day) -> list[SlotGroup]:
     ]
 
 
+class DayBlock(QWidget):
+    """
+    Ein Termin des Raids: Zeile, Zahl, Streifen, Satz.
+
+    **Warum es diesen Block gibt.** Der Standardraid laeuft Mittwoch
+    *und* Donnerstag, und die beiden Anmeldungen sind zwei verschiedene
+    Listen - wer am Mittwoch zusagt, muss am Donnerstag nicht koennen.
+    Die Karte nannte aber nur den naechsten Termin: am Dienstag also
+    den Mittwoch, waehrend der Donnerstag daneben leer sein konnte,
+    ohne dass es in der App zu sehen war. Der Bot schickt beide Tage in
+    derselben Antwort, sie standen nur nie auf dem Bildschirm.
+
+    Die Zahl sitzt in der Zeile ueber *ihrem* Streifen und nicht mehr
+    im Kopf der Karte: mit zwei Tagen gehoert "21 / 25" zu einem von
+    beiden, und im Kopf waere nicht zu sehen, zu welchem.
+    """
+
+    def __init__(self, parent=None):
+
+        super().__init__(parent)
+
+        root = QVBoxLayout(self)
+
+        root.setContentsMargins(0, 0, 0, 0)
+
+        root.setSpacing(4)
+
+        head = QHBoxLayout()
+
+        head.setContentsMargins(0, 0, 0, 0)
+
+        head.setSpacing(tokens.SPACE[1])
+
+        self.when = QLabel("")
+
+        self.when.setFont(font("body"))
+
+        restyle(
+            self.when,
+            f"color:{tokens.TEXT['primary']};background:transparent;",
+        )
+
+        head.addWidget(self.when)
+
+        head.addStretch(1)
+
+        self.count = QLabel("")
+
+        self.count.setFont(font("small"))
+
+        restyle(
+            self.count,
+            f"color:{tokens.TEXT['secondary']};background:transparent;",
+        )
+
+        head.addWidget(self.count)
+
+        root.addLayout(head)
+
+        self.strip = RosterStrip()
+
+        self.strip.setVisible(False)
+
+        root.addSpacing(tokens.SPACE[0])
+
+        root.addWidget(self.strip)
+
+        self.note = QLabel("")
+
+        self.note.setFont(font("small"))
+
+        enable_wrap(self.note)
+
+        restyle(
+            self.note,
+            f"color:{tokens.TEXT['secondary']};background:transparent;",
+        )
+
+        root.addWidget(self.note)
+
+    # --------------------------------------------------
+
+    def apply(self, schedule, day):
+
+        self.when.setText(day_text(day))
+
+        self.count.setText(count_text(day, schedule.raid_size))
+
+        groups = _slot_groups(schedule, day)
+
+        self.strip.setGroups(groups)
+
+        self.strip.setVisible(bool(groups))
+
+        text = _day_note(schedule, day, bool(groups))
+
+        self.note.setText(text)
+
+        self.note.setVisible(bool(text))
+
+
+def _day_note(schedule, day, has_strip: bool) -> str:
+    """
+    Der Satz unter einem Streifen.
+
+    Mit Streifen sagt er, **was** fehlt (die Zahl steht schon in der
+    Zeile darueber); ohne Streifen bleibt es bei der alten Zeile mit
+    der Zahl, sonst stuende unter dem Termin gar nichts. "Vielleicht"
+    und "Ersatzbank" haengen in beiden Faellen hinten dran - sie
+    gehoeren neben die Zusagen, nicht hinein.
+
+    Dass die Anmeldung geschlossen ist, steht hier **nicht**: das gilt
+    fuer den Raid und nicht fuer einen seiner Tage, und zweimal
+    untereinander gelesen sieht es aus wie zwei verschiedene Auskuenfte.
+    Es steht im Kopf der Karte.
+    """
+
+    parts = []
+
+    if has_strip:
+
+        parts.append(composition_text(schedule, day))
+
+        if day.tentative:
+            parts.append(f"{day.tentative} vielleicht")
+
+        if day.bench:
+            parts.append(f"{day.bench} Ersatzbank")
+
+    else:
+
+        parts.append(signup_text(day, schedule.raid_size))
+
+    return " · ".join(part for part in parts if part)
+
+
 class RosterCard(Card):
     """
     Der nächste Raid: Termin, Titel, **Aufstellung**.
@@ -246,6 +382,15 @@ class RosterCard(Card):
     kann; die Namen bleiben hinter der Raidlead-Rolle. Wer sie sehen
     will, geht über den Knopf ins Discord.
 
+    Seit 2.3.4 zeigt sie **jeden noch bevorstehenden Termin**, nicht
+    nur den naechsten: der Standardraid laeuft Mittwoch und
+    Donnerstag, und das sind zwei Anmeldungen - wer am Mittwoch zusagt,
+    muss am Donnerstag nicht koennen. Der Bot schickte beide Tage von
+    Anfang an in derselben Antwort; hier stand nur einer davon, und ob
+    der zweite ueberhaupt Leute hatte, war in der App nicht zu sehen.
+    Jeder Tag ist ein `DayBlock` mit eigener Zahl, eigenem Streifen und
+    eigenem Satz.
+
     Ohne Antwort bleibt die alte Haltung unverändert: die Karte sagt,
     dass nichts bekannt ist, statt "0 von 25" zu behaupten. Eine Null
     wäre keine Untertreibung, sondern eine falsche Messung - niemand
@@ -271,23 +416,26 @@ class RosterCard(Card):
         header.addStretch(1)
 
         #
-        # Die Zahl als schlichte Zeile und nicht mehr als Chip: sie
-        # steht jetzt über den Streifen, die den Zustand ohnehin
-        # zeigen. Ein zweites farbiges Zeichen daneben wäre dieselbe
-        # Auskunft ein drittes Mal - der Chip, der Streifen und der
-        # Satz darunter sagten zu dritt "10 von 25".
+        # Rechts im Kopf steht, was fuer den **Raid** gilt und nicht
+        # fuer einen seiner Tage: dass die Anmeldung geschlossen ist.
+        # Die Zahl der Zusagen sass hier, solange die Karte einen
+        # einzigen Termin zeigte; mit Mittwoch und Donnerstag
+        # untereinander gehoert sie in die Zeile ihres Tages, sonst
+        # ist nicht zu sehen, welchen von beiden sie meint.
         #
 
-        self.count = QLabel("")
+        self.status = QLabel("")
 
-        self.count.setFont(font("small"))
+        self.status.setFont(font("small"))
 
         restyle(
-            self.count,
+            self.status,
             f"color:{tokens.TEXT['secondary']};background:transparent;",
         )
 
-        header.addWidget(self.count)
+        self.status.setVisible(False)
+
+        header.addWidget(self.status)
 
         self.addLayout(header)
 
@@ -320,26 +468,24 @@ class RosterCard(Card):
 
         text.addWidget(self.title)
 
-        self.when = QLabel("")
+        #
+        # Je Termin ein Block. Sie werden einmal gebaut und danach nur
+        # noch beschriftet - dieselbe Regel wie bei den Zeilen unter
+        # `gui/widgets/tv/`: ein Neubau bei jedem `refresh()` waere
+        # Arbeit fuer ein Bild, das sich meist gar nicht aendert.
+        #
 
-        self.when.setFont(font("body"))
+        self.days = QVBoxLayout()
 
-        restyle(
-            self.when,
-            f"color:{tokens.TEXT['primary']};background:transparent;",
-        )
+        self.days.setContentsMargins(0, 0, 0, 0)
 
-        self.when.setVisible(False)
+        self.days.setSpacing(tokens.SPACE[3])
 
-        text.addWidget(self.when)
-
-        self.strip = RosterStrip()
-
-        self.strip.setVisible(False)
+        self._blocks: list[DayBlock] = []
 
         text.addSpacing(tokens.SPACE[1])
 
-        text.addWidget(self.strip)
+        text.addLayout(self.days)
 
         self.explanation = QLabel(
             "Sobald im Discord ein Termin steht, erscheint er hier - "
@@ -412,9 +558,17 @@ class RosterCard(Card):
 
     # --------------------------------------------------
 
-    def apply(self, schedule, day):
+    def apply(self, schedule, days):
         """
-        `schedule` ist ein `RaidSchedule`, `day` sein nächster Termin.
+        `schedule` ist ein `RaidSchedule`, `days` seine noch
+        bevorstehenden Termine (`upcoming_days()`), der naechste zuerst.
+
+        Beim Standardraid sind das **zwei**: Mittwoch und Donnerstag
+        stehen untereinander, jeder mit seiner eigenen Zahl, seinem
+        eigenen Streifen und seinem eigenen Satz. Sie sind zwei
+        Anmeldungen und keine zwei Ansichten derselben - eine
+        gemeinsame Zahl haette den Donnerstag hinter dem Mittwoch
+        verschwinden lassen, und genau darum geht es hier.
 
         Beides kann leer sein - dann steht wieder da, dass nichts
         bekannt ist. Der Zustand "es gibt einen Raid, aber alle
@@ -422,20 +576,22 @@ class RosterCard(Card):
         bekommt deshalb dieselbe Auskunft.
         """
 
-        if not getattr(schedule, "known", False) or day is None:
+        days = list(days or [])
+
+        if not getattr(schedule, "known", False) or not days:
 
             self.title.setVisible(False)
 
-            self.when.setVisible(False)
-
-            self.strip.setVisible(False)
+            self._show_days(0)
 
             self.explanation.setText(
                 "Sobald im Discord ein Termin steht, erscheint er "
                 "hier - mit Datum, Uhrzeit und der Aufstellung."
             )
 
-            self.count.setText("")
+            self.explanation.setVisible(True)
+
+            self.status.setVisible(False)
 
             self.parallel.setVisible(False)
 
@@ -445,21 +601,24 @@ class RosterCard(Card):
 
         self.title.setVisible(True)
 
-        self.when.setText(day_text(day))
+        for block, day in zip(self._blocks_for(len(days)), days):
+            block.apply(schedule, day)
 
-        self.when.setVisible(True)
+        self._show_days(len(days))
 
-        self.count.setText(count_text(day, schedule.raid_size))
+        #
+        # Die Erklaerung darunter ist jetzt allein der Platzhalter fuer
+        # "nichts bekannt" - was zu einem Termin zu sagen ist, sagt
+        # sein eigener Block.
+        #
 
-        groups = _slot_groups(schedule, day)
+        self.explanation.setVisible(False)
 
-        self.strip.setGroups(groups)
+        geschlossen = schedule.signup_status == "locked"
 
-        self.strip.setVisible(bool(groups))
+        self.status.setText("Anmeldung geschlossen" if geschlossen else "")
 
-        self.explanation.setText(
-            self._explanation(schedule, day, bool(groups))
-        )
+        self.status.setVisible(geschlossen)
 
         weitere = others_text(schedule)
 
@@ -469,39 +628,30 @@ class RosterCard(Card):
 
     # --------------------------------------------------
 
-    def _explanation(self, schedule, day, has_strip: bool) -> str:
+    def _blocks_for(self, count: int) -> list[DayBlock]:
         """
-        Die Zeile unter den Streifen.
+        So viele Bloecke, wie Termine anstehen - fehlende werden
+        angelegt, ueberzaehlige bleiben stehen und werden versteckt.
 
-        Mit Streifen sagt sie, **was** fehlt (die Zahl steht schon
-        oben rechts); ohne Streifen bleibt es bei der alten Zeile mit
-        der Zahl, sonst stünde unter dem Termin gar nichts. "Vielleicht"
-        und "Ersatzbank" hängen in beiden Fällen hinten dran - sie
-        gehören neben die Zusagen, nicht hinein.
+        Weggeworfen wird keiner: ein Raid hat heute zwei Termine, und
+        morgen wieder, und ein Widget je Durchgang neu zu bauen kostet
+        Layout fuer ein Bild, das gleich bleibt.
         """
 
-        parts = []
+        while len(self._blocks) < count:
 
-        if has_strip:
+            block = DayBlock()
 
-            parts.append(composition_text(schedule, day))
+            self._blocks.append(block)
 
-        else:
+            self.days.addWidget(block)
 
-            parts.append(signup_text(day, schedule.raid_size))
+        return self._blocks
 
-        if has_strip:
+    def _show_days(self, count: int):
 
-            if day.tentative:
-                parts.append(f"{day.tentative} vielleicht")
-
-            if day.bench:
-                parts.append(f"{day.bench} Ersatzbank")
-
-        if schedule.signup_status == "locked":
-            parts.append("Anmeldung geschlossen")
-
-        return " · ".join(part for part in parts if part)
+        for index, block in enumerate(self._blocks):
+            block.setVisible(index < count)
 
 
 class UpdateRow(QFrame):
@@ -2249,9 +2399,16 @@ class OverviewPage(Page):
 
         schedule = self._schedule()
 
-        day = schedule.next_day() if schedule is not None else None
+        #
+        # Alle noch bevorstehenden Termine, nicht nur der naechste:
+        # Mittwoch und Donnerstag sind zwei Anmeldungen, und wer am
+        # Dienstag hinsieht, will beide sehen. Der Countdown im Kopf
+        # bleibt beim naechsten - er hat genau einen Platz.
+        #
 
-        self.roster.apply(schedule, day)
+        days = schedule.upcoming_days() if schedule is not None else ()
+
+        self.roster.apply(schedule, days)
 
         self._refresh_countdown()
 

@@ -664,3 +664,156 @@ def test_eine_verschachtelte_antwort_wird_nicht_weiterverfolgt():
     assert len(schedule.others) == 1
 
     assert schedule.others[0].others == ()
+
+
+#
+# =========================
+# Beide Raidtage
+# =========================
+#
+
+
+def test_both_raid_days_are_upcoming_before_the_raid():
+    """
+    Mittwoch **und** Donnerstag sind zwei Anmeldungen: wer am Mittwoch
+    zusagt, muss am Donnerstag nicht können. Die Übersicht zeigt
+    deshalb beide - vorher nannte sie am Dienstag nur den Mittwoch,
+    und ob der Donnerstag überhaupt Leute hatte, war in der App nicht
+    zu sehen, obwohl es in derselben Antwort stand.
+    """
+
+    schedule = parse_schedule(PAYLOAD)
+
+    days = schedule.upcoming_days(_moment("2026-08-11T18:30:00+02:00"))
+
+    assert [day.key for day in days] == ["wednesday", "thursday"]
+
+    #
+    # Jeder Tag trägt seine eigenen Zahlen - genau das ist der Grund,
+    # sie überhaupt getrennt zu zeigen.
+    #
+
+    assert [day.active for day in days] == [18, 20]
+
+
+def test_the_running_day_stays_in_the_list():
+    """
+    Mittwoch 21:00: der Raid läuft. Er verschwindet nicht aus der
+    Liste, sonst stünde mitten im Raid nur noch der Donnerstag da.
+    """
+
+    schedule = parse_schedule(PAYLOAD)
+
+    days = schedule.upcoming_days(_moment("2026-08-12T21:00:00+02:00"))
+
+    assert [day.key for day in days] == ["wednesday", "thursday"]
+
+
+def test_a_day_already_behind_us_does_not_come_back_a_week_later():
+    """
+    Die Falle an dieser Stelle. Der Bot nennt zu jedem Wochentag
+    dessen **nächstes Vorkommen**; am Donnerstag steht der Mittwoch
+    derselben Antwort deshalb bereits auf der kommenden Woche - mit
+    den Zusagen der vergangenen, denn die Anmeldung ist dieselbe.
+
+    Neben dem heutigen Donnerstag wäre das eine Aufstellung zu einem
+    Datum, zu dem sie nicht gehört. Solange nur der nächste Termin
+    angezeigt wurde, fiel es nicht auf; untereinander schon.
+    """
+
+    payload = dict(PAYLOAD)
+
+    payload["days"] = [
+        dict(
+            PAYLOAD["days"][1],
+        ),
+        #
+        # Der Mittwoch, wie der Bot ihn am Donnerstag schickt: eine
+        # Woche weiter, die Zahlen unverändert.
+        #
+        dict(
+            PAYLOAD["days"][0],
+            date="2026-08-19",
+            starts_at="2026-08-19T20:00:00+02:00",
+        ),
+    ]
+
+    schedule = parse_schedule(payload)
+
+    days = schedule.upcoming_days(_moment("2026-08-13T09:00:00+02:00"))
+
+    assert [day.key for day in days] == ["thursday"]
+
+
+def test_after_the_raid_week_both_days_are_ahead_again():
+    """
+    Freitag: beide Termine liegen wieder vor uns, einen Tag
+    auseinander - der Schnitt aus dem Test darüber darf hier nichts
+    wegnehmen.
+    """
+
+    payload = dict(PAYLOAD)
+
+    payload["days"] = [
+        dict(
+            PAYLOAD["days"][0],
+            date="2026-08-19",
+            starts_at="2026-08-19T20:00:00+02:00",
+        ),
+        dict(
+            PAYLOAD["days"][1],
+            date="2026-08-20",
+            starts_at="2026-08-20T20:00:00+02:00",
+        ),
+    ]
+
+    schedule = parse_schedule(payload)
+
+    days = schedule.upcoming_days(_moment("2026-08-14T12:00:00+02:00"))
+
+    assert [day.key for day in days] == ["wednesday", "thursday"]
+
+
+def test_the_next_day_is_the_first_of_the_upcoming_ones():
+    """
+    Countdown und Begrüßung haben genau einen Platz. Sie dürfen einen
+    anderen Tag nennen als die Karte darunter zeigt - deshalb rechnet
+    `next_day()` nicht selbst, sondern nimmt den ersten.
+    """
+
+    schedule = parse_schedule(PAYLOAD)
+
+    for text in (
+        "2026-08-11T18:30:00+02:00",
+        "2026-08-12T21:00:00+02:00",
+        "2026-08-13T09:00:00+02:00",
+        "2026-08-20T12:00:00+02:00",
+    ):
+
+        now = _moment(text)
+
+        days = schedule.upcoming_days(now)
+
+        assert schedule.next_day(now) == (days[0] if days else None)
+
+
+def test_a_special_raid_has_exactly_one_day():
+
+    schedule = parse_schedule({
+        "status": "ok",
+        "raid_id": 9,
+        "title": "Ordos",
+        "raid_type": "special",
+        "signup_status": "open",
+        "raid_size": 10,
+        "days": [{
+            "key": "special",
+            "label": "Samstag",
+            "starts_at": "2026-08-15T19:30:00+02:00",
+            "signups": {"active": 7, "tentative": 1, "bench": 0, "absent": 2},
+        }],
+    })
+
+    days = schedule.upcoming_days(_moment("2026-08-11T12:00:00+02:00"))
+
+    assert [day.key for day in days] == ["special"]
