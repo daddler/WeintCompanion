@@ -169,3 +169,103 @@ def test_the_same_content_twice_is_not_a_second_repaint():
     strip.setGroups([SlotGroup("ZUGESAGT", [""] * 10, 15)])
 
     assert repaints == [1]
+
+
+def test_filled_slots_are_painted_in_class_colour():
+    """
+    Das eigentliche Bild: ein Krieger-Kästchen ist braun, ein
+    Priester-Kästchen weiß, ein Magier-Kästchen hellblau. Geprüft wird
+    deshalb am gerenderten Bild und nicht an der Tabelle - genau diese
+    Farben fehlten in der App, obwohl `class_color()` sie kannte: der
+    Bot schickte gar keine Klassen, und der Streifen malte alles in
+    Akzentfarbe.
+    """
+
+    from PySide6.QtGui import QImage
+
+    from gui.theme.wow_colors import class_color
+    from gui.widgets.roster_strip import RosterStrip, SlotGroup
+
+    strip = RosterStrip()
+
+    strip.resize(600, strip.height())
+
+    strip.setGroups([
+        SlotGroup("TANKS", ["Warrior"], 0),
+        SlotGroup("HEILER", ["Priest"], 0),
+        SlotGroup("SCHADEN", ["Mage"], 1),
+    ])
+
+    image = QImage(strip.size(), QImage.Format_ARGB32)
+
+    image.fill(0)
+
+    strip.render(image)
+
+    farben = {
+        QImage.pixelColor(image, x, y).name()
+        for x in range(image.width())
+        for y in range(image.height())
+        if QImage.pixelColor(image, x, y).alpha() == 255
+    }
+
+    for klasse in ("Warrior", "Priest", "Mage"):
+        assert class_color(klasse).lower() in farben, (
+            f"Die Zusage der Klasse {klasse} erscheint nicht in ihrer "
+            f"Klassenfarbe - der Streifen zeigt einen einheitlichen "
+            f"Balken."
+        )
+
+
+def test_a_slot_without_a_class_is_the_accent_and_not_a_guess():
+    """
+    Meldet der Bot nur Zahlen, sind die Plätze in Akzentfarbe. Eine
+    geratene Klasse wäre im Bild von einer gemeldeten nicht zu
+    unterscheiden - dieselbe Linie wie `stars == 0`.
+    """
+
+    from PySide6.QtGui import QImage
+
+    from gui.theme.theme_manager import theme
+    from gui.widgets.roster_strip import RosterStrip, SlotGroup
+
+    strip = RosterStrip()
+
+    strip.resize(600, strip.height())
+
+    strip.setGroups([SlotGroup("ZUGESAGT", [""] * 3, 2)])
+
+    image = QImage(strip.size(), QImage.Format_ARGB32)
+
+    image.fill(0)
+
+    strip.render(image)
+
+    farben = {
+        QImage.pixelColor(image, x, y).name()
+        for x in range(image.width())
+        for y in range(image.height())
+        if QImage.pixelColor(image, x, y).alpha() == 255
+    }
+
+    assert theme().accent_base().lower() in farben
+
+
+def test_the_strip_understands_the_class_as_the_bot_writes_it():
+    """
+    Drei Schreibweisen derselben Klasse: der englische Anzeigename aus
+    WarcraftLogs, das Kürzel des Addons und - weil die Anmeldung im
+    Discord auf Deutsch geführt wird - das deutsche Wort. Alle drei
+    müssen dieselbe Farbe treffen; eine unbekannte Schreibweise ist im
+    Streifen grau und damit von "keine Klasse gemeldet" nicht zu
+    unterscheiden.
+    """
+
+    from gui.theme.wow_colors import CLASS_COLORS, class_color
+
+    for schreibweise in ("Death Knight", "DEATHKNIGHT", "Todesritter"):
+        assert class_color(schreibweise) == CLASS_COLORS["Death Knight"]
+
+    assert class_color("Mönch") == CLASS_COLORS["Monk"]
+
+    assert class_color("Krieger") == CLASS_COLORS["Warrior"]

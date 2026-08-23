@@ -16,6 +16,16 @@ Companion schweigt dann und die Übersicht sagt weiterhin „kein Termin
 bekannt". Dasselbe Muster wie bei der WarcraftLogs- und der
 Zugriffsprofil-Brücke.
 
+**`days[].roster` liefert der Bot seit dieser Änderung mit** — vorher
+schickte er allein die Zahlen, und die Übersicht konnte daraus nur
+einen einfarbigen Streifen malen: die Klassen kannte sie nicht, und
+geraten hätte sie sie nicht. `composition` schickt er weiterhin
+**nicht**: eine Sollstärke je Rolle steht in seiner Datenbank nirgends
+(der Raid kennt nur `raid_size`), und ein erfundenes Soll wäre für die
+halbe Gilde falsch. Die offenen Plätze stehen deshalb als eine Reihe
+„FREI" hinter den Rollen, statt sich auf Tanks, Heiler und Schaden zu
+verteilen.
+
 ## Wozu das Ganze
 
 Die Übersicht trug rechts oben dauerhaft **„KEIN TERMIN BEKANNT"**,
@@ -77,9 +87,9 @@ Authorization: Bearer <companion_token>
         "absent": 3
       },
       "roster": [
-        { "role": "tank",   "class": "Warrior" },
-        { "role": "healer", "class": "Priest" },
-        { "role": "dps",    "class": "Mage" }
+        { "role": "tank",   "class": "WARRIOR" },
+        { "role": "healer", "class": "PRIEST" },
+        { "role": "dps",    "class": "MAGE" }
       ]
     },
     {
@@ -127,11 +137,21 @@ ob der Abend stattfindet.
 - `role` ist `tank`, `healer` oder `dps`; `heiler`, `heal`, `damage`,
   `dd`, `melee`, `ranged` werden ebenfalls erkannt. Ein **unbekannter**
   Wert lässt den Eintrag weg, statt ihn unter „Schaden" abzulegen: eine
-  falsche Rolle gibt sich nicht als Lücke zu erkennen.
-- `class` ist der englische Klassenname wie im Combat-Log
-  (`Death Knight`, `Warrior`, …). Fehlt er, ist der Platz in
-  Akzentfarbe statt in Klassenfarbe — die Aufstellung stimmt, nur das
-  Bild ist ärmer.
+  falsche Rolle gibt sich nicht als Lücke zu erkennen. Der Bot schickt
+  keinen: eine Anmeldung ohne Spezialisierung steht bei ihm unter
+  `dps` — so wie sie auch im Anmelde-Beitrag unter DPS steht und vom
+  Kalender als DPS eingeladen wird. Ein Platz, der in keinem Streifen
+  auftaucht, wäre die schlechtere Auskunft: die Aufstellung wäre
+  kürzer als die Zahl der Zusagen, ohne dass zu sehen wäre warum.
+- `class` ist die Klasse in englischer Schreibweise. Der Bot schickt
+  das Kürzel aus `UnitClass()` (`WARRIOR`, `DEATHKNIGHT` — er führt
+  seine Anmeldungen auf Deutsch und übersetzt vor dem Senden); der
+  Anzeigename aus dem Combat-Log (`Death Knight`) wird genauso
+  erkannt, und seit 2.3.4 auch das deutsche Wort, damit eine
+  unübersetzte Zeile nicht farblos ankommt. Fehlt die Klasse, ist der
+  Platz in Akzentfarbe statt in Klassenfarbe — die Aufstellung stimmt,
+  nur das Bild ist ärmer. Eine **unbekannte** Schreibweise ist grau;
+  das ist absichtlich von „keine Angabe" unterscheidbar.
 - `roster` beschreibt genau die **aktiven** Zusagen. „Vielleicht" und
   „Ersatzbank" gehören nicht hinein; sie stehen weiterhin als Zahl
   daneben.

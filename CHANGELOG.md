@@ -2,6 +2,36 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.3.4
+
+**Die Aufstellung auf der Übersicht zeigt endlich die Klassenfarben.**
+Die Reihen mit den Plätzen gab es schon, aber jeder besetzte Platz
+hatte dieselbe Farbe - man sah, *wie viele* zugesagt hatten, und nicht,
+*was* zugesagt hatte. Das lag nicht an der Anzeige: der Bot schickte
+nur Zahlen. Welche Klasse hinter einer Zusage steckt, wusste die
+Anwendung nicht, und geraten hätte sie es nicht - eine erfundene Klasse
+wäre in der Aufstellung von einer gemeldeten nicht zu unterscheiden
+gewesen.
+
+Der Bot nennt jetzt zu jeder Zusage Rolle und Klasse (weiterhin ohne
+einen einzigen Namen - die stehen wie bisher nur im Roster hinter der
+Raidlead-Rolle). Damit stehen die Tanks, die Heiler und der Schaden in
+eigenen Reihen, jeder Platz in der Farbe seiner Klasse, und die noch
+offenen Plätze dahinter als Lücke. Ein Blick sagt jetzt, ob die vier
+fehlenden Zusagen Heiler oder Schaden sind - also genau das, wofür man
+sonst ins Discord sieht.
+
+Zwei Kleinigkeiten am Rand: Wer sich angemeldet hat, ohne für diesen
+Raid eine Klasse zu wählen, erscheint mit der Klasse aus seiner letzten
+Anmeldung - dieselbe Vorbelegung, die auch der Anmelde-Beitrag im
+Discord zeigt. Und die deutschen Klassennamen aus dem Discord treffen
+nun ebenfalls ihre Farbe; vorher wäre so eine Zeile grau geblieben, und
+Grau heisst hier "keine Klasse gemeldet".
+
+Wichtig: sichtbar wird das erst, wenn der Bot in der neuen Fassung
+läuft. Bis dahin bleibt es beim bisherigen einen Streifen - die
+Aufstellung stimmt dann, nur das Bild ist ärmer.
+
 ## 2.3.3
 
 **Ein wartendes Update meldet sich jetzt von selbst.**

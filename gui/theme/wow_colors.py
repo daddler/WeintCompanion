@@ -139,11 +139,36 @@ CLASS_FILE_NAMES: dict[str, str] = {
 }
 
 
+#
+# --------------------------------------------------
+# Die dritte Schreibweise: die deutsche
+# --------------------------------------------------
+#
+# Der Bot fuehrt seine Anmeldungen auf Deutsch - "Todesritter",
+# "Mönch", so wie es in den Auswahlmenues von Discord steht. Er
+# uebersetzt sie zwar, bevor er sie schickt, aber diese Tabelle ist
+# billig und die Alternative teuer: eine Klasse, die hier nicht
+# ankommt, ist in der Aufstellung grau, und Grau heisst dort "Klasse
+# nicht gemeldet". Der Unterschied zwischen "andere Schreibweise" und
+# "keine Angabe" ist genau der, den `class_icon()` mit seinem `None`
+# zieht - additiv gedacht wie `player_abilities`: ein fehlender
+# Eintrag kostet die Zuordnung, er erfindet keine.
+#
+# Der Schluessel ist grossgeschrieben und ohne Umlaut-Sonderfaelle
+# nachgeschlagen, damit "Mönch" und "MÖNCH" dasselbe treffen.
+#
+
+CLASS_GERMAN_NAMES: dict[str, str] = {
+    label.upper(): name
+    for name, label in CLASS_LABELS.items()
+}
+
+
 def normalize_class(class_name: str) -> str:
     """
-    Beide Schreibweisen auf den englischen Anzeigenamen bringen. Was
-    keine von beiden ist, bleibt unverändert - dieselbe Regel wie bei
-    unbekannten Spezialisierungen im Analyzer.
+    Alle drei Schreibweisen auf den englischen Anzeigenamen bringen.
+    Was keine von ihnen ist, bleibt unverändert - dieselbe Regel wie
+    bei unbekannten Spezialisierungen im Analyzer.
     """
 
     class_name = (class_name or "").strip()
@@ -151,8 +176,13 @@ def normalize_class(class_name: str) -> str:
     if class_name in CLASS_COLORS:
         return class_name
 
+    key = class_name.upper()
+
+    if key in CLASS_GERMAN_NAMES:
+        return CLASS_GERMAN_NAMES[key]
+
     return CLASS_FILE_NAMES.get(
-        class_name.upper().replace(" ", ""),
+        key.replace(" ", ""),
         class_name,
     )
 
