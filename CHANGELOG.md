@@ -98,6 +98,29 @@ dringender als ein Durchschnitt. Ohne aufgezeichnete Pulls verhält
 sich der Plan exakt wie bisher. Der Plan im Spiel übernimmt dieselbe
 Auswahl, er kommt aus derselben Stelle.
 
+**Ein wartendes Update sieht man jetzt, ohne danach zu suchen.**
+Der Hinweis auf der Übersicht war eine Karte in Kartenfarbe auf einer
+Karte in Kartenfarbe: gleiche Fläche, gleicher Radius, keine Kante. Auf
+einer Seite, die daneben den nächsten Raid, die Aufstellung und den
+letzten Pull trägt, stand ausgerechnet der eine Block, der eine
+Entscheidung verlangt, am unauffälligsten da — und sein Knopf war ein
+Umrissknopf neben dem vollflächigen „WoW starten" direkt darunter, also
+die scheinbar zweitwichtigere von zwei Handlungen.
+
+Der Hinweis trägt jetzt eine senkrechte Leiste in Akzentfarbe, eine
+getönte Fläche mit feiner Kante, das Download-Symbol auf einer eigenen
+Kachel und den Hauptknopf der Anwendung. Um die Karte liegt ein Ring,
+der langsam heller und dunkler wird — im selben Takt wie der Warnpunkt
+am Eintrag „Addon & Updates", denn beide lesen dieselbe Uhr; zwei
+eigene Zeitgeber liefen gegeneinander und sähen nach einem Fehler aus.
+
+Zwei Rücksichten sind dabei eingebaut. Läuft in WeintTV gerade ein Pull,
+**steht der Ring still**: ein Update kann warten, ein laufender Kampf
+nicht. Und wer unter Einstellungen → Erscheinungsbild „Bewegung
+reduzieren" gewählt hat, bekommt den Ring in **voller** Stärke, nur
+eben unbewegt — der Hinweis verschwindet nicht, er hört bloss auf, sich
+zu bewegen.
+
 ## 2.3.4
 
 **Die Aufstellung auf der Übersicht zeigt endlich die Klassenfarben.**

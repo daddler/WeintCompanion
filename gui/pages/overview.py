@@ -32,9 +32,18 @@ import threading
 from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
+    QRectF,
     Qt,
     QTimer,
     Signal,
+)
+from PySide6.QtGui import (
+    QColor,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QRegion,
 )
 from PySide6.QtWidgets import (
     QFrame,
@@ -74,15 +83,18 @@ from core.raid_schedule import (
     signup_text,
 )
 from gui.dialogs.changelog_dialog import show_changelog
+from gui.motion.pulse_clock import KIND_WARN, OPACITY_LOW, pulse_clock
 from gui.pages._page import Page
 from gui.theme import tokens
 from gui.theme.fonts import font
-from gui.theme.motion import curve, duration
+from gui.theme.icons import tinted_pixmap
+from gui.theme.motion import curve, duration, is_reduced
 from gui.theme.restyle import restyle
 from gui.theme.theme_manager import theme
 from gui.widgets.card import Card
 from gui.widgets.chip import Chip
 from gui.widgets.eyebrow import eyebrow_label
+from gui.widgets.hero_banner import HeroButton
 from gui.widgets.sparkline import Sparkline
 from gui.widgets.status_dot import StatusDot
 from gui.widgets.progress_ring import ProgressRing
@@ -100,6 +112,102 @@ from gui.widgets.wrapped_label import enable_wrap
 EXCERPT_LINES = 3
 
 EXCERPT_CHARS = 260
+
+
+#
+# Die gemalten Masse des Update-Hinweises.
+#
+# Die Leiste ist absichtlich schmal: sie soll die Zeile anschieben,
+# nicht sie einrahmen. Drei Pixel sind auf jedem Bildschirm noch eine
+# Kante und auf keinem schon ein Balken.
+#
+
+RAIL_WIDTH = 3
+
+ICON_TILE = 38
+
+ICON_GLYPH = 20
+
+#
+# Deckkraft der getoenten Flaeche und ihres Rahmens. Beide liegen
+# unter den Chip-Werten (TINT_SURFACE/TINT_BORDER): der Chip ist eine
+# kleine Pille, diese Flaeche ist gross, und dieselbe Deckkraft waere
+# ueber diese Groesse eine farbige Kachel statt einer Tonung.
+#
+
+SURFACE_ALPHA = 0.075
+
+BORDER_ALPHA = 0.26
+
+#
+# Der atmende Ring um die Karte. `RING_ALPHA_MAX` ist der **Ruhewert** -
+# er steht, wenn nicht gepulst werden darf (reduzierte Bewegung, oder
+# ein sichtbares LIVE-Zeichen anderswo). Der Schein innen traegt einen
+# Bruchteil davon.
+#
+
+RING_ALPHA_MIN = 0.24
+
+RING_ALPHA_MAX = 0.62
+
+GLOW_SHARE = 0.30
+
+#
+# Wie breit das Band an der Kante ist, das der Ring einnimmt - und
+# damit das einzige, was je Bild neu gezeichnet werden muss. Es liegt
+# unter der Innenpolsterung der Karte (16 px in der dichten, 20 px in
+# der bequemen Einstellung), die Beschriftungen darin sind also nicht
+# betroffen.
+#
+
+RING_BAND = 6
+
+
+def ring_strength(opacity: float) -> float:
+    """
+    Die Deckkraft des Rings zu einer Phase der Pulsuhr.
+
+    Eigene Funktion und nicht drei Zeilen im `paintEvent`, weil hier
+    die eine Eigenschaft steht, die sich nicht ansehen laesst: bei
+    **1.0** - also wenn gerade nicht gepulst werden darf - kommt
+    `RING_ALPHA_MAX` heraus und nicht etwa der Mittelwert. Reduzierte
+    Bewegung und ein sichtbares LIVE-Zeichen halten die Uhr an, und
+    der Hinweis muss dann in voller Staerke stehenbleiben statt in dem
+    Zwischenwert, den ein "Mittelwert bei Stillstand" ergaebe. Ein
+    stehengebliebener, halb sichtbarer Ring saehe aus wie ein
+    Zeichenfehler.
+
+    Die untere Grenze kommt aus `pulse_clock`, weil sie dort gesetzt
+    wird - eine zweite 0.35 hier waere eine Zahl, die stillschweigend
+    auseinanderlaufen kann.
+    """
+
+    share = (opacity - OPACITY_LOW) / (1.0 - OPACITY_LOW)
+
+    share = max(0.0, min(1.0, share))
+
+    return RING_ALPHA_MIN + (RING_ALPHA_MAX - RING_ALPHA_MIN) * share
+
+
+def ring_alpha() -> float:
+    """
+    Die Deckkraft, die der Ring in diesem Augenblick tragen soll.
+
+    `is_reduced()` wird hier gefragt und nicht der Uhr überlassen: die
+    Uhr entscheidet über ihren Zeitgeber nur beim An- und Abmelden, und
+    wer die Einstellung umlegt, während die Karte auf dem Schirm steht,
+    meldet sich dabei weder an noch ab. Der `StatusDot` fragt aus
+    demselben Grund in seinem eigenen `paintEvent` - wer sich darauf
+    verlässt, dass die Uhr schon stehen wird, bewegt sich bei genau der
+    Einstellung weiter, die das verbietet.
+    """
+
+    if is_reduced():
+        return RING_ALPHA_MAX
+
+    return ring_strength(
+        pulse_clock().opacity(KIND_WARN)
+    )
 
 
 def _excerpt(entry) -> str:
@@ -704,6 +812,31 @@ class UpdateRow(QFrame):
     """
     Eine Komponente mit wartendem Update: Name, Fassung, Auszug,
     Knopf.
+
+    **Warum die Zeile gemalt wird und keine Stylesheet-Fläche mehr
+    ist.** Bis 2.3.5 war sie eine Karte in Kartenfarbe auf einer Karte
+    in Kartenfarbe - dieselbe Fläche, derselbe Radius, kein Rand. Auf
+    dem Bildschirm stand damit an der auffälligsten Stelle der
+    Übersicht ein Block, der sich von der Aufstellung darunter nur
+    durch seine Beschriftung unterschied. Ein wartendes Update ist
+    aber das einzige auf dieser Seite, das eine **Handlung** verlangt;
+    es muss sich vom Rest unterscheiden, bevor jemand es liest.
+
+    Drei gemalte Mittel dafür, alle drei in Akzentfarbe und alle drei
+    im `paintEvent` gelesen - eine im Konstruktor gemerkte Farbe
+    überlebt den Wechsel der Akzentvariante und bleibt lautlos falsch
+    (siehe CLAUDE.md):
+
+    1. **Eine senkrechte Leiste** an der linken Kante. Sie ist das
+       Zeichen, das man auch dann sieht, wenn man die Seite nur
+       überfliegt.
+    2. **Eine getönte Fläche** statt der Kartenfarbe, damit die Zeile
+       vor der Karte liegt statt in ihr.
+    3. **Ein 1-px-Rahmen**, weil eine getönte Fläche ohne Kante bei
+       dieser Deckkraft als Verschmutzung des Verlaufs gelesen wird.
+
+    Dazu die Symbolkachel: der Pfeil nach unten ist das einzige
+    Element hier, das ohne Sprache sagt, worum es geht.
     """
 
     updateRequested = Signal(str)
@@ -718,24 +851,47 @@ class UpdateRow(QFrame):
 
         self.setObjectName("updateRow")
 
-        self.setAttribute(Qt.WA_StyledBackground, True)
+        #
+        # **Kein** WA_StyledBackground und keine Flächenregel: die
+        # Zeile malt ihre Fläche selbst, und zwar mit Deckkraft. Eine
+        # vom Stylesheet gefüllte Fläche läge deckend darüber, und der
+        # Verlauf der Karte wäre darunter weg.
+        #
 
-        restyle(
-            self,
-            f"""
-            QFrame#updateRow{{
-                background:{tokens.SURFACE["card"]};
-                border:none;
-                border-radius:{tokens.RADIUS["md"]}px;
-            }}
-            """,
+        root = QHBoxLayout(self)
+
+        root.setContentsMargins(
+            RAIL_WIDTH + 13,
+            12,
+            14,
+            12,
         )
 
-        root = QVBoxLayout(self)
+        root.setSpacing(tokens.SPACE[2])
 
-        root.setContentsMargins(14, 12, 14, 12)
+        #
+        # Die Symbolkachel. Sie steht oben statt mittig: die Zeile
+        # wächst mit dem Auszug, und ein mittig ausgerichtetes Symbol
+        # wandert dann von der Überschrift weg, zu der es gehört.
+        #
 
-        root.setSpacing(6)
+        self.icon = QLabel()
+
+        self.icon.setFixedSize(ICON_TILE, ICON_TILE)
+
+        self.icon.setAlignment(Qt.AlignCenter)
+
+        self.icon.setAttribute(Qt.WA_StyledBackground, True)
+
+        root.addWidget(self.icon, 0, Qt.AlignTop)
+
+        body = QVBoxLayout()
+
+        body.setContentsMargins(0, 0, 0, 0)
+
+        body.setSpacing(6)
+
+        root.addLayout(body, 1)
 
         head = QHBoxLayout()
 
@@ -767,7 +923,7 @@ class UpdateRow(QFrame):
 
         head.addStretch(1)
 
-        root.addLayout(head)
+        body.addLayout(head)
 
         #
         # Der Auszug ist der eigentliche Grund für diesen Hinweis: ein
@@ -786,7 +942,7 @@ class UpdateRow(QFrame):
             f"color:{tokens.TEXT['secondary']};background:transparent;",
         )
 
-        root.addWidget(self.excerpt)
+        body.addWidget(self.excerpt)
 
         actions = QHBoxLayout()
 
@@ -794,11 +950,15 @@ class UpdateRow(QFrame):
 
         actions.setSpacing(tokens.SPACE[1])
 
-        self.install = QPushButton("Jetzt aktualisieren")
+        #
+        # Der Hauptknopf der Anwendung statt des sekundären: eine
+        # Umrissfläche neben "WoW starten" in Vollfläche liest sich als
+        # die weniger wichtige der beiden Handlungen - und genau
+        # umgekehrt ist es hier gemeint. `HeroButton` nimmt seine
+        # Farben zur Laufzeit aus dem Theme, folgt also dem Akzent.
+        #
 
-        self.install.setObjectName("secondaryAccent")
-
-        self.install.setCursor(Qt.PointingHandCursor)
+        self.install = HeroButton("Jetzt aktualisieren")
 
         self.install.clicked.connect(self._request_update)
 
@@ -816,7 +976,55 @@ class UpdateRow(QFrame):
 
         actions.addStretch(1)
 
-        root.addLayout(actions)
+        body.addLayout(actions)
+
+        self._apply_accent()
+
+        #
+        # Gebundene Methode, keine Lambda: `theme()` ist ein Singleton
+        # und lebt so lange wie der Prozess - eine Closure darin hielte
+        # diese Zeile für immer am Leben (siehe CLAUDE.md und
+        # tests/test_theme_connections.py).
+        #
+
+        theme().accent_changed.connect(self._on_accent)
+
+    # --------------------------------------------------
+
+    def _on_accent(self, _name: str = ""):
+
+        self._apply_accent()
+
+        self.update()
+
+    def _apply_accent(self):
+        """
+        Symbol und Kachel neu einfärben.
+
+        Das Symbol ist eine Pixmap und damit das eine Element hier, das
+        einen Akzentwechsel nicht durch bloßes Neuzeichnen mitmacht -
+        es muss neu eingefärbt werden.
+        """
+
+        self.icon.setPixmap(
+            tinted_pixmap(
+                "download",
+                theme().accent_light(),
+                ICON_GLYPH,
+            )
+        )
+
+        restyle(
+            self.icon,
+            f"""
+            QLabel{{
+                background:{tokens.tint(
+                    theme().accent_base(), 0.14
+                )};
+                border-radius:{tokens.RADIUS["sm"]}px;
+            }}
+            """,
+        )
 
     # --------------------------------------------------
 
@@ -849,6 +1057,84 @@ class UpdateRow(QFrame):
         if note:
             self.excerpt.setText(note)
 
+    # --------------------------------------------------
+
+    def paintEvent(self, event):
+
+        painter = QPainter(self)
+
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+
+        radius = float(tokens.RADIUS["md"])
+
+        base = QColor(theme().accent_base())
+
+        shape = QPainterPath()
+
+        shape.addRoundedRect(rect, radius, radius)
+
+        #
+        # Fläche
+        #
+
+        surface = QColor(base)
+
+        surface.setAlphaF(SURFACE_ALPHA)
+
+        painter.setPen(Qt.NoPen)
+
+        painter.setBrush(surface)
+
+        painter.drawPath(shape)
+
+        #
+        # Die Leiste. Sie wird gegen die Kartenform beschnitten statt
+        # als eigenes Rechteck gezeichnet - sonst stünde sie an den
+        # beiden linken Ecken über die Rundung hinaus.
+        #
+
+        painter.save()
+
+        painter.setClipPath(shape)
+
+        rail = QLinearGradient(
+            rect.left(),
+            rect.top(),
+            rect.left(),
+            rect.bottom(),
+        )
+
+        rail.setColorAt(0.0, QColor(theme().accent_light()))
+        rail.setColorAt(1.0, base)
+
+        painter.fillRect(
+            QRectF(
+                rect.left(),
+                rect.top(),
+                float(RAIL_WIDTH),
+                rect.height(),
+            ),
+            rail,
+        )
+
+        painter.restore()
+
+        #
+        # Rahmen
+        #
+
+        border = QColor(base)
+
+        border.setAlphaF(BORDER_ALPHA)
+
+        painter.setBrush(Qt.NoBrush)
+
+        painter.setPen(QPen(border, 1))
+
+        painter.drawPath(shape)
+
 
 class UpdateCard(Card):
     """
@@ -870,6 +1156,31 @@ class UpdateCard(Card):
     sichtbare Karte "alles aktuell" wäre genau der Fehler, den die
     Übersicht 2.0 beim Dashboard behoben hat: der Bereich, den man bei
     jedem Start zuerst sieht, sagt sonst etwas, das man schon weiß.
+
+    **Und sie atmet.** Die Karte trägt einen Ring in Akzentfarbe,
+    dessen Deckkraft an der Pulsuhr hängt - derselben, an der der
+    Warnpunkt am Navigationseintrag "Addon & Updates" hängt. Beide
+    lesen dieselbe Phase und schwingen deshalb im Gleichtakt; zwei
+    eigene Zeitgeber liefen gegeneinander und sähen nach einem Fehler
+    aus (siehe `gui/motion/pulse_clock.py`). Drei Eigenschaften der Uhr
+    sind hier der Grund, sie überhaupt zu benutzen statt selbst zu
+    animieren:
+
+    - **Vorrang.** Ist irgendwo ein LIVE-Zeichen sichtbar - WeintTV
+      während eines laufenden Pulls -, steht der Ring still. Ein
+      Update kann warten, ein laufender Kampf nicht.
+    - **Reduzierte Bewegung.** Dann steht der Ring in **voller**
+      Stärke (`ring_alpha()`). Der Hinweis verschwindet also nicht, er
+      hört nur auf sich zu bewegen - das ist der Unterschied zwischen
+      einer abgeschalteten Animation und einer abgeschalteten Aussage.
+    - **Kosten.** Die Uhr läuft ohnehin, solange ein Update wartet
+      (der Navigationspunkt ist immer sichtbar); dieser Ring bestellt
+      keinen zweiten Zeitgeber, er liest nur mit.
+
+    Angemeldet wird bei der **Sichtbarkeit**, nicht beim Bauen: die
+    Karte wird auf jeder Übersicht gebaut, aber nur gezeigt, wenn
+    etwas aussteht - eine Anmeldung im Konstruktor hielte die Uhr
+    dauerhaft am Laufen, obwohl niemand pulst.
     """
 
     updateRequested = Signal(str)
@@ -879,6 +1190,8 @@ class UpdateCard(Card):
     def __init__(self, parent=None):
 
         super().__init__(accent=True, parent=parent)
+
+        self._pulsing = False
 
         header = QHBoxLayout()
 
@@ -895,7 +1208,13 @@ class UpdateCard(Card):
 
         header.addStretch(1)
 
-        self.chip = Chip("1 UPDATE", "warn")
+        #
+        # Mit Punkt: er trägt dieselbe Phase wie der Ring und wie das
+        # Abzeichen in der Navigationsspalte. Der Chip allein war eine
+        # ruhende Angabe unter mehreren ruhenden Angaben.
+        #
+
+        self.chip = Chip("1 UPDATE", "warn", dot=True)
 
         header.addWidget(self.chip)
 
@@ -938,6 +1257,143 @@ class UpdateCard(Card):
 
         self.chip.setText(
             f"{count} UPDATES" if count != 1 else "1 UPDATE"
+        )
+
+        #
+        # Auch die Rubrik: "UPDATE VERFÜGBAR" über zwei Zeilen liest
+        # sich wie ein Fehler in der Karte.
+        #
+
+        self.eyebrow.setText(
+            "UPDATES VERFÜGBAR" if count != 1 else "UPDATE VERFÜGBAR"
+        )
+
+    # --------------------------------------------------
+    # Puls
+    # --------------------------------------------------
+
+    def showEvent(self, event):
+
+        super().showEvent(event)
+
+        self._claim()
+
+    def hideEvent(self, event):
+
+        super().hideEvent(event)
+
+        self._release()
+
+    def _claim(self):
+
+        if self._pulsing:
+            return
+
+        clock = pulse_clock()
+
+        clock.subscribe(KIND_WARN)
+
+        clock.tick.connect(self._on_tick)
+
+        self._pulsing = True
+
+    def _release(self):
+
+        if not self._pulsing:
+            return
+
+        clock = pulse_clock()
+
+        clock.unsubscribe(KIND_WARN)
+
+        try:
+            clock.tick.disconnect(self._on_tick)
+
+        except (RuntimeError, TypeError):
+            #
+            # Bereits getrennt - beim Abbau der Seite kann Qt die
+            # Verbindung vor uns gelöst haben.
+            #
+            pass
+
+        self._pulsing = False
+
+    def _on_tick(self):
+        """
+        Nur das Band an der Kante neu anfordern, nicht die Karte.
+
+        Ein `update()` ohne Bereich zeichnete sechzig Mal je Sekunde
+        die **ganze** Karte neu - beide Zeilen mit Symbolkachel,
+        Überschrift, Auszug und zwei Knöpfen, dazu Kopfzeile und Chip.
+        Genau die Art Kosten je Bild, die CLAUDE.md für die
+        Wiedergabe beschreibt, nur dass hier niemand darum gebeten
+        hat: der Ring bewegt sich, der Inhalt steht.
+        """
+
+        rect = self.rect()
+
+        inner = rect.adjusted(
+            RING_BAND,
+            RING_BAND,
+            -RING_BAND,
+            -RING_BAND,
+        )
+
+        self.update(
+            QRegion(rect).subtracted(QRegion(inner))
+        )
+
+    # --------------------------------------------------
+
+    def paintEvent(self, event):
+
+        super().paintEvent(event)
+
+        painter = QPainter(self)
+
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        radius = float(self._radius)
+
+        base = QColor(theme().accent_base())
+
+        strength = ring_alpha()
+
+        painter.setBrush(Qt.NoBrush)
+
+        #
+        # Zwei Ringe: ein breiter, sehr schwacher innen als Schein und
+        # ein schmaler auf der Kante. Qt kennt keinen Schlagschatten
+        # ohne eigenen Grafikeffekt je Widget - und ein Effekt auf der
+        # Karte legte ihren ganzen Inhalt in eine eigene Pixmap.
+        #
+
+        glow = QColor(base)
+
+        glow.setAlphaF(strength * GLOW_SHARE)
+
+        pen = QPen(glow, 4)
+
+        pen.setJoinStyle(Qt.RoundJoin)
+
+        painter.setPen(pen)
+
+        painter.drawRoundedRect(
+            QRectF(self.rect()).adjusted(2.5, 2.5, -2.5, -2.5),
+            radius - 2.0,
+            radius - 2.0,
+        )
+
+        ring = QColor(base)
+
+        ring.setAlphaF(strength)
+
+        painter.setPen(QPen(ring, 1.4))
+
+        painter.drawRoundedRect(
+            QRectF(self.rect()).adjusted(0.7, 0.7, -0.7, -0.7),
+            radius,
+            radius,
         )
 
 

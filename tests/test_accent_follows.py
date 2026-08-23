@@ -294,3 +294,34 @@ def test_the_accent_connection_is_not_doubled():
     assert isinstance(method, QMetaMethod)
 
     button.close()
+
+
+def test_the_update_row_follows_the_accent():
+    """
+    Der Update-Hinweis auf der Übersicht ist seit 2.3.6 gemalt statt
+    gestylt: Leiste, getönte Fläche und Rahmen in Akzentfarbe. Genau
+    dort entsteht der Fehler, den CLAUDE.md beschreibt - eine im
+    Konstruktor gelesene Farbe überlebt den Wechsel, und die Zeile
+    bleibt bernsteinfarben, ohne dass irgendetwas fehlschlägt.
+
+    Die Symbolkachel gehört mit dazu: sie ist eine **Pixmap** und
+    macht einen Akzentwechsel deshalb nicht durch bloßes Neuzeichnen
+    mit, sondern nur, wenn sie neu eingefärbt wird.
+    """
+
+    from gui.pages.overview import UpdateRow
+
+    def build():
+
+        row = UpdateRow("addon")
+
+        row.apply("WeintCodex", "v2.3.1.0", "v2.4.0.0", "Behoben.")
+
+        return row
+
+    images = _images_per_accent(build)
+
+    assert len(set(images.values())) == len(images), (
+        "Die Update-Zeile bleibt bernsteinfarben, obwohl eine andere "
+        "Akzentvariante gewählt ist."
+    )

@@ -570,3 +570,188 @@ def test_no_page_refresh_starts_a_network_round():
         "Hauptthread und schliesst mit state_changed einen Kreis:\n  "
         + "\n  ".join(offenders)
     )
+
+
+# --------------------------------------------------
+# Der atmende Ring der Update-Karte
+# --------------------------------------------------
+#
+# Seit 2.3.6 trägt die Karte einen Ring in Akzentfarbe, dessen
+# Deckkraft an der Pulsuhr hängt. Zwei Eigenschaften davon sind auf dem
+# Bildschirm nicht zu sehen und deshalb genau die, die hier stehen.
+
+
+@pytest.fixture
+def card():
+
+    _app()
+
+    from gui.theme.theme_manager import init_theme, theme
+
+    init_theme(_Config())
+
+    theme().set_motion_reduced(False)
+
+    theme().set_system_motion_reduced(False)
+
+    from gui.pages.overview import UpdateCard
+
+    widget = UpdateCard()
+
+    yield widget
+
+    widget.close()
+
+
+def _warn_subscribers() -> int:
+    """
+    Wie viele sichtbare Warnquellen die Uhr gerade zählt.
+
+    Der Zähler ist privat und hat keinen öffentlichen Weg nach draussen -
+    gefragt ist hier aber genau die Differenz "einer mehr / einer
+    weniger", und `active_kind()` beantwortet sie nicht: es meldet
+    "warn", solange irgendein anderer Punkt noch angemeldet ist.
+    """
+
+    from gui.motion.pulse_clock import KIND_WARN, pulse_clock
+
+    return pulse_clock()._counts[KIND_WARN]
+
+
+def test_the_card_only_pulses_while_it_is_visible(card):
+    """
+    Angemeldet wird bei der Sichtbarkeit, nicht beim Bauen.
+
+    Die Karte entsteht auf **jeder** Übersicht, gezeigt wird sie nur,
+    wenn wirklich etwas aussteht. Eine Anmeldung im Konstruktor hielte
+    die Uhr dauerhaft am Laufen: ein Zeitgeber mit 16 ms, der ins Leere
+    tickt, weckt den Prozess sechzig Mal je Sekunde - neben einem
+    Vollbildspiel.
+    """
+
+    before = _warn_subscribers()
+
+    assert not card._pulsing, (
+        "Die gebaute, aber nie gezeigte Karte hängt schon an der Uhr."
+    )
+
+    card.show()
+
+    _pump(30)
+
+    assert card._pulsing
+
+    #
+    # Mehr als eine: der Punkt im Chip meldet sich ebenfalls an. Genau
+    # deshalb liest der Ring die Uhr mit, statt sich einen zweiten
+    # Zeitgeber zu bestellen - zwei eigene Uhren liefen gegeneinander.
+    #
+
+    assert _warn_subscribers() > before
+
+    card.hide()
+
+    _pump(30)
+
+    assert not card._pulsing
+
+    assert _warn_subscribers() == before, (
+        "Die verborgene Update-Karte bleibt bei der Pulsuhr "
+        "angemeldet - die Uhr tickt dann für niemanden weiter."
+    )
+
+
+def test_an_already_counted_card_is_not_counted_twice(card):
+    """
+    `close()` erzeugt auf manchen Plattformen ein zweites Verbergen,
+    und eine Karte wird beim Seitenwechsel mehrfach ein- und
+    ausgeblendet. Ein doppelt gezählter Abgang drückte den Zähler unter
+    die Zahl der echten Quellen und stellte die Uhr still, während
+    anderswo noch etwas pulst - dieselbe Falle wie beim doppelten
+    `detach()` des Overlay-Fensters.
+    """
+
+    before = _warn_subscribers()
+
+    card._claim()
+
+    counted = _warn_subscribers()
+
+    assert counted == before + 1
+
+    card._claim()
+
+    assert _warn_subscribers() == counted, (
+        "Eine zweite Anmeldung wird mitgezählt."
+    )
+
+    card._release()
+
+    assert _warn_subscribers() == before
+
+    card._release()
+
+    assert _warn_subscribers() == before, (
+        "Eine zweite Abmeldung zählt den Zähler unter die Zahl der "
+        "wirklich sichtbaren Quellen."
+    )
+
+
+def test_a_standing_ring_stands_at_full_strength():
+    """
+    Bei reduzierter Bewegung und bei einem sichtbaren LIVE-Zeichen
+    steht die Uhr, und `opacity()` liefert dauerhaft 1.0. Der Ring muss
+    dann in **voller** Stärke stehenbleiben.
+
+    Der Hinweis verschwindet also nicht, er hört nur auf, sich zu
+    bewegen - dieselbe Linie, die den LIVE-Punkt bei reduzierter
+    Bewegung zum Quadrat macht statt ihn auszublenden. Ein
+    stehengebliebener, halb sichtbarer Ring wäre von einem
+    Zeichenfehler nicht zu unterscheiden.
+    """
+
+    from gui.motion.pulse_clock import OPACITY_LOW
+    from gui.pages.overview import (
+        RING_ALPHA_MAX,
+        RING_ALPHA_MIN,
+        ring_strength,
+    )
+
+    assert ring_strength(1.0) == pytest.approx(RING_ALPHA_MAX)
+
+    assert ring_strength(OPACITY_LOW) == pytest.approx(RING_ALPHA_MIN)
+
+    assert RING_ALPHA_MIN < ring_strength(0.7) < RING_ALPHA_MAX
+
+
+def test_reduced_motion_stops_the_ring_without_dimming_it(card):
+    """
+    Und zwar auch dann, wenn die Einstellung umgelegt wird, **während**
+    die Karte auf dem Schirm steht.
+
+    Die Pulsuhr entscheidet über ihren Zeitgeber nur beim An- und
+    Abmelden; wer den Schalter in Einstellungen -> Erscheinungsbild
+    umlegt, meldet sich dabei weder an noch ab. Die Uhr läuft also
+    weiter, und ein Ring, der sich allein auf sie verliesse, atmete
+    genau bei der Einstellung weiter, die das untersagt. Deshalb fragt
+    `ring_alpha()` selbst - so wie es der `StatusDot` in seinem
+    `paintEvent` tut.
+    """
+
+    from gui.pages.overview import RING_ALPHA_MAX, ring_alpha
+    from gui.theme.theme_manager import theme
+
+    card.show()
+
+    _pump(40)
+
+    theme().set_motion_reduced(True)
+
+    try:
+        assert ring_alpha() == pytest.approx(RING_ALPHA_MAX), (
+            "Bei reduzierter Bewegung steht der Ring in einem "
+            "Zwischenwert - er sieht dann aus wie ein Zeichenfehler."
+        )
+
+    finally:
+        theme().set_motion_reduced(False)

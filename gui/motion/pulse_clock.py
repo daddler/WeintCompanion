@@ -71,6 +71,20 @@ TICK_MS = 16
 PERIOD_MS = MOTION["pulse"].duration
 
 
+#
+# Die beiden Tiefpunkte des Pulses. Sie stehen hier als Namen, weil
+# nicht nur die Punkte selbst sie brauchen: der Update-Hinweis auf der
+# Uebersicht rechnet die Deckkraft seines Rings aus `opacity()` aus und
+# muss dafuer wissen, wo deren unteres Ende liegt. Als zweite 0.35 in
+# der Uebersicht waeren es zwei Zahlen, die uebereinstimmen muessen -
+# und niemand haette gemerkt, wenn eine davon geaendert worden waere.
+#
+
+OPACITY_LOW = 0.35
+
+SCALE_LOW = 0.82
+
+
 class PulseClock(QObject):
     """
     Eine Phase, viele Punkte.
@@ -178,24 +192,24 @@ class PulseClock(QObject):
 
     def opacity(self, kind: str = KIND_LIVE) -> float:
         """
-        Die Deckkraft eines Punktes dieser Art: 1.0 bis 0.35 und
-        zurueck (motion.pulse), sinusfoermig.
+        Die Deckkraft eines Punktes dieser Art: 1.0 bis OPACITY_LOW
+        und zurueck (motion.pulse), sinusfoermig.
         """
 
         if not self.may_pulse(kind):
             return 1.0
 
-        return self._eased(1.0, 0.35)
+        return self._eased(1.0, OPACITY_LOW)
 
     def scale(self, kind: str = KIND_LIVE) -> float:
         """
-        Die Skalierung eines Punktes dieser Art: 1.0 bis 0.82.
+        Die Skalierung eines Punktes dieser Art: 1.0 bis SCALE_LOW.
         """
 
         if not self.may_pulse(kind):
             return 1.0
 
-        return self._eased(1.0, 0.82)
+        return self._eased(1.0, SCALE_LOW)
 
     def _eased(self, high: float, low: float) -> float:
 
