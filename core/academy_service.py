@@ -28,6 +28,7 @@ from analyzer.academy.models import PlayerProfile, TrainingPlan
 from analyzer.academy.progression import (
     CURVE_LIMIT,
     PullRecord,
+    build_focus,
     pull_key,
     qualifies,
     record_from_profile,
@@ -493,6 +494,14 @@ class AcademyService:
         den gewählten Kampf und markiert sie selbst als erfüllt oder
         nicht erfüllt. Ohne ihn bleibt es beim reinen Lernpfad -
         dasselbe Verhalten wie vorher.
+
+        **Die Reihenfolge der Bereiche kommt aus der Lernkurve**,
+        sobald sie genug Pulls kennt: geübt wird gegen das Muster und
+        nicht gegen den einen Ausrutscher, der den Plan bis 2.3.4
+        komplett umwarf. Die Bewertungen selbst bleiben unberührt -
+        sie beschreiben den angezeigten Kampf. Ohne aufgezeichnete
+        Pulls ist `focus` leer und der Plan verhält sich exakt wie
+        vorher.
         """
 
         #
@@ -508,6 +517,7 @@ class AcademyService:
             self.completed_for(name),
             snapshot=snapshot,
             excluded=self.excluded_for(name),
+            focus=build_focus(self.curve_for(profile, name)),
         )
 
     # --------------------------------------------------
@@ -583,6 +593,27 @@ class AcademyService:
         )
 
         return True
+
+    def curve_for(
+        self,
+        profile: PlayerProfile,
+        character: str = "",
+    ) -> tuple[PullRecord, ...]:
+        """
+        Die Kurve, die zu einem Profil gehört - dieselbe Auswahl für
+        die Verlaufskarte und für den Trainingsplan.
+
+        Eine Funktion und nicht zwei Aufrufstellen mit denselben drei
+        Argumenten: liefen sie auseinander, zeigte die Karte eine
+        andere Entwicklung, als die Reihenfolge des Plans behauptet -
+        und beide stehen auf derselben Seite.
+        """
+
+        return self.curve(
+            character or self.player_name(),
+            self.manager.config.data.get("raid_data_source", ""),
+            profile.spec,
+        )
 
     def curve(
         self,

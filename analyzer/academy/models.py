@@ -540,6 +540,20 @@ class TrainingPlan:
 
     completed: frozenset[str] = frozenset()
 
+    #
+    # Woher die Auswahl der Bereiche kommt - gefüllt, sobald die
+    # Lernkurve genug Pulls kennt, um sie zu bestimmen (siehe
+    # `evaluator.plan_order()`). Leer heisst: es zählt allein der
+    # angezeigte Kampf, also genau wie eh und je.
+    #
+    # Der Satz steht am Plan und nicht in der Oberfläche, weil die
+    # Entscheidung hier fällt. Eine Auswahl, die den Sternen auf
+    # derselben Seite widerspricht, sähe ohne ihn nach einem Fehler
+    # aus.
+    #
+
+    note: str = ""
+
     # --------------------------------------------------
 
     @classmethod

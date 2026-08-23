@@ -678,3 +678,193 @@ def test_the_same_archived_pull_from_two_visits_is_one_point(
     assert erst
 
     assert not nochmal
+
+
+# --------------------------------------------------
+# Was die Kurve dem Trainingsplan sagt
+# --------------------------------------------------
+#
+# Der Plan ordnete seine Bereiche allein nach den Sternen des gerade
+# gezeigten Kampfes. Ein einzelner missratener Pull warf ihn damit
+# komplett um - obwohl an dem Abend nichts zu üben war, was der
+# Spieler nicht schon konnte.
+#
+
+
+def test_a_single_bad_pull_no_longer_hijacks_the_plan():
+    """
+    Acht Pulls auf vier Sternen in Mechaniken und einer auf zwei:
+    geübt wird gegen das Muster, nicht gegen den Ausrutscher. Die
+    Bewertung des Kampfes bleibt davon unberührt - sie beschreibt ja
+    genau diesen Pull.
+    """
+
+    from analyzer.academy.evaluator import plan_order
+    from analyzer.academy.progression import build_focus
+
+    records = [
+        _record(f"k{index}", sequence=index, mechanics=4, rotation=3)
+        for index in range(8)
+    ]
+
+    focus = build_focus(records)
+
+    #
+    # Im angezeigten Kampf steht Mechaniken auf zwei, Rotation auf
+    # drei - ohne Kurve stünde Mechaniken deshalb vorn.
+    #
+
+    profile = _profile(mechanics=2, rotation=3)
+
+    ohne = [rating.category for rating in plan_order(profile)]
+
+    mit = [rating.category for rating in plan_order(profile, focus)]
+
+    assert ohne[0] == CATEGORY_MECHANICS
+
+    assert mit[0] == CATEGORY_ROTATION
+
+
+def test_without_recorded_pulls_the_order_is_exactly_the_old_one():
+    """
+    Kein `focus` heisst: alles wie vorher. Das ist die Rückfallebene
+    für jeden, der die App gerade erst benutzt.
+    """
+
+    from analyzer.academy.evaluator import plan_order
+
+    profile = _profile(rotation=2, mechanics=4, movement=3)
+
+    assert plan_order(profile) == profile.weakest
+
+    assert plan_order(profile, {}) == profile.weakest
+
+
+def test_a_single_recorded_pull_is_no_pattern():
+    """
+    Ein Mittelwert aus einem einzigen Pull wäre kein Muster, sondern
+    derselbe Pull unter anderem Namen.
+    """
+
+    from analyzer.academy.progression import build_focus
+
+    assert build_focus([_record("a", rotation=5)]) == {}
+
+
+def test_at_equal_average_the_falling_area_comes_first():
+    """
+    Zwei Bereiche auf drei Sternen sind nicht gleich dringend, wenn
+    der eine steigt und der andere fällt.
+    """
+
+    from analyzer.academy.evaluator import plan_order
+    from analyzer.academy.progression import build_focus
+
+    records = [
+        _record("a", sequence=1, rotation=2, mechanics=4),
+        _record("b", sequence=2, rotation=3, mechanics=3),
+        _record("c", sequence=3, rotation=4, mechanics=2),
+    ]
+
+    focus = build_focus(records)
+
+    #
+    # Beide stehen im Mittel bei drei Sternen - Rotation steigt,
+    # Mechaniken fällt.
+    #
+
+    assert focus[CATEGORY_ROTATION].average == focus[CATEGORY_MECHANICS].average
+
+    profile = _profile(rotation=4, mechanics=2)
+
+    assert plan_order(profile, focus)[0].category == CATEGORY_MECHANICS
+
+
+def test_an_area_without_history_is_judged_by_the_shown_fight():
+    """
+    Beide Werte sind in Sternen gemessen und deshalb vergleichbar -
+    ein Bereich ohne Kurve fällt nicht heraus, er wird nur anders
+    beantwortet.
+    """
+
+    from analyzer.academy.evaluator import plan_order
+    from analyzer.academy.progression import build_focus
+
+    records = [
+        _record("a", sequence=1, rotation=4),
+        _record("b", sequence=2, rotation=4),
+    ]
+
+    profile = _profile(rotation=4, mechanics=1)
+
+    reihenfolge = plan_order(profile, build_focus(records))
+
+    assert reihenfolge[0].category == CATEGORY_MECHANICS
+
+
+def test_the_plan_says_why_it_is_sorted_that_way():
+    """
+    Die Sterne auf derselben Seite gehören zum angezeigten Kampf.
+    Eine Reihenfolge, die ihnen widerspricht, sähe ohne diesen Satz
+    nach einem Fehler aus.
+    """
+
+    from analyzer.academy.progression import build_focus, focus_note
+
+    records = [
+        _record("a", sequence=1, mechanics=4),
+        _record("b", sequence=2, mechanics=3),
+        _record("c", sequence=3, mechanics=2),
+    ]
+
+    focus = build_focus(records)
+
+    satz = focus_note(focus, CATEGORY_MECHANICS)
+
+    assert "3" in satz
+
+    assert "Mechaniken wird" in satz
+
+    #
+    # "Welche Bereiche" und nicht "die Reihenfolge": die endgültige
+    # Folge der Karten bestimmt weiterhin das Log dieses Kampfes -
+    # was es nachweislich bemängelt, steht oben. Beides
+    # zusammenzufassen wäre in der Hälfte der Fälle falsch.
+    #
+
+    assert "Welche Bereiche" in satz
+
+    #
+    # Ohne Kurve keine Erklärung: die Reihenfolge ist dann genau die,
+    # die sie immer war, und ein Satz darüber wäre Lärm.
+    #
+
+    assert focus_note({}, CATEGORY_MECHANICS) == ""
+
+
+def test_the_plan_keeps_the_ratings_untouched():
+    """
+    Die Kurve ordnet, sie bewertet nicht. Zwei Antworten auf dieselbe
+    Frage - hier die Sterne des Kampfes, dort die des Musters - wären
+    der schlimmere Fehler.
+    """
+
+    from analyzer.academy.evaluator import plan_order
+    from analyzer.academy.progression import build_focus
+
+    records = [
+        _record("a", sequence=1, mechanics=5),
+        _record("b", sequence=2, mechanics=5),
+    ]
+
+    profile = _profile(mechanics=1, rotation=4)
+
+    reihenfolge = plan_order(profile, build_focus(records))
+
+    mechanik = next(
+        rating
+        for rating in reihenfolge
+        if rating.category == CATEGORY_MECHANICS
+    )
+
+    assert mechanik.stars == 1

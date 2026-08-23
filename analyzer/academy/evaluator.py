@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from analyzer.academy import lessons as lesson_catalog
 from analyzer.academy.checks import evaluate_lesson
+from analyzer.academy.progression import focus_note
 from analyzer.academy.models import (
     CATEGORY_COOLDOWNS,
     CATEGORY_MECHANICS,
@@ -1193,12 +1194,53 @@ def build_profile(
 #
 
 
+def plan_order(
+    profile: PlayerProfile,
+    focus=None,
+) -> tuple[SkillRating, ...]:
+    """
+    Die Bereiche in der Reihenfolge, in der der Plan sie abarbeitet.
+
+    Ohne `focus` ist das genau `profile.weakest`: der schwächste
+    Bereich dieses Kampfes zuerst.
+
+    **Mit `focus` entscheidet das Muster statt des Ausrutschers.** Zu
+    jedem Bereich, für den genug Pulls aufgezeichnet sind, zählt das
+    Mittel über die Kurve; für die übrigen weiter die Bewertung des
+    angezeigten Kampfes. Beide sind in Sternen gemessen und deshalb
+    vergleichbar. Bei gleichem Wert steht der Bereich vorn, der
+    schwächer wird - und erst danach entscheidet `CATEGORY_ORDER`,
+    damit sich der Plan nicht bei jedem Neuzeichnen umsortiert.
+
+    Ein einzelner missratener Pull warf den Plan bis 2.3.4 komplett
+    um: acht Pulls auf vier Sternen und einer auf zwei genügten, und
+    er kannte nichts anderes mehr. Geübt wird aber gegen das Muster.
+    """
+
+    focus = focus or {}
+
+    def _key(rating: SkillRating):
+
+        eintrag = focus.get(rating.category)
+
+        return (
+            eintrag.average if eintrag is not None else float(rating.stars),
+            eintrag.rank if eintrag is not None else 1,
+            CATEGORY_ORDER.index(rating.category)
+            if rating.category in CATEGORY_ORDER
+            else len(CATEGORY_ORDER),
+        )
+
+    return tuple(sorted(profile.rated, key=_key))
+
+
 def build_plan(
     profile: PlayerProfile,
     completed: frozenset[str] | set[str] | None = None,
     *,
     snapshot: RaidSnapshot | None = None,
     excluded: frozenset[str] | set[str] | None = None,
+    focus=None,
 ) -> TrainingPlan:
     """
     Leitet aus einem Profil die nächsten Lektionen ab und prüft sie
@@ -1208,6 +1250,13 @@ def build_plan(
     (schlechtester zuerst) und reihum je eine Lektion beigesteuert.
     Dadurch beginnt der Plan bei der größten Schwäche, ohne die
     übrigen Bereiche vollständig auszublenden.
+
+    `focus` ist, was die aufgezeichneten Pulls über die Bereiche sagen
+    (`analyzer/academy/progression.build_focus()`). Er ändert
+    ausschliesslich die **Reihenfolge** der Bereiche, nie eine
+    Bewertung: die Sterne beschreiben den angezeigten Kampf, und zwei
+    Antworten auf dieselbe Frage wären der schlimmere Fehler. Ohne ihn
+    verhält sich der Plan exakt wie vorher - siehe `plan_order()`.
 
     `snapshot` ist bewusst ein **Schlüsselwort**-Argument mit
     Standardwert: die bisherigen Aufrufe `build_plan(profile)` und
@@ -1265,7 +1314,19 @@ def build_plan(
 
     buckets: list[list[Lesson]] = []
 
-    for rating in profile.weakest:
+    reihenfolge = plan_order(profile, focus)
+
+    #
+    # Welcher Bereich den Plan wirklich anführt: der erste, der auch
+    # eine offene Lektion beisteuert. Der erste der Reihenfolge ist
+    # es nicht zwangsläufig - dort können alle Lektionen erledigt
+    # oder abgewählt sein, und die Begründung nennte dann einen
+    # Bereich, der im Plan gar nicht vorkommt.
+    #
+
+    fuehrend = ""
+
+    for rating in reihenfolge:
 
         candidates = [
             lesson
@@ -1279,7 +1340,10 @@ def build_plan(
         ]
 
         if candidates:
+
             buckets.append(candidates)
+
+            fuehrend = fuehrend or rating.category
 
     selected: list[Lesson] = []
 
@@ -1343,4 +1407,5 @@ def build_plan(
     return TrainingPlan(
         items=tuple(items) + tuple(finished),
         completed=done,
+        note=focus_note(focus, fuehrend),
     )

@@ -628,6 +628,27 @@ class AcademyPage(QWidget):
 
         self.plan_layout.addWidget(self.plan_placeholder)
 
+        #
+        # Warum der Plan so sortiert ist. Er steht nur da, wenn die
+        # Lernkurve die Reihenfolge bestimmt hat: die Sterne auf der
+        # Übersicht gehören zum angezeigten Kampf, und eine
+        # Reihenfolge, die ihnen widerspricht, sähe ohne diesen Satz
+        # nach einem Fehler aus.
+        #
+
+        self.plan_note = QLabel("")
+
+        self.plan_note.setWordWrap(True)
+
+        self.plan_note.setStyleSheet(
+            f"font-size:12px;color:{Colors.TEXT_MUTED};"
+            "background:transparent;border:none;"
+        )
+
+        self.plan_note.setVisible(False)
+
+        self.plan_layout.addWidget(self.plan_note)
+
         self.plan_layout.addStretch()
 
         self._lesson_cards: list[LessonCard] = []
@@ -1174,15 +1195,16 @@ class AcademyPage(QWidget):
         `progression.select()`).
         """
 
-        character = self.academy.player_name()
-
         source = self.manager.config.data.get("raid_data_source", "")
 
-        records = self.academy.curve(
-            character,
-            source,
-            self._profile.spec,
-        )
+        #
+        # Dieselbe Auswahl, aus der auch der Trainingsplan seine
+        # Reihenfolge nimmt - liefen die beiden auseinander, zeigte
+        # die Karte eine andere Entwicklung, als der Plan daneben
+        # behauptet.
+        #
+
+        records = self.academy.curve_for(self._profile)
 
         signature = tuple(record.key for record in records)
 
@@ -1209,19 +1231,34 @@ class AcademyPage(QWidget):
         if self.service.replay_state().playing:
             return
 
-        signature = tuple(
-            (
-                item.lesson_id,
-                item.completed,
-                item.status,
-            )
-            for item in self._plan.items
+        signature = (
+            tuple(
+                (
+                    item.lesson_id,
+                    item.completed,
+                    item.status,
+                )
+                for item in self._plan.items
+            ),
+
+            #
+            # Die Begründung gehört in die Signatur: sie ändert sich,
+            # sobald ein Pull dazukommt, während die Lektionen
+            # dieselben bleiben können - ohne sie bliebe der Satz auf
+            # dem Stand von vorgestern stehen.
+            #
+
+            self._plan.note,
         )
 
         if signature == self._plan_signature:
             return
 
         self._plan_signature = signature
+
+        self.plan_note.setText(self._plan.note)
+
+        self.plan_note.setVisible(bool(self._plan.note))
 
         #
         # Alte Karten entfernen. deleteLater() statt sofortigem

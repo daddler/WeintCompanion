@@ -73,6 +73,31 @@ Und die Reihenfolge kommt aus dem Raidabend, nicht aus der Klickfolge:
 wer im Archiv erst Pull 5 und dann Pull 2 ansieht, bekommt trotzdem
 keine Kurve, die einen Rückschritt zeigt, den es nie gab.
 
+**Der Trainingsplan folgt jetzt dem Muster statt dem Ausrutscher.**
+Er wählte seine Bereiche allein nach den Sternen des gerade
+angezeigten Kampfes. Ein einziger missratener Pull warf ihn damit
+komplett um: wer acht Pulls lang bei vier Sternen in Mechaniken steht
+und in diesem einen auf zwei fällt, bekam einen Plan, der nichts
+anderes mehr kannte — obwohl da nichts zu üben war, was er nicht
+längst konnte.
+
+Sobald genug Pulls aufgezeichnet sind, entscheidet deshalb der
+Durchschnitt über die Kurve, welche Bereiche der Plan aufgreift; für
+Bereiche ohne Kurve zählt weiterhin der angezeigte Kampf. Stehen zwei
+gleich da, kommt der zuerst, der **schwächer wird** — zwei Bereiche
+auf drei Sternen sind nicht gleich dringend, wenn der eine steigt und
+der andere fällt. Über dem Plan steht ein Satz, woher seine Auswahl
+kommt, denn eine Auswahl, die den Sternen daneben widerspricht, sähe
+sonst nach einem Fehler aus.
+
+Zwei Dinge bleiben ausdrücklich, wie sie waren: die **Bewertungen**
+selbst beschreiben weiter genau diesen Kampf (die Kurve ordnet, sie
+bewertet nicht), und innerhalb des Plans steht weiter oben, was das
+Log an diesem Kampf nachweislich bemängelt — ein belegter Fehler ist
+dringender als ein Durchschnitt. Ohne aufgezeichnete Pulls verhält
+sich der Plan exakt wie bisher. Der Plan im Spiel übernimmt dieselbe
+Auswahl, er kommt aus derselben Stelle.
+
 ## 2.3.4
 
 **Die Aufstellung auf der Übersicht zeigt endlich die Klassenfarben.**

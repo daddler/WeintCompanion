@@ -682,6 +682,137 @@ def weakest_category(records) -> str:
     return gewaehlt
 
 
+# --------------------------------------------------
+# Was die Kurve dem Trainingsplan sagt
+# --------------------------------------------------
+#
+# **Warum der Plan die Kurve überhaupt liest.** Er ordnete seine
+# Bereiche allein nach den Sternen des gerade gezeigten Kampfes. Ein
+# einzelner missratener Pull warf ihn damit komplett um: wer acht
+# Pulls lang bei vier Sternen in Mechaniken steht und in diesem einen
+# auf zwei fällt, bekam einen Plan, der nichts anderes mehr kannte -
+# obwohl an dem Abend nichts zu üben war, was er nicht schon konnte.
+#
+# Geübt wird gegen das Muster, nicht gegen den Ausrutscher. Wo genug
+# Pulls aufgezeichnet sind, ordnet deshalb der **Mittelwert über die
+# Kurve**; wo nicht, bleibt es beim angezeigten Kampf. Die Bewertungen
+# selbst bleiben davon unberührt - sie beschreiben diesen Pull, und
+# zwei verschiedene Antworten auf dieselbe Frage wären der schlimmere
+# Fehler.
+#
+
+
+@dataclass(frozen=True)
+class AreaFocus:
+    """
+    Was die aufgezeichneten Pulls über einen Bereich sagen.
+
+    `average` ist das Mittel über die Punkte, die es zu diesem Bereich
+    gibt - unbewertete Pulls sind darin keine Nullen, sie kommen gar
+    nicht vor (siehe `build_trend()`).
+    """
+
+    category: str
+
+    average: float = 0.0
+
+    direction: str = DIRECTION_FLAT
+
+    points: int = 0
+
+    # --------------------------------------------------
+
+    @property
+    def falling(self) -> bool:
+
+        return self.direction == DIRECTION_DOWN
+
+    @property
+    def rank(self) -> int:
+        """
+        Bei gleichem Mittel zuerst der Bereich, der **schwächer**
+        wird. Zwei Bereiche auf drei Sternen sind nicht gleich
+        dringend, wenn der eine steigt und der andere fällt.
+        """
+
+        return {
+            DIRECTION_DOWN: 0,
+            DIRECTION_FLAT: 1,
+            DIRECTION_UP: 2,
+        }[self.direction]
+
+
+def build_focus(records) -> dict[str, AreaFocus]:
+    """
+    Je Bereich, zu dem die Kurve genug hergibt, sein Mittel und seine
+    Richtung.
+
+    Bereiche mit weniger als `MIN_POINTS` Punkten fehlen im Ergebnis -
+    und das ist der Punkt: der Aufrufer nimmt dort weiter die
+    Bewertung des angezeigten Kampfes. Ein Mittelwert aus einem
+    einzigen Pull wäre kein Muster, sondern derselbe Pull unter einem
+    anderen Namen.
+    """
+
+    focus: dict[str, AreaFocus] = {}
+
+    for category in CATEGORY_ORDER:
+
+        trend = build_trend(records, category)
+
+        if trend is None:
+            continue
+
+        focus[category] = AreaFocus(
+            category=category,
+            average=sum(trend.points) / len(trend.points),
+            direction=trend.direction,
+            points=len(trend.points),
+        )
+
+    return focus
+
+
+def focus_note(focus, first_category: str = "") -> str:
+    """
+    Der Satz über dem Trainingsplan: woher seine Auswahl kommt.
+
+    Er sagt ausdrücklich **"welche Bereiche"** und nicht "die
+    Reihenfolge". Die Kurve entscheidet, welche Bereiche der Plan
+    überhaupt aufgreift und in welcher Rangfolge sie ziehen dürfen;
+    die endgültige Folge der Karten bestimmt danach weiterhin das
+    Log dieses Kampfes - was es nachweislich bemängelt, steht oben.
+    Beides zusammenzufassen wäre bequem und in der Hälfte der Fälle
+    falsch.
+
+    Ohne Kurve bleibt er leer: dann ist die Auswahl genau die, die sie
+    immer war, und ein Satz darüber wäre Lärm. Mit Kurve muss er
+    dastehen - die Sterne auf derselben Seite gehören zu *diesem*
+    Pull, und eine Auswahl, die ihnen widerspricht, sähe ohne
+    Erklärung nach einem Fehler aus.
+    """
+
+    if not focus:
+        return ""
+
+    punkte = max(eintrag.points for eintrag in focus.values())
+
+    satz = (
+        f"Welche Bereiche dieser Plan aufgreift, folgt den letzten "
+        f"{punkte} aufgezeichneten Pulls und nicht diesem einen Kampf."
+    )
+
+    erster = focus.get(first_category)
+
+    if erster is not None and erster.falling:
+
+        label = CATEGORY_LABELS.get(first_category, first_category)
+
+        satz += f" {label} wird über diese Pulls schwächer."
+
+    return satz
+
+
 def summary_text(records, trend: Trend | None) -> str:
     """
     Der Satz über der Kurve.
