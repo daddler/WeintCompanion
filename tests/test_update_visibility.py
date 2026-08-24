@@ -576,7 +576,7 @@ def test_no_page_refresh_starts_a_network_round():
 # Der atmende Ring der Update-Karte
 # --------------------------------------------------
 #
-# Seit 2.3.6 trägt die Karte einen Ring in Akzentfarbe, dessen
+# Seit 2.4.0 trägt die Karte einen Ring in Akzentfarbe, dessen
 # Deckkraft an der Pulsuhr hängt. Zwei Eigenschaften davon sind auf dem
 # Bildschirm nicht zu sehen und deshalb genau die, die hier stehen.
 

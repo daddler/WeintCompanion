@@ -298,7 +298,7 @@ def test_the_accent_connection_is_not_doubled():
 
 def test_the_update_row_follows_the_accent():
     """
-    Der Update-Hinweis auf der Übersicht ist seit 2.3.6 gemalt statt
+    Der Update-Hinweis auf der Übersicht ist seit 2.4.0 gemalt statt
     gestylt: Leiste, getönte Fläche und Rahmen in Akzentfarbe. Genau
     dort entsteht der Fehler, den CLAUDE.md beschreibt - eine im
     Konstruktor gelesene Farbe überlebt den Wechsel, und die Zeile
