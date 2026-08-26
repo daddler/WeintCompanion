@@ -2,6 +2,46 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.4.1
+
+**Über dem Update-Knopf steht jetzt, was in deiner Fassung steckt.**
+Bisher stand dort ein Text, der die Fassung beschrieb, die es zu
+holen gibt — also etwas, das auf dem Rechner noch gar nicht liegt.
+Beschriftet war er nicht, und deshalb war er von einer Beschreibung
+dessen, was man gerade hat, nicht zu unterscheiden.
+
+Jetzt steht eine Zeile darüber: „Das steckt in deiner Fassung 2.4.0:"
+— und darunter die Notizen genau dazu. Was das Update mitbringt,
+steht wie bisher hinter *Alle Änderungen ansehen*, einen Knopf weiter
+und dort auch so benannt. Dasselbe gilt für die beiden Karten unter
+*Addon & Updates*.
+
+Liegen zu der laufenden Fassung keine Notizen vor, sagt die Karte
+genau das. Der Text einer anderen Fassung rückt nie an diese Stelle
+nach.
+
+**Und die Änderungsnotizen selbst werden von hier an einfacher
+geschrieben.** Sie waren für die Entwicklung geschrieben: mit
+Dateinamen, Funktionsnamen und Sätzen über die Ursache eines Fehlers
+statt über das, was man davon merkt. Wer die App benutzt, konnte
+daraus oft nicht einmal ablesen, ob ihn eine Änderung überhaupt
+betrifft. Künftig steht oben, was sich für dich ändert; das
+Technische steht weiterhin da, aber unten unter *Technisch*.
+
+### Technisch
+- `update_note()` in `core/changelog_source.py` ersetzt `latest_entry()`
+  und liest den Eintrag zur **installierten** Fassung. Fehlt er, ist die
+  Antwort `None` statt des Eintrags einer anderen Fassung — dieselbe
+  Linie wie `stars == 0`. Ohne das wäre beim Addon der Release-Text der
+  neuen Fassung eingesprungen, sobald dem Addon-Ordner die
+  `CHANGELOG.md` fehlt
+- `UpdateRow` und `ComponentCard` tragen dafür eine eigene, gedämpfte
+  Kopfzeile über dem Auszug; während eines laufenden Vorgangs wird sie
+  ausgeblendet, weil der Fortschrittstext an derselben Stelle steht und
+  keine Fassung meint
+- Die Regeln für die Formulierung stehen in `CLAUDE.md` und gelten für
+  beide Repositorys
+
 ## 2.4.0
 
 **Ein wartendes Update sieht man jetzt, ohne danach zu suchen.**

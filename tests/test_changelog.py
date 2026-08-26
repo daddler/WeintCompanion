@@ -24,7 +24,8 @@ from core.changelog_source import (
     addon_entries,
     companion_entries,
     find_entry,
-    latest_entry,
+    installed_entry,
+    update_note,
 )
 
 
@@ -247,7 +248,14 @@ def test_the_offered_version_wins_over_the_newest_local_one():
     assert find_entry(entries, "") is None
 
 
-def test_latest_entry_falls_back_to_the_top(tmp_path):
+def test_the_note_over_the_button_describes_the_installed_version(tmp_path):
+    """
+    **Der Kern der Regel seit 2.4.1.** Über dem Update-Knopf steht,
+    was in der Fassung steckt, die hier läuft - nicht das, was die
+    angebotene mitbringt. Der Auszug beschreibt damit etwas, das man
+    nachsehen kann; was das Update bringt, steht hinter "Alle
+    Änderungen ansehen".
+    """
 
     (tmp_path / "CHANGELOG.md").write_text(
         ADDON_STYLE, encoding="utf-8",
@@ -259,15 +267,64 @@ def test_latest_entry_falls_back_to_the_top(tmp_path):
 
     state.addon_path = tmp_path
 
+    state.addon_version = "1.3.3.0"
+
     #
-    # Eine Fassung, die in der Datei nicht vorkommt (das Release ist
-    # neuer als das installierte Addon): dann der oberste Eintrag,
-    # statt gar keiner.
+    # Die angebotene Fassung ist neuer als die installierte - und
+    # genau die soll hier *nicht* stehen.
     #
+
+    state.github_version = "v1.3.3.1"
+
+    note = update_note(ADDON, state)
+
+    assert note.version == "1.3.3.0"
+
+    assert note.installed is True
+
+    assert "1.3.3.1" not in note.body
+
+
+def test_without_an_entry_for_the_installed_version_nothing_is_claimed(tmp_path):
+    """
+    Fehlt die CHANGELOG.md im Addon-Ordner, steht in `addon_entries()`
+    nur der Release-Text der **neuen** Fassung. Der beschreibt die
+    installierte nicht, also ist die ehrliche Antwort `None` - und die
+    Oberfläche sagt dann "keine Notizen", statt einen fremden Text als
+    den eigenen auszugeben. Dieselbe Linie wie `stars == 0`.
+    """
+
+    state = FakeState()
+
+    state.addon_found = True
+
+    state.addon_version = "1.3.3.0"
 
     state.github_version = "v1.4.0.0"
 
-    assert latest_entry(ADDON, state).version == "1.3.3.1"
+    state.github_changelog = "- Etwas Neues"
+
+    assert installed_entry(ADDON, state) is None
+
+    assert update_note(ADDON, state) is None
+
+
+def test_the_companion_note_is_its_own_bundled_entry():
+    """
+    Für die Companion ist die installierte Fassung die laufende, und
+    ihre CHANGELOG.md liegt mit im Paket - dort muss die Notiz also
+    immer zu finden sein.
+    """
+
+    from core.version import VERSION
+
+    note = update_note(COMPANION, FakeState())
+
+    assert note is not None
+
+    assert note.version == VERSION
+
+    assert note.installed is True
 
 
 def test_read_changelog_sections_still_serves_the_whats_new_dialog():

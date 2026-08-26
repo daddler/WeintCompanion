@@ -32,6 +32,7 @@ Update-Prüfung.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from core.changelog_reader import ChangelogEntry, read_entries
@@ -99,31 +100,6 @@ def entries_for(component: str, state) -> list[ChangelogEntry]:
     return companion_entries()
 
 
-def latest_entry(component: str, state) -> ChangelogEntry | None:
-    """
-    Der oberste Eintrag - was ein Update mitbringt.
-
-    Beim Addon ist das die Fassung, die auf GitHub liegt (die lokale
-    Datei stammt aus der *installierten*, ist also einen Schritt
-    zurück, solange nicht aktualisiert wurde). Für den Hinweis auf der
-    Übersicht wird deshalb gezielt der Eintrag zur angebotenen Version
-    gesucht und nur ersatzweise der neueste genommen.
-    """
-
-    entries = entries_for(component, state)
-
-    if not entries:
-        return None
-
-    wanted = (
-        getattr(state, "github_version", "")
-        if component == ADDON
-        else getattr(state, "companion_latest_version", "")
-    )
-
-    return find_entry(entries, wanted) or entries[0]
-
-
 def find_entry(
     entries: list[ChangelogEntry],
     version: str,
@@ -159,3 +135,76 @@ def installed_version(component: str, state) -> str:
         )
 
     return VERSION
+
+
+@dataclass(frozen=True)
+class UpdateNote:
+    """
+    Der Text, der über dem Update-Knopf steht.
+
+    `version` ist die Fassung, die er beschreibt, `installed` sagt, ob
+    das die gerade laufende ist. Ohne dieses zweite Feld kann die
+    Oberfläche den Text nicht beschriften - und ein unbeschrifteter
+    Auszug unter "Update verfügbar" wird als Inhalt des Updates
+    gelesen, egal welche Fassung er in Wahrheit beschreibt.
+    """
+
+    version: str
+
+    body: str
+
+    installed: bool
+
+
+def installed_entry(component: str, state) -> ChangelogEntry | None:
+    """
+    Der Eintrag zu der Fassung, die gerade läuft.
+
+    Bewusst über `find_entry` und nicht über "der oberste Eintrag":
+    beim Addon *kann* die oberste Fassung eine andere sein. Fehlt die
+    CHANGELOG.md im Addon-Ordner, steht in `addon_entries()` nur der
+    Release-Text der **neuen** Fassung - und der beschreibt die
+    installierte gerade nicht. Dann ist die ehrliche Antwort `None`.
+    """
+
+    version = installed_version(component, state)
+
+    if not version:
+        return None
+
+    entries = entries_for(component, state)
+
+    if not entries:
+        return None
+
+    return find_entry(entries, version)
+
+
+def update_note(component: str, state) -> UpdateNote | None:
+    """
+    Was neben einem wartenden Update zu lesen ist: **die Notizen der
+    Fassung, die man hat.**
+
+    Bis 2.4.0 stand hier der Auszug zur *angebotenen* Fassung, also zu
+    etwas, das auf diesem Rechner noch gar nicht liegt. Beschriftet
+    war er nicht, und beides zusammen ergab einen vorausschauenden
+    Text an einer Stelle, an der jeder eine Beschreibung dessen
+    erwartet, was er sieht. Was das Update mitbringt, steht vollständig
+    hinter "Alle Änderungen ansehen" - eine Zeile weiter, einen Klick
+    entfernt, und dort ist es auch als solches beschriftet.
+
+    `None` heißt "zu dieser Fassung liegt nichts vor". Das ist eine
+    eigene Auskunft und darf nicht durch den Text einer anderen
+    Fassung ersetzt werden - dieselbe Linie wie `stars == 0`.
+    """
+
+    entry = installed_entry(component, state)
+
+    if entry is None:
+        return None
+
+    return UpdateNote(
+        version=entry.version,
+        body=entry.body,
+        installed=True,
+    )

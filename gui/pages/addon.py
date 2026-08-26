@@ -41,7 +41,7 @@ from PySide6.QtWidgets import (
 #
 
 from core.changelog_reader import format_changelog_body
-from core.changelog_source import ADDON, COMPANION, latest_entry
+from core.changelog_source import ADDON, COMPANION, update_note
 from core.paths import Paths
 from core.platform import open_folder
 
@@ -230,6 +230,24 @@ class ComponentCard(Card):
         #
         # Änderungsnotizen als Punktliste, Zeilenhöhe locker.
         #
+        # Sie beschreiben die Fassung, die **installiert** ist, und die
+        # Zeile darüber sagt welche - siehe `set_changelog()`.
+        #
+
+        self.changelog_head = QLabel("")
+
+        self.changelog_head.setFont(font("small"))
+
+        self.changelog_head.setWordWrap(True)
+
+        restyle(
+            self.changelog_head,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+        self.changelog_head.setVisible(False)
+
+        self.addWidget(self.changelog_head)
 
         self.changelog = enable_wrap(QLabel(""))
 
@@ -329,9 +347,10 @@ class ComponentCard(Card):
 
         self.available_value.setToolTip(available_meta)
 
-    def set_changelog(self, entry, fallback: list[str] | None = None):
+    def set_changelog(self, note, fallback: list[str] | None = None):
         """
-        Der Auszug aus dem Changelog dieser Komponente.
+        Der Auszug aus dem Changelog dieser Komponente - und zwar zu
+        der Fassung, die **installiert** ist.
 
         **Was hier vorher stand.** Die Addon-Karte zeigte "Keine
         Änderungen gefunden." (die Release-Notes des Tags waren leer)
@@ -342,11 +361,24 @@ class ComponentCard(Card):
         Gelesen wird jetzt die CHANGELOG.md der Komponente
         (`core/changelog_source.py`); die Commit-Liste bleibt nur als
         Rückfall für eine Fassung, die noch keine mitbringt.
+
+        Beschriftet ist der Auszug seit 2.4.1: er nennt seine Fassung,
+        weil sonst niemand ihm ansieht, ob er das beschreibt, was hier
+        läuft, oder das, was der Knopf darunter holen würde. Was das
+        Update mitbringt, steht vollständig hinter "Änderungen".
         """
 
-        if entry is not None:
+        self.changelog_head.setText(
+            f"Das steckt in deiner Fassung {note.version}:"
+            if note is not None
+            else ""
+        )
 
-            text = format_changelog_body(entry.body)
+        self.changelog_head.setVisible(note is not None)
+
+        if note is not None:
+
+            text = format_changelog_body(note.body)
 
             lines = [
                 line for line in text.splitlines() if line.strip()
@@ -369,7 +401,7 @@ class ComponentCard(Card):
             return
 
         self.changelog.setText(
-            "Für diese Fassung liegen keine Änderungsnotizen vor - "
+            "Zu deiner Fassung liegen keine Änderungsnotizen vor - "
             "die vollständige Liste steht hinter dem Knopf "
             "\"Änderungen\"."
         )
@@ -794,7 +826,7 @@ class AddonPage(Page):
         )
 
         self.addon_card.set_changelog(
-            latest_entry(ADDON, state)
+            update_note(ADDON, state)
         )
 
         if not state.addon_found:
@@ -847,7 +879,7 @@ class AddonPage(Page):
         )
 
         self.companion_card.set_changelog(
-            latest_entry(COMPANION, state),
+            update_note(COMPANION, state),
             state.companion_changelog,
         )
 

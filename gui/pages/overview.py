@@ -58,7 +58,7 @@ from PySide6.QtWidgets import (
 from core.backend_config import TARGET_URL, app_url, roster_target
 from core.browser import open_url
 from core.changelog_reader import format_changelog_body
-from core.changelog_source import ADDON, COMPANION, LABELS, latest_entry
+from core.changelog_source import ADDON, COMPANION, LABELS, update_note
 from core.greeting import greeting, headline
 from core.last_pull import (
     LastPull,
@@ -210,22 +210,42 @@ def ring_alpha() -> float:
     )
 
 
-def _excerpt(entry) -> str:
+def _note_head(note, installed: str) -> str:
     """
-    Die ersten Zeilen eines Changelog-Eintrags.
+    Die Zeile über dem Auszug: **welche Fassung** er beschreibt.
 
-    Ohne Eintrag ein Satz, der sagt, dass es keinen gibt - und nicht
+    Ohne sie ist der Auszug unbeschriftet, und ein unbeschrifteter
+    Text unter "Update verfügbar" wird als Inhalt des Updates gelesen.
+    Was das Update mitbringt, steht hinter "Alle Änderungen ansehen" -
+    hier steht, was man gerade hat.
+    """
+
+    if note is None:
+        return ""
+
+    return f"Das steckt in deiner Fassung {note.version}:"
+
+
+def _excerpt(note, installed: str = "") -> str:
+    """
+    Die ersten Zeilen der Notizen zur **installierten** Fassung.
+
+    Ohne Notizen ein Satz, der sagt, dass es keine gibt - und nicht
     etwa nichts. Eine leere Fläche unter "Update verfügbar" liest sich
-    wie ein Ladefehler.
+    wie ein Ladefehler. Der Text einer Fassung, die hier noch gar
+    nicht liegt, ist an dieser Stelle aber die schlechtere Antwort als
+    gar keiner: er beschreibt etwas, das niemand nachsehen kann.
     """
 
-    if entry is None:
+    if note is None:
 
         return (
-            "Für diese Fassung liegen keine Änderungsnotizen vor."
+            f"Zu deiner Fassung {installed} liegen keine Notizen vor."
+            if installed
+            else "Zu deiner Fassung liegen keine Notizen vor."
         )
 
-    text = format_changelog_body(entry.body)
+    text = format_changelog_body(note.body)
 
     lines = [line for line in text.splitlines() if line.strip()]
 
@@ -235,7 +255,7 @@ def _excerpt(entry) -> str:
 
         excerpt = excerpt[:EXCERPT_CHARS].rstrip() + " …"
 
-    return excerpt or "Für diese Fassung liegen keine Notizen vor."
+    return excerpt or "Zu deiner Fassung liegen keine Notizen vor."
 
 
 def _divider() -> QFrame:
@@ -928,8 +948,28 @@ class UpdateRow(QFrame):
         #
         # Der Auszug ist der eigentliche Grund für diesen Hinweis: ein
         # "Update verfügbar" ohne Inhalt beantwortet die einzige Frage
-        # nicht, die man davor hat.
+        # nicht, die man davor hat. Er beschreibt seit 2.4.1 die
+        # Fassung, die **installiert** ist - und die Zeile darüber sagt
+        # welche. Vorher stand hier der Text der angebotenen Fassung,
+        # also einer, die auf diesem Rechner noch gar nicht liegt: ein
+        # vorausschauender Absatz an einer Stelle, an der jeder eine
+        # Beschreibung dessen erwartet, was er hat. Was das Update
+        # bringt, steht einen Knopf weiter unter "Alle Änderungen
+        # ansehen" - dort ist es auch als solches beschriftet.
         #
+
+        self.note_head = QLabel("")
+
+        self.note_head.setFont(font("small"))
+
+        enable_wrap(self.note_head)
+
+        restyle(
+            self.note_head,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+        body.addWidget(self.note_head)
 
         self.excerpt = QLabel("")
 
@@ -1038,13 +1078,24 @@ class UpdateRow(QFrame):
 
     # --------------------------------------------------
 
-    def apply(self, name: str, installed: str, available: str, excerpt: str):
+    def apply(
+        self,
+        name: str,
+        installed: str,
+        available: str,
+        excerpt: str,
+        note_head: str = "",
+    ):
 
         self.title.setText(f"{name} {available}")
 
         self.versions.setText(
             f"{installed} → {available}" if installed else available
         )
+
+        self.note_head.setText(note_head)
+
+        self.note_head.setVisible(bool(note_head))
 
         self.excerpt.setText(excerpt)
 
@@ -1053,6 +1104,15 @@ class UpdateRow(QFrame):
         self.install.setEnabled(not running)
 
         self.changelog.setEnabled(not running)
+
+        #
+        # Während des Vorgangs steht der Fortschritt an der Stelle des
+        # Auszugs - die Überschrift dazu wäre dann falsch, denn sie
+        # nennt eine Fassung, die der Fortschrittstext nicht meint.
+        #
+
+        if running:
+            self.note_head.setVisible(False)
 
         if note:
             self.excerpt.setText(note)
@@ -2582,13 +2642,14 @@ class OverviewPage(Page):
 
             row.setVisible(True)
 
-            entry = latest_entry(component, state)
+            note = update_note(component, state)
 
             row.apply(
                 LABELS[component],
                 installed,
                 available,
-                _excerpt(entry),
+                _excerpt(note, installed),
+                _note_head(note, installed),
             )
 
         for component, row in self.updates.rows.items():

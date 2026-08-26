@@ -12,8 +12,12 @@ beide sichtbar falsch aussähen:
 - **Sie erscheint nur bei Handlungsbedarf.** Eine Dauerkarte "alles
   aktuell" wäre der Fehler, den die Übersicht dem Dashboard gerade
   ausgetrieben hat.
-- **Sie zeigt, was kommt, nicht nur dass etwas kommt.** Der Auszug
-  stammt aus derselben Quelle wie die vollständige Änderungsansicht.
+- **Der Auszug beschreibt die Fassung, die man hat**, und sagt das
+  auch dazu (seit 2.4.1). Vorher stand dort der Text der angebotenen
+  Fassung - unbeschriftet, also nicht von einer Beschreibung des
+  Ist-Zustands zu unterscheiden, und über etwas, das auf diesem
+  Rechner noch gar nicht liegt. Was das Update mitbringt, steht einen
+  Knopf weiter unter "Alle Änderungen ansehen".
 """
 
 import os
@@ -184,12 +188,19 @@ def test_an_addon_update_shows_the_card_with_its_notes(page):
 
     #
     # Der Auszug stammt aus der CHANGELOG.md des Addon-Ordners - und
-    # zwar aus der angebotenen Fassung, nicht aus der installierten.
+    # zwar aus der **installierten** Fassung, nicht aus der
+    # angebotenen. Die Zeile darüber sagt, welche das ist; ohne sie
+    # wäre der Auszug nicht als Beschreibung des Ist-Zustands zu
+    # erkennen.
     #
 
-    assert "Ein neuer Bericht" in row.excerpt.text()
+    assert "Etwas Altes" in row.excerpt.text()
 
-    assert "Etwas Altes" not in row.excerpt.text()
+    assert "Ein neuer Bericht" not in row.excerpt.text()
+
+    assert "1.3.3.1" in row.note_head.text()
+
+    assert row.note_head.isVisibleTo(row)
 
     #
     # Die Companion-Zeile bleibt weg, solange dort nichts ansteht.
