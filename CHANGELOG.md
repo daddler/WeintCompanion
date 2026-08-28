@@ -2,6 +2,77 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.4.4
+
+**Wenn die Discord-Anmeldung scheitert, steht jetzt da, warum.**
+Bisher endete sie mit einer Meldung des Betriebssystems: „Der Name
+oder der Dienst ist nicht bekannt". Wer das las, suchte den Fehler
+bei Discord oder bei sich selbst. Beide sind unbeteiligt.
+
+Gemeint ist etwas ganz anderes: Der Bot, über den die Anmeldung
+läuft, war unter seiner Adresse nicht auffindbar. Das steht jetzt in
+klaren Worten da — samt der Adresse, unter der es versucht wurde,
+und dem Hinweis, dass die Anmeldung selbst in Ordnung war.
+
+**Und du kannst die Adresse des Bots jetzt selbst eintragen.**
+Der Bot liegt bei einem Anbieter, der ihm bei jedem Umzug einen
+neuen Namen gibt. Nach so einem Umzug erreicht die Companion ihn
+nicht mehr — keine Anmeldung, kein Kalender, keine Aufstellung. Bis
+jetzt half nur eine neue Fassung der Companion, die erst alle
+installieren mussten.
+
+Unter *Einstellungen · Discord* steht dafür ein neues Feld
+„Adresse des Bots". Trag die aktuelle Adresse ein, drück
+„Adresse übernehmen" und starte die Companion neu. Ein Knopf
+„Erreichbarkeit prüfen" sagt vorher, ob dort überhaupt jemand
+antwortet — so musst du nicht neu starten, um es herauszufinden.
+
+Wer nichts einträgt, merkt von alledem nichts: Das Feld bleibt leer,
+und es gilt die eingebaute Adresse wie bisher. Leeren stellt sie
+jederzeit wieder her.
+
+### Technisch
+- Neu: `core/net_errors.py` übersetzt einen Netzfehler in einen
+  deutschen Satz, der die Adresse, die Entlastung der Anmeldung und
+  den nächsten Schritt nennt. Rein, ohne `httpx` und ohne Qt — aus
+  demselben Grund wie `access_roles.build_profile_payload()`.
+  Erkannt wird über die Ausnahmekette und `errno`, nicht über einen
+  `isinstance`-Test auf eine httpx-Klasse; die deutschen wie die
+  englischen Systemmeldungen zählen, weil sie vom Betriebssystem
+  kommen. Ein abgewiesener Verbindungsversuch bekommt bewusst einen
+  anderen Satz als ein Auflösungsfehler: „der Bot läuft gerade
+  nicht" und „diese Adresse gibt es nicht mehr" führen zu völlig
+  verschiedenen nächsten Schritten
+- `DiscordAuth.login()` fing den Austausch beim Bot bisher gar nicht
+  ab — die `httpx`-Ausnahme flog durch bis in den Hinweistext der
+  Seite. Jetzt wird sie übersetzt und zusätzlich protokolliert,
+  mitsamt beider Wege, die Adresse zu ändern
+- `core/backend_config.py` bekommt `write_bot_url_override()` und
+  `bot_url_source()`. Die Überschreibung war seit 2.0.12 lesbar,
+  aber nur über eine von Hand angelegte Datei zu setzen; ein Ausweg,
+  den man erst finden muss, ist im Ernstfall keiner. Eine
+  unbrauchbare Adresse wird abgewiesen statt abgelegt — dieselbe
+  Linie wie beim Lesen, nur eine Stufe früher
+- Die Umgebungsvariable gewinnt weiterhin über die Datei; steht sie,
+  sperrt der Abschnitt das Feld und sagt warum. Ein Feld, dessen
+  Eingabe folgenlos bleibt, ist von einem kaputten Knopf nicht zu
+  unterscheiden
+- `DiscordSection.refresh()` fasst das Eingabefeld nicht an. Es läuft
+  bei jedem Betreten und bei jeder `state_changed` und überschriebe
+  sonst eine halb getippte Adresse — dieselbe Falle wie beim
+  `ArchivePicker`
+- Die Erreichbarkeitsprüfung läuft in einem kurzlebigen Thread mit
+  Rückmeldung über ein Signal (wie `ConnectionsPage.sync_now()`) und
+  prüft, was im Feld steht, nicht was gilt. Alles unterhalb von
+  HTTP 500 zählt als erreichbar — die Frage ist, ob dort überhaupt
+  jemand zuhört
+- Neu: `tests/test_net_errors.py`, `tests/test_discord_section.py`
+  (baut Widgets, `importorskip("PySide6")`, offscreen — dass ein
+  Bedienelement fehlt, sieht kein anderer Test) sowie Ergänzungen in
+  `tests/test_backend_config.py` und `tests/test_discord_auth.py`.
+  Letztere fahren `login()` wirklich durch, indem der Rückruf statt
+  eines Browsers selbst ausgelöst wird
+
 ## 2.4.3
 
 **Diese Fassung bringt keine sichtbaren Änderungen.** Sie hebt allein

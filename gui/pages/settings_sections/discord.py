@@ -1,9 +1,25 @@
 import threading
 
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QVBoxLayout,
+    QWidget,
+)
 
+from core.backend_config import (
+    BOT_BASE_URL,
+    BOT_URL_ENV,
+    DEFAULT_BOT_BASE_URL,
+    bot_url_override_path,
+    bot_url_source,
+    normalize_bot_url,
+    write_bot_url_override,
+)
 from core.discord_account import is_usable
+from core.net_errors import bot_unreachable_text
 
 from gui.theme.colors import Colors
 from gui.widgets.hero_banner import HeroButton
@@ -18,6 +34,16 @@ class _DiscordLoginBridge(QObject):
     """
 
     finished = Signal(object, object)  # (result_dict | None, error_str | None)
+
+
+class _BotProbeBridge(QObject):
+    """
+    Meldet das Ergebnis der Erreichbarkeitsprüfung zurück in den
+    Hauptthread - derselbe Weg wie beim Login, aus demselben Grund:
+    ein Netzabruf im Klick-Handler friert das Fenster ein.
+    """
+
+    finished = Signal(str, bool, str)  # (adresse, erreichbar, meldung)
 
 
 class DiscordSection(SectionContent):
@@ -83,12 +109,276 @@ class DiscordSection(SectionContent):
 
         card_layout.addLayout(button_row)
 
-        self.addRow(card, divider=False)
+        self.addRow(card)
+
+        self.addRow(self._build_address_row(), divider=False)
 
         self.login_button.clicked.connect(self.start_login)
         self.unlink_button.clicked.connect(self.unlink)
 
         self.refresh()
+
+    # --------------------------------------------------
+    # Adresse des Bots
+    # --------------------------------------------------
+    # Warum das hier bedienbar ist und nicht nur in einer Datei:
+    # der Bot liegt bei einem Anbieter, der den Rechner in den
+    # Hostnamen schreibt (siehe core/backend_config.py). Zieht er um,
+    # verschwindet der alte Name aus dem DNS, und ab diesem Moment
+    # scheitert jeder Abruf mit "Der Name oder der Dienst ist nicht
+    # bekannt" - die Anmeldung eingeschlossen. Der Ausweg gibt es
+    # seit 2.0.12, aber er führte über eine von Hand angelegte Datei
+    # in einem Verzeichnis, das niemand auswendig kennt. Ein Ausweg,
+    # den man erst finden muss, ist im Ernstfall keiner.
+
+    def _build_address_row(self) -> QWidget:
+
+        self._probe = _BotProbeBridge(self)
+
+        self._probe.finished.connect(self._on_probe_finished)
+
+        row = QWidget()
+
+        layout = QVBoxLayout(row)
+
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        layout.setSpacing(10)
+
+        label = QLabel("Adresse des Bots")
+
+        label.setStyleSheet(
+            f"font-size:14px;font-weight:600;color:{Colors.WHITE};"
+        )
+
+        layout.addWidget(label)
+
+        description = QLabel(
+            "Nur ändern, wenn der Bot umgezogen ist - dann meldet "
+            "die App, seine Adresse liesse sich nicht auflösen. Leer "
+            "lassen für die eingebaute Adresse. Die Änderung greift "
+            "nach einem Neustart der Companion."
+        )
+
+        description.setWordWrap(True)
+
+        description.setStyleSheet(
+            f"font-size:13px;color:{Colors.TEXT_MUTED};"
+        )
+
+        layout.addWidget(description)
+
+        self.address_input = QLineEdit()
+
+        self.address_input.setPlaceholderText(DEFAULT_BOT_BASE_URL)
+
+        layout.addWidget(self.address_input)
+
+        self.address_hint = QLabel("")
+
+        self.address_hint.setWordWrap(True)
+
+        self.address_hint.setStyleSheet(
+            f"font-size:13px;color:{Colors.TEXT_MUTED};"
+        )
+
+        layout.addWidget(self.address_hint)
+
+        address_buttons = QHBoxLayout()
+
+        address_buttons.addStretch()
+
+        self.probe_button = HeroButton(
+            "Erreichbarkeit prüfen",
+            primary=False,
+        )
+
+        self.address_save_button = HeroButton(
+            "Adresse übernehmen",
+            primary=False,
+        )
+
+        address_buttons.addWidget(self.probe_button)
+        address_buttons.addWidget(self.address_save_button)
+
+        layout.addLayout(address_buttons)
+
+        self.probe_button.clicked.connect(self.probe_address)
+        self.address_save_button.clicked.connect(self.save_address)
+
+        self._refresh_address()
+
+        return row
+
+    def _refresh_address(self):
+        """
+        Das Feld auf den gerade gültigen Stand bringen.
+
+        Nicht Teil von `refresh()`: jenes läuft bei jedem Betreten
+        des Abschnitts und bei jeder `state_changed`, und es würde
+        eine halb getippte Adresse unter den Fingern des Nutzers
+        überschreiben.
+        """
+
+        quelle = bot_url_source()
+
+        self.address_input.setText(
+            "" if quelle == "default" else BOT_BASE_URL
+        )
+
+        if quelle == BOT_URL_ENV:
+
+            #
+            # Die Umgebungsvariable gewinnt über die Datei. Ohne
+            # diesen Hinweis änderte man hier eine Adresse, die
+            # danach folgenlos bliebe - von aussen nicht von einem
+            # kaputten Knopf zu unterscheiden.
+            #
+
+            self.address_input.setEnabled(False)
+
+            self.address_save_button.setEnabled(False)
+
+            self.address_hint.setText(
+                f"Aktuell: {BOT_BASE_URL} - vorgegeben durch die "
+                f"Umgebungsvariable {BOT_URL_ENV}. Solange die "
+                "gesetzt ist, hat eine Eingabe hier keine Wirkung."
+            )
+
+            return
+
+        self.address_input.setEnabled(True)
+
+        self.address_save_button.setEnabled(True)
+
+        if quelle == "default":
+
+            self.address_hint.setText(
+                f"Aktuell: {BOT_BASE_URL} (eingebaute Adresse)."
+            )
+
+        else:
+
+            self.address_hint.setText(
+                f"Aktuell: {BOT_BASE_URL} - hinterlegt in "
+                f"{bot_url_override_path()}."
+            )
+
+    def save_address(self):
+
+        eingabe = self.address_input.text().strip()
+
+        try:
+
+            gespeichert = write_bot_url_override(eingabe)
+
+        except (ValueError, OSError) as exc:
+
+            self.address_hint.setText(f"Nicht gespeichert: {exc}")
+
+            return
+
+        self.manager.logger.info(
+            "Adresse des Bots geändert: "
+            f"{gespeichert or DEFAULT_BOT_BASE_URL} "
+            "(gilt ab dem nächsten Start)."
+        )
+
+        self.address_input.setText(gespeichert)
+
+        self.address_hint.setText(
+            f"Gespeichert: {gespeichert or DEFAULT_BOT_BASE_URL}. "
+            "Bitte die Companion neu starten - erst danach benutzen "
+            "Anmeldung und Abgleich die neue Adresse."
+        )
+
+    def probe_address(self):
+        """
+        Antwortet der Bot unter dieser Adresse überhaupt?
+
+        Geprüft wird, was im Feld steht - nicht, was gilt: sonst
+        liesse sich eine neue Adresse erst nach dem Neustart
+        beurteilen, also genau dann nicht, wenn man es wissen will.
+        """
+
+        adresse = (
+            normalize_bot_url(self.address_input.text())
+            or BOT_BASE_URL
+        )
+
+        self.probe_button.setEnabled(False)
+
+        self.address_hint.setText(f"Prüfe {adresse} …")
+
+        thread = threading.Thread(
+            target=self._probe_worker,
+            args=(adresse, ),
+            daemon=True,
+            name="BotProbeThread",
+        )
+
+        thread.start()
+
+    def _probe_worker(self, adresse: str):
+
+        #
+        # Erst hier importiert: dieser Abschnitt wird gebaut, sobald
+        # jemand die Einstellungen öffnet, und soll dafür keine
+        # HTTP-Bibliothek nachziehen.
+        #
+
+        import httpx
+
+        try:
+
+            response = httpx.get(f"{adresse}/status", timeout=8)
+
+        except Exception as exc:
+
+            self._probe.finished.emit(
+                adresse,
+                False,
+                bot_unreachable_text(exc, adresse),
+            )
+
+            return
+
+        if response.status_code >= 500:
+
+            self._probe.finished.emit(
+                adresse,
+                False,
+                f"{adresse} antwortet, meldet aber einen Fehler "
+                f"(HTTP {response.status_code}). Der Bot läuft "
+                "gerade nicht richtig.",
+            )
+
+            return
+
+        #
+        # Alles unterhalb von 500 zählt als erreichbar - auch ein
+        # 404. Die Frage an dieser Stelle ist, ob dort überhaupt
+        # jemand zuhört; welche Pfade er kennt, beantworten die
+        # Abrufe selbst.
+        #
+
+        self._probe.finished.emit(
+            adresse,
+            True,
+            f"{adresse} ist erreichbar (HTTP "
+            f"{response.status_code}).",
+        )
+
+    def _on_probe_finished(self, adresse, erreichbar, meldung):
+
+        self.probe_button.setEnabled(True)
+
+        self.address_hint.setText(meldung)
+
+        if erreichbar:
+            self.manager.logger.success(meldung)
+        else:
+            self.manager.logger.warning(meldung.replace("\n\n", " "))
 
     # --------------------------------------------------
 

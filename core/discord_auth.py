@@ -8,6 +8,7 @@ import httpx
 
 from core.backend_config import BOT_BASE_URL
 from core.browser import open_url
+from core.net_errors import bot_unreachable_text, override_hint
 
 # --------------------------------------------------
 # Discord OAuth2 Konfiguration
@@ -244,11 +245,48 @@ class DiscordAuth:
                 "Kein Autorisierungscode erhalten."
             )
 
-        response = httpx.post(
-            f"{BOT_BASE_URL}/companion/auth/exchange",
-            json={"code": code},
-            timeout=15,
-        )
+        #
+        # Der Netzfehler wird hier abgefangen und übersetzt, statt
+        # ihn durchzureichen. Bis 2.4.3 stand nach einer im Browser
+        # tadellos abgeschlossenen Anmeldung
+        #
+        #     Der letzte Versuch ist fehlgeschlagen: [Errno -2] Der
+        #     Name oder der Dienst ist nicht bekannt
+        #
+        # auf dem Bildschirm - eine Meldung des Betriebssystems, in
+        # der weder die Adresse vorkommt, die nicht aufgelöst werden
+        # konnte, noch der Umstand, dass Discord und die Anmeldung
+        # selbst völlig in Ordnung waren. Wer sie liest, sucht den
+        # Fehler bei sich.
+        #
+        # Und genau dieser Fall ist der wahrscheinlichste, den die
+        # Companion je erlebt: verschwindet der Name des Bots aus dem
+        # DNS - der Anbieter schreibt den Rechner in den Hostnamen,
+        # siehe core/backend_config.py -, scheitert ab diesem Moment
+        # jeder einzelne Abruf so.
+        #
+
+        try:
+
+            response = httpx.post(
+                f"{BOT_BASE_URL}/companion/auth/exchange",
+                json={"code": code},
+                timeout=15,
+            )
+
+        except Exception as exc:
+
+            if logger is not None:
+
+                logger.error(
+                    "Discord-Login: der Bot ist unter "
+                    f"{BOT_BASE_URL} nicht erreichbar ({exc}). "
+                    f"Abweichende Adresse: {override_hint()}."
+                )
+
+            raise DiscordAuthError(
+                bot_unreachable_text(exc, BOT_BASE_URL)
+            ) from exc
 
         if response.status_code != 200:
 

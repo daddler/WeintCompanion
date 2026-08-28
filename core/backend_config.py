@@ -107,6 +107,80 @@ def resolve_bot_base_url() -> str:
     return DEFAULT_BOT_BASE_URL
 
 
+def write_bot_url_override(value) -> str:
+    """
+    Die abweichende Adresse ablegen - oder die Ablage räumen.
+
+    Liefert die abgelegte Adresse, oder "", wenn die Datei entfernt
+    wurde. Eine unbrauchbare Angabe wird **nicht** geschrieben,
+    sondern gemeldet: dieselbe Linie wie beim Lesen, nur eine Stufe
+    früher. Eine kaputte Adresse hier abzulegen hiesse, den einzigen
+    Ausweg mit dem zu verstopfen, wogegen er hilft.
+
+    Warum das überhaupt bedienbar sein muss: verschwindet der Name
+    des Bots aus dem DNS - der wahrscheinlichste Ausfall dieser
+    Anwendung, siehe oben -, scheitert jeder Abruf, und der einzige
+    Weg zurück führte bis 2.4.4 über eine von Hand angelegte Datei
+    in einem Verzeichnis, das niemand auswendig kennt. Ein Ausweg,
+    den man erst finden muss, ist im Ernstfall keiner.
+    """
+
+    text = str(value or "").strip()
+
+    pfad = bot_url_override_path()
+
+    if not text:
+
+        try:
+            pfad.unlink()
+        except FileNotFoundError:
+            pass
+
+        return ""
+
+    adresse = normalize_bot_url(text)
+
+    if not adresse:
+
+        raise ValueError(
+            "Das ist keine brauchbare Adresse. Erwartet wird eine "
+            "vollständige Angabe mit http:// oder https:// davor, "
+            "zum Beispiel https://weintcodex-bot.example.app"
+        )
+
+    pfad.parent.mkdir(parents=True, exist_ok=True)
+
+    pfad.write_text(adresse + "\n", encoding="utf-8")
+
+    return adresse
+
+
+def bot_url_source() -> str:
+    """
+    Woher die gerade gültige Adresse stammt.
+
+    Für die Anzeige in den Einstellungen: steht dort eine Adresse,
+    die von einer Umgebungsvariable kommt, hilft es nicht, das
+    Eingabefeld zu ändern - jene gewinnt.
+    """
+
+    if normalize_bot_url(os.environ.get(BOT_URL_ENV)):
+        return BOT_URL_ENV
+
+    try:
+        pfad = bot_url_override_path()
+
+        if pfad.is_file() and normalize_bot_url(
+            pfad.read_text(encoding="utf-8")
+        ):
+            return BOT_URL_FILE
+
+    except OSError:
+        pass
+
+    return "default"
+
+
 #
 # Einmal beim Import bestimmt. Die acht lesenden Module holen sich den
 # Wert selbst beim Import ab; eine spätere Änderung greift deshalb
