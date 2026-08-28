@@ -3,6 +3,8 @@ import threading
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from core.discord_account import is_usable
+
 from gui.theme.colors import Colors
 from gui.widgets.hero_banner import HeroButton
 
@@ -101,7 +103,13 @@ class DiscordSection(SectionContent):
 
         self.login_button.setEnabled(True)
 
-        if account:
+        #
+        # `is_usable()` und nicht "steht da etwas": ohne
+        # Companion-Token ist nichts abrufbar, und "Verbunden als …"
+        # wäre dann eine Behauptung, der kein einziger Abruf folgt.
+        #
+
+        if is_usable(account):
 
             self.status_label.setText(
                 f"Verbunden als {account.get('username', '?')}"
@@ -177,7 +185,9 @@ class DiscordSection(SectionContent):
 
         try:
 
-            result = self.manager.discord_auth.login()
+            result = self.manager.discord_auth.login(
+                self.manager.logger
+            )
 
         except Exception as exc:
 
@@ -189,30 +199,61 @@ class DiscordSection(SectionContent):
 
     def _on_login_finished(self, result, error):
 
-        if error:
+        #
+        # Das Ablegen gehört mit in die Fehlerbehandlung. Es stand
+        # vorher ungesichert im Erfolgszweig: schlug es fehl (kein
+        # Schreibrecht, ein Virenscanner, der die Datei hält, eine
+        # Antwort ohne Companion-Token), flog die Ausnahme mitten aus
+        # einem Qt-Slot heraus, das `refresh()` darunter lief nie, und
+        # auf dem Bildschirm blieb "Browser öffnet sich …" stehen.
+        # Genau der Zustand, den man von aussen als "ich verbinde
+        # mich, und es kommt nichts" beschreibt.
+        #
+
+        problem = error
+
+        if not problem:
+
+            try:
+
+                self.manager.discord_account.save(result)
+
+            except Exception as exc:
+
+                problem = str(exc)
+
+        if problem:
 
             self.manager.logger.error(
-                f"Discord-Login fehlgeschlagen: {error}"
+                f"Discord-Login fehlgeschlagen: {problem}"
+            )
+
+        elif result.get("authorized"):
+
+            self.manager.logger.success(
+                f"Discord verbunden als {result.get('username')}."
             )
 
         else:
 
-            self.manager.discord_account.save(result)
-
-            if result.get("authorized"):
-
-                self.manager.logger.success(
-                    f"Discord verbunden als {result.get('username')}."
-                )
-
-            else:
-
-                self.manager.logger.warning(
-                    f"Discord verbunden als {result.get('username')}, "
-                    "aber ohne Berechtigung für den Raid-Roster-Export."
-                )
+            self.manager.logger.warning(
+                f"Discord verbunden als {result.get('username')}, "
+                "aber ohne Berechtigung für den Raid-Roster-Export."
+            )
 
         self.refresh()
+
+        #
+        # Nach `refresh()`, denn das setzt den Hinweistext neu. Ein
+        # Fehlschlag, der nur im Protokoll steht, ist an dieser Stelle
+        # von "nichts passiert" nicht zu unterscheiden.
+        #
+
+        if problem:
+
+            self.hint_label.setText(
+                f"Der letzte Versuch ist fehlgeschlagen: {problem}"
+            )
 
     # --------------------------------------------------
 

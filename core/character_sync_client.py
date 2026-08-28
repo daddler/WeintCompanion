@@ -86,27 +86,21 @@ class CharacterSyncClient:
             # und dieselbe Nachricht endlos alle paar Sekunden
             # erfolglos erneut versucht werden.
             #
-            # Aber erst nach mehreren Ablehnungen kurz hintereinander
-            # (AUTH_REJECTIONS_BEFORE_UNLINK in
-            # core/discord_account.py): dieser Sync läuft alle fünf
-            # Sekunden, ein einzelnes 401 eines gerade neu startenden
-            # Bots hat hier sonst die Verknüpfung gekostet.
+            # Aber erst nach mehreren Ablehnungen, die weit genug
+            # auseinanderliegen (AUTH_REJECTIONS_BEFORE_UNLINK und
+            # AUTH_REJECTION_COOLDOWN in core/discord_account.py):
+            # eine nicht zugestellte Nachricht bleibt in der
+            # Warteschlange und wird alle fünf Sekunden erneut
+            # versucht - drei Ablehnungen sind hier also derselbe
+            # Vorfall und nicht drei.
+            #
+            # Gesagt wird es dort und nicht hier: von den fünf
+            # Stellen, die diese Funktion aufrufen, hat genau diese
+            # eine überhaupt etwas gemeldet - und auch nur nach
+            # stdout, wo es im Protokoll der App nicht ankommt.
             #
 
-            if self.account_store.note_auth_rejected():
-
-                print(
-                    "Charakter-Sync-Fehler: Companion-Token vom Bot "
-                    "abgelehnt (401) - Verknüpfung wird lokal aufgehoben, "
-                    "bitte Discord in den Einstellungen erneut verbinden."
-                )
-
-            else:
-
-                print(
-                    "Charakter-Sync-Fehler: Companion-Token vom Bot "
-                    "abgelehnt (401) - wird erneut versucht."
-                )
+            self.account_store.note_auth_rejected()
 
             return False
 

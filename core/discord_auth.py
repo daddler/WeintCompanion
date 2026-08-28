@@ -34,6 +34,49 @@ class DiscordAuthError(Exception):
     pass
 
 
+def parse_exchange_response(payload) -> dict:
+    """
+    Prüft die Antwort des Bots auf den Code-Austausch, bevor sie
+    abgelegt wird.
+
+    Bewusst rein und ausserhalb von `login()` - aus demselben Grund,
+    aus dem `access_roles.build_profile_payload()` ohne `httpx`
+    auskommt: die Entscheidung ist die Stelle, an der etwas falsch
+    sein kann, und die soll ohne Netz und ohne Fenster prüfbar sein.
+
+    Bis 2.4.1 wurde `response.json()` ungeprüft weitergereicht. Eine
+    Antwort ohne `companion_token` - ein `null`, eine Fehlermeldung
+    mit Status 200, eine ältere oder neuere Feldbenennung - landete
+    damit unverändert in der Ablage. Die Oberfläche meldete danach
+    "Verbunden als …", während jeder einzelne Client genau dieses
+    Feld verlangt und deshalb wortlos nichts tat. Genau das ist der
+    Zustand "ich verbinde mich, und es kommt nichts".
+    """
+
+    if not isinstance(payload, dict):
+
+        raise DiscordAuthError(
+            "Der Bot hat auf die Anmeldung keine verwertbare Antwort "
+            "geschickt."
+        )
+
+    token = str(payload.get("companion_token") or "").strip()
+
+    if not token:
+
+        raise DiscordAuthError(
+            "Der Bot hat die Anmeldung bestätigt, aber kein "
+            "Companion-Token mitgeschickt - ohne das kann die App "
+            "nichts abrufen. Bitte erneut versuchen."
+        )
+
+    account = dict(payload)
+
+    account["companion_token"] = token
+
+    return account
+
+
 class _CallbackHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
@@ -81,7 +124,7 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
 
 class DiscordAuth:
 
-    def login(self) -> dict:
+    def login(self, logger=None) -> dict:
         """
         Führt den kompletten OAuth-Login aus: startet einen
         temporären lokalen HTTP-Server, öffnet den System-Browser zur
@@ -96,10 +139,27 @@ class DiscordAuth:
 
         state = secrets.token_urlsafe(16)
 
-        server = http.server.HTTPServer(
-            ("127.0.0.1", REDIRECT_PORT),
-            _CallbackHandler,
-        )
+        try:
+
+            server = http.server.HTTPServer(
+                ("127.0.0.1", REDIRECT_PORT),
+                _CallbackHandler,
+            )
+
+        except OSError as exc:
+
+            #
+            # Der übliche Fall ist ein noch laufender Versuch: der
+            # wartende Server hält den Port bis zu zwei Minuten. Als
+            # englische Systemmeldung ("Address already in use") war
+            # das an dieser Stelle nicht zu deuten.
+            #
+
+            raise DiscordAuthError(
+                f"Die Anmeldung läuft bereits (Port {REDIRECT_PORT} ist "
+                "belegt). Bitte den offenen Browser-Tab abschliessen "
+                "oder kurz warten und es erneut versuchen."
+            ) from exc
 
         server.result = None
         server.timeout = 120
@@ -123,7 +183,25 @@ class DiscordAuth:
         # unten.
         #
 
-        open_url(f"{DISCORD_AUTHORIZE_URL}?{query}")
+        address = f"{DISCORD_AUTHORIZE_URL}?{query}"
+
+        #
+        # Und der Rückgabewert wird ausgewertet. Ohne Browser (auf
+        # einem frisch aufgesetzten System ist schlicht keiner als
+        # Standard hinterlegt) hat der Knopf sonst zwei Minuten lang
+        # nichts getan und danach mit "Zeitüberschreitung" geantwortet
+        # - der Grund stand nirgends, und die Adresse, die man von
+        # Hand hätte öffnen können, auch nicht.
+        #
+
+        if not open_url(address, logger):
+
+            server.server_close()
+
+            raise DiscordAuthError(
+                "Es liess sich kein Browser öffnen. Bitte diese "
+                f"Adresse von Hand aufrufen: {address}"
+            )
 
         try:
 
@@ -178,7 +256,18 @@ class DiscordAuth:
                 f"Bot hat den Login abgelehnt: {response.text}"
             )
 
-        return response.json()
+        try:
+
+            payload = response.json()
+
+        except ValueError as exc:
+
+            raise DiscordAuthError(
+                "Die Antwort des Bots auf die Anmeldung war kein "
+                "gültiges JSON."
+            ) from exc
+
+        return parse_exchange_response(payload)
 
     # --------------------------------------------------
 

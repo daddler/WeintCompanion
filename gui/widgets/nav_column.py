@@ -60,6 +60,8 @@ from PySide6.QtWidgets import (
 # hier ist deshalb unbedenklich (main_window macht denselben).
 #
 
+from core.discord_account import is_usable
+
 from gui.navigation import PageId
 from gui.theme import tokens
 from gui.theme.fonts import font
@@ -746,7 +748,13 @@ class NavColumn(QFrame):
 
         account = self.manager.discord_account.load()
 
-        if account:
+        #
+        # Nur ein Eintrag MIT Companion-Token heisst "verbunden" -
+        # siehe core/discord_account.py:is_usable(). Ohne das meldete
+        # die Spalte einen Namen, wo nichts abrufbar war.
+        #
+
+        if is_usable(account):
 
             username = account.get("username", "Discord")
 

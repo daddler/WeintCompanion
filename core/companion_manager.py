@@ -18,6 +18,7 @@ from addon.sync_reader import SyncReader
 from core.sync_manager import SyncManager
 from PySide6.QtCore import QObject, QTimer, Signal
 from core.discord_status import DiscordStatus
+from core import discord_account
 from core.discord_account import DiscordAccountStore
 from core.discord_auth import DiscordAuth
 from core.access_profile_sync import AccessProfileSync
@@ -115,6 +116,15 @@ class CompanionManager(QObject):
         self.sync = SyncManager(self)
         self.discord = DiscordStatus()
         self.discord_account = DiscordAccountStore()
+
+        #
+        # Damit die Ablage selbst sagen kann, wenn sie die Verknüpfung
+        # aufhebt oder aus der Sicherung wiederherstellt. Vorher hat
+        # das eine von fünf Stellen mit `print()` getan - also an
+        # keiner Stelle, die ein Nutzer je zu sehen bekommt.
+        #
+
+        discord_account.set_logger(self.logger)
         self.discord_auth = DiscordAuth()
         #
         # Alles, was Richtung Addon zugestellt wird, laeuft ueber eine

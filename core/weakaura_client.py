@@ -233,10 +233,13 @@ class WeakAuraClient:
             #
             #
             # Nicht beim ersten Mal aufheben: siehe
-            # AUTH_REJECTIONS_BEFORE_UNLINK in core/discord_account.py.
+            # AUTH_REJECTIONS_BEFORE_UNLINK und
+            # AUTH_REJECTION_COOLDOWN in core/discord_account.py.
             # Ein einzelnes 401 kann ein gerade neu startender Bot
-            # sein; erst mehrere kurz hintereinander heissen, dass er
-            # dieses Token wirklich nicht mehr kennt.
+            # sein; erst mehrere, die weit genug auseinanderliegen,
+            # heissen, dass er dieses Token wirklich nicht mehr kennt
+            # - ein Abruf, der im Takt wiederholt wird, ist ein
+            # Vorfall und nicht drei.
             #
 
             self.account_store.note_auth_rejected()

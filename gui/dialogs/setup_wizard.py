@@ -40,6 +40,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.discord_account import is_usable
 from core.wow_folder import resolve_classic_folder
 
 from gui.theme import tokens
@@ -457,7 +458,7 @@ class SetupWizard(QDialog):
 
         account = self.manager.discord_account.load()
 
-        if account:
+        if is_usable(account):
 
             step.set_status(
                 "ok", f"Verbunden als {account.get('username', '-')}.",
@@ -487,7 +488,9 @@ class SetupWizard(QDialog):
 
         try:
 
-            result = self.manager.discord_auth.login()
+            result = self.manager.discord_auth.login(
+                self.manager.logger
+            )
 
         except Exception as exc:
 
@@ -501,17 +504,47 @@ class SetupWizard(QDialog):
 
         self.discord_button.setEnabled(True)
 
-        if error:
+        #
+        # Wie in Einstellungen → Discord: das Ablegen kann selbst
+        # scheitern (kein Schreibrecht, eine Antwort ohne
+        # Companion-Token), und ein Fehlschlag gehört auf den Schritt
+        # und nicht nur ins Protokoll.
+        #
 
-            self.manager.logger.error(f"Discord-Login fehlgeschlagen: {error}")
+        problem = error
 
-        else:
+        if not problem:
 
-            self.manager.discord_account.save(result)
+            try:
 
-            self.manager.logger.success(
-                f"Discord verbunden als {result.get('username')}."
+                self.manager.discord_account.save(result)
+
+            except Exception as exc:
+
+                problem = str(exc)
+
+        if problem:
+
+            self.manager.logger.error(
+                f"Discord-Login fehlgeschlagen: {problem}"
             )
+
+            #
+            # Gekürzt, weil die Zeile in einem Dialog fester Breite
+            # steht und nicht umbricht: die volle Meldung (samt
+            # Adresse, wenn sich kein Browser öffnen liess) steht im
+            # Protokoll.
+            #
+
+            kurz = problem if len(problem) <= 90 else problem[:87] + "…"
+
+            self._steps[2].set_status("error", kurz)
+
+            return
+
+        self.manager.logger.success(
+            f"Discord verbunden als {result.get('username')}."
+        )
 
         self._refresh_discord_step()
 

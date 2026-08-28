@@ -151,7 +151,16 @@ def show_discord_link_prompt_if_needed(manager, parent=None) -> None:
     Funktionsumfang, der sonst dauerhaft unbemerkt bliebe.
     """
 
-    if manager.discord_account.load():
+    #
+    # `is_linked()` statt `load()`: ein abgelegter Eintrag OHNE
+    # Companion-Token sah hier wie eine bestehende Verknüpfung aus und
+    # hat den Hinweis dauerhaft unterdrückt - während kein einziger
+    # Abruf funktionierte, weil jeder Client genau dieses Feld
+    # verlangt. Der Hinweis ist der einzige Ort, an dem das je
+    # aufgefallen wäre.
+    #
+
+    if manager.discord_account.is_linked():
         return
 
     dialog = DiscordLinkPromptDialog(parent)

@@ -2,6 +2,79 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.4.2
+
+**Die Discord-Verknüpfung bleibt jetzt, wo sie ist.**
+Nach einem Neustart des Rechners war sie regelmässig wieder weg, und
+der Hinweis „Discord noch nicht verknüpft" stand erneut da. Dafür
+gab es drei Gründe, alle drei sind behoben.
+
+Der erste: lehnt der Bot die Verknüpfung einmal ab, hebt die App sie
+erst nach mehreren Ablehnungen auf — gemeint waren drei getrennte
+Vorfälle. Tatsächlich reichte ein einziger. Eine Meldung ans Discord,
+die nicht durchkommt, wird nämlich alle fünf Sekunden erneut
+versucht, und damit war die Grenze nach einer Viertelminute
+überschritten. Jetzt zählen nur Ablehnungen, die mindestens eine
+Minute auseinanderliegen. Ein Bot, der gerade neu startet, kostet die
+Verknüpfung nicht mehr.
+
+Der zweite: die Datei mit der Verknüpfung wurde beim Speichern zuerst
+geleert und dann neu geschrieben. Ein Absturz oder ein erzwungener
+Neustart genau dazwischen liess eine leere Datei zurück — und die war
+von „noch nie verbunden" nicht zu unterscheiden. Jetzt wird daneben
+geschrieben und erst am Ende umgestellt, und es gibt eine Sicherung,
+aus der die App sich holt, was noch da ist. Das gilt für Linux und
+Windows gleichermassen.
+
+Der dritte: hebt die App die Verknüpfung von sich aus auf, sagt sie
+das jetzt im Protokoll. Bisher geschah es lautlos, und aufgefallen
+ist es erst beim nächsten Start.
+
+**Und verbinden heisst wieder verbinden.**
+Wenn die Anmeldung schiefging, blieb auf der Seite „Browser öffnet
+sich …" stehen und sonst passierte nichts. Jetzt steht der Grund da:
+kein Browser gefunden (mit der Adresse zum Selbstöffnen), die
+Anmeldung läuft schon in einem anderen Fenster, oder die Antwort des
+Bots war unvollständig.
+
+Der letzte Fall ist der wichtigste. Eine unvollständige Antwort wurde
+bisher trotzdem gespeichert. Die App meldete danach „Verbunden als
+…", während in Wahrheit kein einziger Abruf laufen konnte — Kalender,
+Roster und Auswertung blieben leer, ohne dass irgendwo stand, warum.
+Eine solche Antwort gilt jetzt als fehlgeschlagene Anmeldung.
+
+### Technisch
+- `AUTH_REJECTION_COOLDOWN` (60 s) in `core/discord_account.py`: eine
+  Ablehnung zählt nur, wenn sie weit genug von der vorigen entfernt
+  ist. Ohne das war `AUTH_REJECTIONS_BEFORE_UNLINK = 3` in fünfzehn
+  Sekunden erreicht, weil eine fehlgeschlagene Zustellung in der
+  Warteschlange des Addons liegen bleibt und im Sync-Takt erneut
+  versucht wird (`core/sync_manager.py`)
+- `DiscordAccountStore.save()` schreibt über eine Nebendatei mit
+  `fsync()` und `os.replace()` und legt danach eine `.bak` an;
+  `load()` holt daraus zurück, wenn die Hauptdatei fehlt oder nicht
+  lesbar ist. `clear()` räumt beide weg, sonst käme eine getrennte
+  Verknüpfung zurück
+- `save()` wirft `DiscordAccountError` statt lautlos einen Eintrag
+  ohne `companion_token` abzulegen; beide Aufrufer (Einstellungen und
+  Einrichtung) behandeln das jetzt als Fehlschlag. Vorher flog eine
+  Ausnahme mitten aus einem Qt-Slot und das `refresh()` darunter lief
+  nie
+- `is_usable()` ist die eine Antwort auf „ist ein Konto verknüpft".
+  Vier Stellen prüften „steht da etwas", sieben Clients verlangten
+  `companion_token` — der Eintrag ohne Token erfüllte das erste und
+  nicht das zweite
+- `parse_exchange_response()` in `core/discord_auth.py` prüft die
+  Antwort des Bots, bewusst als reine Funktion neben `login()`
+- `note_auth_rejected()` meldet die Aufhebung selbst über den Logger
+  der App (`discord_account.set_logger()` in `CompanionManager`).
+  Vier der fünf Aufrufer haben den Rückgabewert nie ausgewertet, der
+  fünfte schrieb nach stdout
+- `login()` wertet den Rückgabewert von `open_url()` aus und
+  übersetzt ein belegtes Port 53682 in einen deutschen Satz
+- `tests/test_discord_account.py` und das neue
+  `tests/test_discord_auth.py` halten alle sechs Regeln fest
+
 ## 2.4.1
 
 **Über dem Update-Knopf steht jetzt, was in deiner Fassung steckt.**
