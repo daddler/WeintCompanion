@@ -153,7 +153,7 @@ def test_die_adresse_zeigt_auf_den_bot(monkeypatch):
     """
 
     assert backend_config.DEFAULT_BOT_BASE_URL == (
-        "https://weintcodex-bot.e.jrnm.app"
+        "https://weintcodex-bot.e.onjrnm.co.uk"
     )
 
     assert not backend_config.DEFAULT_BOT_BASE_URL.endswith("/")

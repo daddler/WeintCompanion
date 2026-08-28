@@ -33,7 +33,21 @@ from core.paths import Paths
 # Wert ist immer noch der bessere Rateversuch.
 #
 
-DEFAULT_BOT_BASE_URL = "https://weintcodex-bot.e.jrnm.app"
+#
+# Der Bot ist inzwischen zweimal umgezogen, und beim zweiten Mal
+# wechselte nicht nur der Rechnername, sondern die ganze Domain:
+#
+#   weintcodex-a1d.b.jrnm.app  ->  weintcodex-bot.e.jrnm.app
+#                              ->  weintcodex-bot.e.onjrnm.co.uk
+#
+# `jrnm.app` löst seitdem überhaupt nicht mehr auf (NXDOMAIN für die
+# ganze Zone), nicht nur der alte Hostname. Jeder Abruf scheiterte
+# danach mit "Der Name oder der Dienst ist nicht bekannt" - die
+# Discord-Anmeldung eingeschlossen, obwohl an ihr nichts fehlte.
+# Genau der Fall, für den die Überschreibung unten existiert.
+#
+
+DEFAULT_BOT_BASE_URL = "https://weintcodex-bot.e.onjrnm.co.uk"
 
 BOT_URL_ENV = "WEINTCODEX_BOT_URL"
 

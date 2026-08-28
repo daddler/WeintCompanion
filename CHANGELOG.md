@@ -4,6 +4,14 @@ Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
 ## 2.4.4
 
+**Die Verbindung zum Bot geht wieder.**
+Der Bot ist umgezogen und hat dabei eine neue Adresse bekommen. Die
+alte gab es von einem Moment auf den anderen nicht mehr — und damit
+lief nichts mehr, was über ihn geht: keine Discord-Anmeldung, kein
+Kalender, keine Aufstellung, kein Abgleich. Die neue Adresse steckt
+in dieser Fassung. Nach dem Update funktioniert alles wieder, ohne
+dass du etwas einstellen musst.
+
 **Wenn die Discord-Anmeldung scheitert, steht jetzt da, warum.**
 Bisher endete sie mit einer Meldung des Betriebssystems: „Der Name
 oder der Dienst ist nicht bekannt". Wer das las, suchte den Fehler
@@ -32,6 +40,11 @@ und es gilt die eingebaute Adresse wie bisher. Leeren stellt sie
 jederzeit wieder her.
 
 ### Technisch
+- `DEFAULT_BOT_BASE_URL` zeigt auf
+  `https://weintcodex-bot.e.onjrnm.co.uk`. Der zweite Umzug wechselte
+  nicht nur den Rechnernamen, sondern die ganze Domain: `jrnm.app`
+  löst seitdem gar nicht mehr auf (NXDOMAIN für die komplette Zone),
+  nicht nur der alte Hostname
 - Neu: `core/net_errors.py` übersetzt einen Netzfehler in einen
   deutschen Satz, der die Adresse, die Entlastung der Anmeldung und
   den nächsten Schritt nennt. Rein, ohne `httpx` und ohne Qt — aus
