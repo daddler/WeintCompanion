@@ -2,6 +2,24 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.4.3
+
+**Diese Fassung bringt keine sichtbaren Änderungen.** Sie hebt allein
+die Versionsnummer an. Nach dem Update verhält sich die Companion
+genau wie 2.4.2 — es ist nichts einzurichten und nichts nachzuholen.
+
+Der Eintrag steht hier trotzdem. Das „Was ist neu"-Fenster öffnet
+sich nach jedem Update und muss etwas zu sagen haben: „diesmal
+nichts" ist eine Antwort, ein leeres Fenster wäre keine.
+
+### Technisch
+- Die Versionsnummer steht in `core/version.py` und
+  `packaging/installer.iss`; beide sind auf 2.4.3 gehoben. Dieser
+  Abschnitt erfüllt die dritte Bedingung aus
+  `scripts/check_version.py`, sonst bricht die CI vor dem Build ab
+- Außerhalb der beiden Versionsangaben und dieses Abschnitts ist
+  kein Code geändert
+
 ## 2.4.2
 
 **Die Discord-Verknüpfung bleibt jetzt, wo sie ist.**
