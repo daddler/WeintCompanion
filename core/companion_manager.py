@@ -32,6 +32,8 @@ from core.raid_data_service import RaidDataService
 from core.academy_service import AcademyService
 from core.academy_history import day_from_iso
 from core.character_store import CharacterStore
+from core.stat_weights_store import StatWeightsStore
+from core.stat_weights_sync import StatWeightsSync
 from core.weakaura_store import WeakAuraStore
 from core.weakaura_sync import WeakAuraSync
 from core.weakaura_guild_sync import WeakAuraGuildSync
@@ -243,6 +245,20 @@ class CompanionManager(QObject):
         self.weakaura_guild_sync = WeakAuraGuildSync(
             self,
             self.weakauras,
+        )
+
+        #
+        # Die Wertegewichte aus einem Sim: was auf der Seite "Simmen"
+        # eingelesen wurde, plus ihre Zustellung ins Addon. Liest beim
+        # Erzeugen ihre Datei und macht sonst nichts.
+        #
+
+        self.stat_weights = StatWeightsStore(self)
+
+        self.stat_weights_sync = StatWeightsSync(
+            self,
+            self.addon_inbox,
+            self.stat_weights,
         )
 
         #
@@ -548,6 +564,22 @@ class CompanionManager(QObject):
             )
 
         #
+        # Die Sim-Gewichte ins Addon. Rein lokal wie die Zustellung
+        # darüber und mit eigenem try/except; sie schreibt nur, wenn
+        # sich etwas geändert hat.
+        #
+
+        try:
+
+            self.stat_weights_sync.process()
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"Zustellung der Sim-Gewichte fehlgeschlagen: {exc}"
+            )
+
+        #
         # Wieder eigener try/except: eine fehlerhafte Auswertung darf
         # weder den Material-Sync noch den Roster-Abruf mitreissen.
         #
@@ -648,7 +680,11 @@ class CompanionManager(QObject):
         #
         if classic_path != self.state.wow_path:
 
-            for attribute in ("addon_analysis_sync", "weakaura_sync"):
+            for attribute in (
+                "addon_analysis_sync",
+                "weakaura_sync",
+                "stat_weights_sync",
+            ):
 
                 sync = getattr(self, attribute, None)
 

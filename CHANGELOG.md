@@ -2,6 +2,78 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.5.0
+
+**Neu: Simmen, und das Ergebnis geht von selbst ins Spiel.**
+Wer seinen Charakter auf wowsims.com/mop simmt, musste das Ergebnis
+bisher von Hand ins Spiel tragen: Zeichenkette kopieren, ingame die
+richtige Unterseite suchen und dort in ein sehr kleines Feld einfügen.
+
+Der neue Bereich *Simmen* nimmt das ab. Er öffnet den Sim auf der
+Seite deiner Spezialisierung, liest die Ausgabe, die du zurückgibst,
+und bringt sie ins Addon. Nach dem nächsten `/reload` liegt die
+Gewichtung dort bereit — oder sofort, wenn du den Import-String
+benutzt.
+
+**Drei Schritte, und sie stehen so auf der Seite:**
+
+1. *Sim öffnen* — für den gewählten Charakter und seine
+   Spezialisierung. Die Ausrüstung stellst du im Sim selbst ein, das
+   weiß nur er.
+2. *Ergebnis einfügen* — die Zeichenkette aus *Suggest Reforges*,
+   dieselbe, die auch ReforgeLite liest. Ein Wertname mit einer Zahl
+   geht genauso.
+3. *Ins Spiel bringen* — die Companion stellt es zu (im Spiel nach dem
+   nächsten `/reload`), oder du kopierst den String und fügst ihn
+   ingame unter *Import* ein. Der wirkt sofort, ohne Neuladen.
+
+**Wirksam wird die Gewichtung erst auf deinen Klick.**
+Im Spiel füllt sie die Felder unter *Charakter → Priorisierung* und
+wartet dort — genau wie ein selbst eingefügter Text. Eine Gewichtung,
+die sich nach einem Login von selbst ändert, sieht aus wie ein Fehler.
+
+**Was der Sim sonst noch mitschickt, wird gesagt und nicht
+übernommen.** Die Trefferwertungs- und Waffenkunde-Grenzen gelten für
+jeden gleich und stehen im Addon; die Seite nennt sie und sagt, wenn
+sie abweichen. Ist die Ausgabe für eine andere Klasse gerechnet, steht
+das da, bevor du etwas übernimmst.
+
+**Zweitspezialisierung:** die Gewichtung gehört im Spiel zu genau
+einer, und die lässt sich hier umstellen.
+
+### Technisch
+- `core/stat_weights.py` ist die reine Hälfte (Parser für beide
+  Lesewege, Skalierung, die Zuordnung Spec → Sim-Seite, der
+  `WCIMPORT:SW:`-String, die Nutzlast der Inbox-Nachricht) — kein Qt,
+  kein `httpx`, kein Dateizugriff, aus demselben Grund wie
+  `build_profile_payload()` und `parse_schedule()`.
+  `core/stat_weights_store.py` legt in `stat_weights.json` unter
+  `Paths.config()` ab (dahinter steht ein Sim-Lauf, kein
+  Zwischenspeicher), `core/stat_weights_sync.py` stellt über einen
+  eigenen Inbox-Kanal zu.
+- **Der Leseweg für die Sim-Ausgabe ist die Übersetzung von
+  `modules/statweights.lua`, keine zweite Idee davon.** Derselbe Text
+  muss hier und ingame dieselben Zahlen ergeben; `tests/` und
+  `.github/tests/` drüben prüfen beide dieselbe echte Ausgabe gegen
+  dieselben erwarteten Zahlen.
+- **Er muss laut scheitern.** Die Gewichte stehen dort als blosse
+  Zahlenreihe, und welcher Wert gemeint ist, sagt allein die Position.
+  Verschiebt der Sim seine Reihenfolge, bekäme jeder Wert lautlos das
+  Gewicht eines anderen — geprüft wird deshalb die Länge der Reihe,
+  bevor ein einziger Wert übernommen wird.
+- **Die Zuordnung Profilschlüssel → Sim-Seite ist eine Tabelle und
+  keine Ableitung.** `HUNTER_BEASTMASTERY` hiesse abgeleitet
+  `beastmastery` und heisst dort `beast_mastery`; eine Ableitung, die
+  bei zwei von 34 daneben greift, führt genau dort ins Leere, und ein
+  toter Knopf ist von einer nicht simmbaren Spec nicht zu
+  unterscheiden. Ein unbekannter Schlüssel wird nicht geraten.
+- **Die Kennung eines Vorschlags hängt am Inhalt**, nicht an der Uhr.
+  Das Addon merkt sich je Spec die zuletzt erledigte Kennung; sonst
+  stünde derselbe Vorschlag nach jedem Login wieder da, weil zugestellt
+  immer die ganze Liste wird.
+- Voller Vertrag beider Wege in `docs/stat-weights-bridge.md`. Braucht
+  WeintCodex 2.8.0.0.
+
 ## 2.4.4
 
 **Die Verbindung zum Bot geht wieder.**

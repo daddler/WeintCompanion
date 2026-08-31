@@ -59,17 +59,18 @@ class PageId(IntEnum):
 
     CHARACTERS = 4
     PREPARATION = 5
-    WEAKAURAS = 6
-    CHARACTER_LINKS = 7
+    SIM = 6
+    WEAKAURAS = 7
+    CHARACTER_LINKS = 8
 
     #
     # SYSTEM
     #
 
-    ADDON = 8
-    CONNECTIONS = 9
-    SETTINGS = 10
-    LOGS = 11
+    ADDON = 9
+    CONNECTIONS = 10
+    SETTINGS = 11
+    LOGS = 12
 
 
 #
@@ -149,6 +150,7 @@ def build_page_specs() -> tuple[PageSpec, ...]:
     from gui.pages.overview import OverviewPage
     from gui.pages.preparation import PreparationPage
     from gui.pages.settings import SettingsPage
+    from gui.pages.sim import SimPage
     from gui.pages.weakauras import WeakAurasPage
     from gui.pages.weinttv import WeintTvPage
 
@@ -232,6 +234,24 @@ def build_page_specs() -> tuple[PageSpec, ...]:
             icon="vorbereitung",
             page_factory=PreparationPage,
             attribute="preparation",
+        ),
+
+        #
+        # Simmen steht zwischen "Vorbereitung" und "WeakAuras", weil
+        # es dasselbe ist: etwas, das man sich vor dem Raid einrichtet.
+        # Die Seite simmt nicht selbst (siehe gui/pages/sim.py), sie
+        # bringt das Ergebnis von wowsims ins Addon - und genau
+        # deshalb steht sie hier und nicht unter SYSTEM: sie handelt
+        # von einem Charakter, nicht von der Anwendung.
+        #
+
+        PageSpec(
+            page_id=PageId.SIM,
+            label="Simmen",
+            group=GROUP_CHARACTER,
+            icon="sim",
+            page_factory=SimPage,
+            attribute="sim",
         ),
 
         #

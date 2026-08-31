@@ -40,6 +40,7 @@ def test_expected_navigation_order():
         "ARCHIVE",
         "CHARACTERS",
         "PREPARATION",
+        "SIM",
         "WEAKAURAS",
         "CHARACTER_LINKS",
         "ADDON",
