@@ -73,6 +73,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from addon.wse_reader import NO_WOW, WseReader
 from core.browser import open_url
 from core.stat_weights import (
     SPECS,
@@ -88,6 +89,13 @@ from core.stat_weights import (
     spec as spec_of,
     spec_label,
 )
+from core.wowsims_export import (
+    age_text,
+    fits_spec,
+    gap_text,
+    parse_export,
+)
+from core.wowsims_link import build_link
 from gui.pages._page import Page
 from gui.theme import tokens
 from gui.theme.fonts import font
@@ -142,6 +150,19 @@ class SimPage(Page):
         self._parsed = None
 
         self._weights: dict[str, int] = {}
+
+        #
+        # Was der WowSimsExporter zuletzt in seine SavedVariables
+        # geschrieben hat. Gelesen wird in `on_enter()`, nicht in
+        # `refresh()`: eine Datei anzufassen ist keine Zeichenarbeit,
+        # und `refresh()` laeuft bei jeder `state_changed`.
+        #
+
+        self._lookup = None
+
+        self._export = None
+
+        self._follow_export = False
 
         self._build_source_card()
 
@@ -213,9 +234,10 @@ class SimPage(Page):
 
         self._hint(
             card,
-            "Die Ausrüstung stellst du im Sim selbst ein — das weiß nur "
-            "er. Danach auf Suggest Reforges drücken und die "
-            "Zeichenkette kopieren, die dabei herauskommt.",
+            "Der Sim öffnet sich mit deiner Ausrüstung, wenn der "
+            "WowSimsExporter sie im Spiel gemeldet hat. Danach reicht "
+            "dort Suggest Reforges — die Zeichenkette, die dabei "
+            "herauskommt, kommt in Schritt 2.",
         )
 
         row = QHBoxLayout()
@@ -283,11 +305,50 @@ class SimPage(Page):
 
         buttons.setSpacing(tokens.SPACE[2])
 
-        self.open_button = HeroButton("Sim öffnen")
+        self.open_button = HeroButton("Sim mit meiner Ausrüstung öffnen")
 
         self.open_button.clicked.connect(self._open_sim)
 
         buttons.addWidget(self.open_button)
+
+        self.plain_button = HeroButton("Nur die Seite", primary=False)
+
+        self.plain_button.clicked.connect(self._open_plain)
+
+        buttons.addWidget(self.plain_button)
+
+        self.copy_export_button = HeroButton(
+            "Export kopieren",
+            primary=False,
+        )
+
+        self.copy_export_button.clicked.connect(self._copy_export)
+
+        buttons.addWidget(self.copy_export_button)
+
+        buttons.addStretch(1)
+
+        card.root.addLayout(buttons)
+
+        #
+        # Was die Adresse mitbringt und was nicht. Der Satz steht hier
+        # und nicht in der Doku: die Adresse liefert nur die
+        # Ausrüstung, und wer das nicht weiss, sucht nach seinen
+        # Glyphen und hält ihr Fehlen für einen Fehler.
+        #
+
+        self.gear_state = self._hint(card, "")
+
+        self.gear_note = self._hint(card, "", tokens.TEXT["faint"])
+
+        #
+        # Die Rückmeldung des Kopierens hat eine eigene Zeile, weil
+        # `_draw_gear()` bei jeder `state_changed` über die obige
+        # schreibt - das "Kopiert." wäre nach Sekunden weg, und wer
+        # kurz wegsieht, hält den Knopf für kaputt.
+        #
+
+        self.gear_copy_state = self._hint(card, "", tokens.TEXT["faint"])
 
         self.url_label = QLabel("")
 
@@ -300,9 +361,7 @@ class SimPage(Page):
             f"color:{tokens.TEXT['faint']};background:transparent;",
         )
 
-        buttons.addWidget(self.url_label, 1)
-
-        card.root.addLayout(buttons)
+        card.root.addWidget(self.url_label)
 
         self.addWidget(card)
 
@@ -491,7 +550,60 @@ class SimPage(Page):
 
     def on_enter(self):
 
+        self.read_export()
+
         self.refresh()
+
+    # --------------------------------------------------
+    # Die Ausrüstung aus dem Spiel
+    # --------------------------------------------------
+
+    def read_export(self):
+        """
+        Liest die SavedVariables des WowSimsExporter.
+
+        Ausdrücklich nicht in `refresh()`: die Seite wird bei jeder
+        `state_changed` neu gezeichnet, und eine Datei je Zeichnung
+        anzufassen wäre dieselbe Sorte Aufwand wie ein Netzabruf im
+        Zeichnen (siehe `ConnectionsPage.refresh()`).
+        """
+
+        reader = WseReader(getattr(self.manager.state, "wow_path", None))
+
+        try:
+            self._lookup = reader.read()
+
+        except Exception:
+
+            #
+            # Eine fremde Datei, an der wir nichts ändern können - sie
+            # darf die Seite nicht mitnehmen.
+            #
+
+            self._lookup = None
+
+            self._export = None
+
+            self._follow_export = False
+
+            return
+
+        newest = self._lookup.newest
+
+        self._export = parse_export(newest.data) if newest else None
+
+        self.gear_copy_state.setText("")
+
+        #
+        # Beim Betreten folgt die Auswahl dem, was das Spiel gemeldet
+        # hat. Ohne das stünde die Liste auf ihrem ersten Eintrag, und
+        # der Knopf wäre ausgerechnet in dem Fall tot, für den es ihn
+        # gibt. Nur beim Betreten: wer danach umstellt, hat sich etwas
+        # dabei gedacht, und `refresh()` läuft bei jeder
+        # `state_changed`.
+        #
+
+        self._follow_export = True
 
     def selected_spec(self) -> str:
 
@@ -530,9 +642,36 @@ class SimPage(Page):
 
         self._fill_characters()
 
+        self._follow_reported_spec()
+
         self._draw_source()
 
+        self._draw_gear()
+
         self._draw_stored()
+
+    def _follow_reported_spec(self):
+        """
+        Stellt die Auswahl auf die Spezialisierung, deren Ausrüstung
+        gemeldet wurde - einmal je Besuch.
+
+        Sie schlägt die Spec aus dem Ausrüstungsbogen, wenn beide sich
+        widersprechen: hier geht es um die Ausrüstung, und die gehört
+        zu genau dem Charakter, den der Exporter gemeldet hat.
+        """
+
+        if not self._follow_export:
+            return
+
+        self._follow_export = False
+
+        if self._export is None:
+            return
+
+        key = self._export.spec_key
+
+        if key and spec_of(key):
+            self.spec_select.select_value(key)
 
     def _fill_characters(self):
 
@@ -575,7 +714,7 @@ class SimPage(Page):
 
             self.url_label.setText(url)
 
-            self.open_button.setEnabled(True)
+            self.plain_button.setEnabled(True)
 
         else:
 
@@ -590,7 +729,7 @@ class SimPage(Page):
                 f"eigene Seite hinterlegt."
             )
 
-            self.open_button.setEnabled(True)
+            self.plain_button.setEnabled(True)
 
     def _draw_stored(self):
 
@@ -667,19 +806,180 @@ class SimPage(Page):
 
         self._draw_source()
 
+        self._draw_gear()
+
         self._draw_stored()
 
     def _on_spec_changed(self):
 
         self._draw_source()
 
+        #
+        # Der Ausrüstungs-Zustand hängt an der gewählten Spec (die
+        # Klasse muss passen) - ohne diese Zeile bliebe der Knopf auf
+        # dem Stand von vorhin, und beim Wechsel auf die Zweitspec
+        # wäre er tot, obwohl die Ausrüstung dieselbe ist.
+        #
+
+        self._draw_gear()
+
         self._draw_stored()
 
+    # --------------------------------------------------
+    # Schritt 1: was der Sim bekommt
+    # --------------------------------------------------
+
+    def _export_class(self) -> str:
+
+        return (self._export.char_class if self._export else "").upper()
+
+    def _gear_link(self) -> str:
+
+        if not fits_spec(self._export, self.selected_spec()):
+            return ""
+
+        url = sim_url(self.selected_spec())
+
+        if not url:
+            return ""
+
+        return build_link(url, self._export.items)
+
+    def _draw_gear(self):
+        """
+        Zeichnet, was der Sim bekommt - und wenn nichts, warum
+        nicht. Welcher Satz das ist, entscheidet `gap_text()`; hier
+        steht er nur.
+        """
+
+        reason = self._lookup.reason if self._lookup else NO_WOW
+
+        note = (
+            "Die Adresse bringt die Ausrüstung mit. Talente und Glyphen "
+            "bleiben, wie du sie im Sim eingestellt hast — für die geht "
+            "Export kopieren und im Sim Import → Addon."
+        )
+
+        if fits_spec(self._export, self.selected_spec()):
+
+            export = self._export
+
+            self.gear_state.setText(
+                f"{export.full_name} · {export.item_count} Teile · "
+                f"gemeldet {age_text(self._lookup.newest.stamp)}"
+            )
+
+            restyle(
+                self.gear_state,
+                f"color:{tokens.WHITE};background:transparent;",
+            )
+
+            if export.problems:
+                note = " ".join(export.problems) + " " + note
+
+            self.gear_note.setText(note)
+
+            self.open_button.setEnabled(True)
+
+            self.copy_export_button.setEnabled(True)
+
+            return
+
+        self.open_button.setEnabled(False)
+
+        self.copy_export_button.setEnabled(bool(self._export))
+
+        if self._export and self._export.usable:
+
+            #
+            # Gefunden, passt aber nicht zur gewählten Klasse. Das ist
+            # keine Störung, sondern eine Auskunft: gemeldet wird
+            # immer der zuletzt gespielte Charakter.
+            #
+
+            self.gear_state.setText(
+                f"Zuletzt gemeldet wurde {self._export.full_name} "
+                f"({class_label(self._export_class())}) — das passt nicht "
+                f"zur gewählten Spezialisierung."
+            )
+
+            self.gear_note.setText(
+                "Im Spiel auf diesen Charakter wechseln und dort unter "
+                "Charakter → Simmen bereitstellen. Solange öffnet Nur "
+                "die Seite den Sim ohne Ausrüstung."
+            )
+
+        else:
+
+            self.gear_state.setText(gap_text(reason, self._export))
+
+            self.gear_note.setText(
+                "Ohne gemeldete Ausrüstung stellst du sie im Sim selbst "
+                "ein — der Weg zurück in Schritt 2 und 3 ändert sich "
+                "dadurch nicht."
+            )
+
+        restyle(
+            self.gear_state,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+    # --------------------------------------------------
+
     def _open_sim(self):
+
+        link = self._gear_link()
+
+        if not link:
+
+            #
+            # Der Knopf ist dann gesperrt; hierher kommt man nur, wenn
+            # sich der Zustand zwischen Zeichnen und Klick geändert
+            # hat. Die Seite ohne Ausrüstung ist die richtige Antwort
+            # darauf - ein Klick, der nichts tut, wäre es nicht.
+            #
+
+            self._open_plain()
+
+            return
+
+        open_url(link, getattr(self.manager, "logger", None))
+
+    def _open_plain(self):
 
         url = sim_url(self.selected_spec()) or BASE_PAGE
 
         open_url(url, getattr(self.manager, "logger", None))
+
+    def _copy_export(self):
+        """
+        Der Export-Text für *Import → Addon* im Sim.
+
+        Er bringt mit, was die Adresse nicht mitbringen kann: Talente,
+        Glyphen, Volk und Berufe. Den Weg gibt es also nicht als
+        Rückfall, sondern weil er mehr kann.
+        """
+
+        if not self._export:
+            return
+
+        clipboard = QGuiApplication.clipboard()
+
+        if clipboard is None:
+
+            self.gear_copy_state.setText(
+                "Kopieren geht auf diesem System nicht — im Spiel führt "
+                "/wse export zum selben Text."
+            )
+
+            return
+
+        clipboard.setText(self._export.raw)
+
+        self.gear_copy_state.setText(
+            "Kopiert. Im Sim oben unter Import → Addon einfügen — so "
+            "kommen auch Talente, Glyphen und Berufe mit."
+        )
 
     def _clear_input(self):
 

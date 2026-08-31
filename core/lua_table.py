@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 
-def _find_matching_brace(text: str, open_index: int) -> int:
+def matching_brace(text: str, open_index: int) -> int:
     """
     Findet den Index der zu text[open_index] ("{") passenden
     schließenden Klammer, unter Berücksichtigung von Lua-String-
@@ -48,6 +48,17 @@ def _find_matching_brace(text: str, open_index: int) -> int:
         index += 1
 
     raise ValueError("Unausgeglichene Klammern in Lua-Datei.")
+
+
+#
+# Der alte, dateiinterne Name. Die Klammersuche ist inzwischen auch
+# ausserhalb dieser Datei die einzige richtige Antwort auf "wo endet
+# dieser Block" (addon/wse_reader.py liest damit die SavedVariables
+# eines fremden Addons), und eine zweite Fassung davon liefe an
+# Lua-Strings mit Klammern darin auseinander.
+#
+
+_find_matching_brace = matching_brace
 
 
 def extract_variable_body(text: str, var_name: str) -> str | None:

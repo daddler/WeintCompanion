@@ -2,6 +2,88 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.6.0
+
+**Der Sim öffnet sich jetzt mit deiner Ausrüstung.**
+Bisher endete die Hilfe beim Öffnen der richtigen Seite. Die
+Ausrüstung musste man dort Stück für Stück selbst zusammenklicken —
+sechzehn Teile mit Steinen, Verzauberungen und Aufwertungsstufen. Wer
+das einmal gemacht hat, simmt nicht jede Woche erneut, und eine
+Gewichtung, die zur Ausrüstung von vor vier Wochen gehört, ist
+schlechter als ihr Ruf.
+
+Jetzt steht sie schon drin. Drücken musst du im Sim nur noch
+*Suggest Reforges*.
+
+**Dafür wird ein zweites Addon gebraucht**, und zwar das, das wowsims
+selbst dafür nennt: der *WowSimsExporter*. Fehlt er, steht das auf der
+Seite samt Adresse — und alles andere geht weiter wie bisher.
+
+**Und im Spiel gibt es jetzt einen Knopf dafür.** WeintCodex 2.9.0.0
+bringt *Charakter → Simmen*: er stellt deinen jetzigen Stand bereit.
+World of Warcraft schreibt seine Daten nämlich erst beim Neuladen oder
+beim Ausloggen heraus — vorher sieht der Rechner deine Ausrüstung von
+vorhin.
+
+### Neu
+- **Ein Knopf *Sim mit meiner Ausrüstung öffnen*** unter *Simmen*.
+  Er nennt darüber, wessen Ausrüstung er schickt und wie alt sie ist
+- **Wie alt, steht in Worten** („gerade eben", „vor 4 Stunden",
+  „gestern"). Das Alter ist hier die eigentliche Auskunft: eine Meldung
+  von gestern beschreibt die Ausrüstung von gestern
+- **Steht nichts da, steht da warum** — WoW nicht gefunden, Addon
+  fehlt, Addon hat noch nichts gemeldet, Meldung ohne Ausrüstung. Vier
+  Gründe, vier Antworten, und drei davon verlangen etwas völlig anderes
+- **Deine Zweitspezialisierung darf mit.** Dieselbe Rüstung, andere
+  Seite im Sim — das geht. Die Ausrüstung eines anderen Charakters
+  nicht, und dann sagt die Seite es und bietet die Seite ohne
+  Ausrüstung an
+- **Ein Knopf *Export kopieren*** für das ganze Bild: im Sim unter
+  *Import → Addon* einfügen, dann kommen auch Talente, Glyphen und
+  Berufe mit
+
+### Geändert
+- Schritt 1 sagte „die Ausrüstung stellst du im Sim selbst ein" — das
+  stimmt so nicht mehr
+- Der bisherige Knopf heisst jetzt *Nur die Seite* und tut, was er
+  immer tat
+
+### Technisch
+- **Die Adresse trägt die Ausrüstung als Protobuf** im Fragment, mit
+  Deflate gepackt und Base64 geschrieben, dazu `?i=g` für „nur dieser
+  Bereich". Genau dafür ist der Sim gebaut (er nennt es *partial link
+  import*) und mischt die Lieferung in das, was dort schon eingestellt
+  ist. Voller Vertrag in `docs/wowsims-exporter-bridge.md`
+- **Nur die Ausrüstung, und das ist keine Sparsamkeit.** Der Sim räumt
+  jeden Bereich vollständig ab, den die Adresse benennt; Talente und
+  Glyphen liegen bei ihm in *einem* Bereich, und Glyphen führt er als
+  Gegenstands-Nummern, während das Addon Zauber-Nummern meldet — diese
+  Übersetzung kennt nur der Sim. Den Bereich mitzuschicken hiesse:
+  Talente kommen an, Glyphen sind weg, lautlos. Ein Bereich, den wir
+  nicht vollständig füllen können, wird nicht geschickt (dieselbe Linie
+  wie `stars == 0`). Für das ganze Bild gibt es *Export kopieren*
+- **Jede Protobuf-Feldnummer steht als benannte Konstante mit der
+  Zeile aus dem Sim-Repository daneben.** Ein Protobuf trägt keine
+  Feldnamen; verschiebt sich eine Nummer, käme die Ausrüstung lautlos
+  falsch an. `tests/test_wowsims_link.py` baut die Nachricht aus einer
+  **echten** Sim-Ausgabe und liest sie mit einem eigenen Decoder
+  zurück — ein Encoder, der sich selbst bestätigt, beweist nichts
+- **Ein leerer Platz bleibt ein Platz.** Der Sim vergibt die Plätze der
+  Reihe nach; fiele der leere Zweitwaffenplatz eines Zweihandkämpfers
+  heraus, rückte alles dahinter vor
+- **`addon/wse_reader.py` liest `WSEDB` aus allen AceDB-Profilen und
+  allen WoW-Konten**, neuester Eintrag gewinnt. Geschrieben wird in
+  diese Datei nie. Eine halb geschriebene Datei (WoW schreibt beim
+  Ausloggen) ergibt „nichts gefunden" und keinen Absturz
+- **`core/wowsims_export.py` ordnet Klasse + Spec über eine Tabelle
+  zu**, nicht über eine Ableitung: das Addon schreibt `marksman` und
+  `disc`, unsere Profile heissen `HUNTER_MARKSMANSHIP` und
+  `PRIEST_DISCIPLINE`. Dieselbe Lehre wie bei `sim_url()`
+- `fits_spec()`, `age_text()` und `gap_text()` liegen im Qt-freien
+  Modul, nicht in der Seite — welcher Satz dasteht, ist genau die
+  Stelle, an der etwas falsch sein kann (dieselbe Aufteilung wie bei
+  `gui/widgets/tv/analysis_gap.py`)
+
 ## 2.5.1
 
 **Nach dem Einlesen steht jetzt da, wo jeder Wert geblieben ist.**
