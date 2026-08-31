@@ -47,10 +47,21 @@ Aufteilung ist die Fortsetzung der schon bestehenden:
 - Das **Addon rechnet die Gewichte nicht nach**. Es bekommt sie fertig
   auf seiner eigenen Skala (siehe unten).
 - Die **Grenzen** (7,5 % Treffer, 15 % Waffenkunde) reisen **nicht**
-  mit. Eine Grenze ist eine Aussage über das Spiel und gilt für jeden
-  gleich; sie steht in `data/spec_profiles.lua`. Die Companion **nennt**
-  die Grenzen der Sim-Ausgabe und wendet sie nicht an — weicht der Sim
-  ab, ist das eine Datenfrage für einen Menschen.
+  mit. Eine Grenze ist eine Aussage über das Spiel und gilt für alle
+  dieser Spezialisierung; sie steht in `data/spec_profiles.lua`. Die
+  Companion **nennt** die Grenzen der Sim-Ausgabe und wendet sie nicht
+  an — weicht der Sim ab, ist das eine Datenfrage für einen Menschen.
+  Dasselbe gilt für die **Schwellen** (`breakpointLimits`): die
+  Tempo-Treppe rechnet das Addon aus Laufzeit und Grundtickabstand
+  selbst aus, eine abgeschriebene Wunschzahl gilt immer nur für eine
+  Ausrüstungsstufe. Genannt werden sie trotzdem — ein Block, den
+  niemand liest, fällt sonst still unter den Tisch.
+- **Was in der Liste fehlt, bekommt seinen eigenen Satz** (seit 2.5.1).
+  Vier Fälle, vier Antworten: mit null gewichtet, hier nicht
+  verwertbar (Angriffskraft, Waffenschaden — kein Stein, keine
+  Verzauberung, keine Umschmiedung bewegt sie), nicht erkannt, zu klein
+  für die Skala. Bis dahin stand alles unter „kennt WeintCodex nicht",
+  und das war für den häufigsten Fall unwahr.
 
 ## Die Skala
 

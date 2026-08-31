@@ -130,18 +130,69 @@ def test_sim_caps_are_read_but_stay_as_they_are():
     assert caps["hit"].percent == 7.5
 
 
-def test_unknown_sim_fields_are_named_not_swallowed():
+def test_unusable_sim_fields_are_named_not_swallowed():
     """
-    Angriffskraft und Rüstung gewichtet der Sim mit, WeintCodex kennt
-    sie nicht. Wer nicht sieht, dass sie unter den Tisch fallen, hält
-    das Ergebnis für vollständig.
+    Angriffskraft und Rüstung gewichtet der Sim mit. Wer nicht sieht,
+    dass sie unter den Tisch fallen, hält das Ergebnis für vollständig.
     """
 
-    ignored = parse(SIM_OUTPUT).ignored
+    result = parse(SIM_OUTPUT)
 
-    assert "Angriffskraft" in ignored
+    assert "Angriffskraft" in result.unusable
 
-    assert "Rüstung" in ignored
+    assert "Rüstung" in result.unusable
+
+    assert "Waffenschaden (Haupthand)" in result.unusable
+
+
+def test_unusable_is_not_the_same_answer_as_unknown():
+    """
+    Der gemeldete Fehler: "kennt WeintCodex nicht" stand über
+    Angriffskraft und Waffenschaden, und das ist falsch — es kennt sie
+    sehr wohl, sie lassen sich nur nicht sockeln, verzaubern oder
+    umschmieden. Der Satz las sich wie eine Lücke in unseren Tabellen.
+
+    Aus einer Sim-Ausgabe kann deshalb nichts "unbekannt" sein: jedes
+    ihrer 38 Felder hat einen Namen.
+    """
+
+    assert parse(SIM_OUTPUT).unknown == []
+
+
+def test_a_stat_the_sim_weighted_zero_is_named():
+    """
+    Sechs Werte verschwanden lautlos aus der Liste, weil der Sim sie
+    mit null gewichtet hat — und "der Sim sagt null" ist von "die App
+    hat den Wert verloren" nicht zu unterscheiden. Dieselbe Linie wie
+    `stars == 0` im Analyzer.
+    """
+
+    zeroed = parse(SIM_OUTPUT).zeroed
+
+    #
+    # Ein Blut-Todesritter: Beweglichkeit und Intelligenz stehen in
+    # jener Ausgabe auf null.
+    #
+
+    assert "agility" in zeroed
+
+    assert "intellect" in zeroed
+
+    #
+    # Und was Gewicht hat, steht nicht darin.
+    #
+
+    assert "hit" not in zeroed
+
+
+def test_a_typed_list_says_nothing_about_a_stat_it_omits():
+    """
+    Nur der Sim führt immer alle 22 Werte. Eine getippte Paarliste
+    sagt über einen Wert, der nicht darin steht, gar nichts — dort
+    wäre "mit null gewichtet" eine Erfindung.
+    """
+
+    assert parse("Agility 1 Crit 0.5").zeroed == []
 
 
 def test_a_different_array_length_refuses_instead_of_guessing():
@@ -216,7 +267,7 @@ def test_pairs_from_json():
 
     assert result.weights["crit"] == 0.55
 
-    assert "Dps" in result.ignored
+    assert "Dps" in result.unknown
 
 
 def test_the_german_comma_is_a_decimal_point():
@@ -495,6 +546,32 @@ def test_the_payload_does_not_carry_the_caps():
     blob = repr(payload([_set()]))
 
     assert "cap" not in blob.lower()
+
+
+def test_breakpoint_limits_are_read_and_named():
+    """
+    Der dritte Block der Sim-Ausgabe. Angewendet wird er nicht — die
+    Tempo-Treppe rechnet das Addon selbst aus —, aber ihn gar nicht zu
+    lesen hiess, ihn still fallen zu lassen.
+    """
+
+    with_limit = SIM_OUTPUT.replace(
+        '"breakpointLimits":{"apiVersion":3,'
+        '"stats":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]',
+        '"breakpointLimits":{"apiVersion":3,'
+        '"stats":[0,0,0,0,0,0,0,5000,0,0,0,0,0,0,0,0,0,0,0,0,0,0]',
+    )
+
+    assert with_limit != SIM_OUTPUT
+
+    limits = parse(with_limit).limits
+
+    assert limits == ["Tempowertung 5000"]
+
+
+def test_no_limit_set_says_nothing():
+
+    assert parse(SIM_OUTPUT).limits == []
 
 
 def test_the_display_order_matches_the_stat_table():

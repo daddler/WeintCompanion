@@ -563,15 +563,54 @@ class Parsed:
 
     `problem` ist der einzige Fall, in dem `weights` leer bleibt - und
     er trägt immer einen Satz, der sagt, was zu tun ist.
+
+    DREI ANTWORTEN AUF "WARUM STEHT DAS NICHT IN DER LISTE", UND SIE
+    RATEN ZU VERSCHIEDENEM.
+
+    Bis 2.5.0 gab es dafür eine einzige Liste mit der Überschrift
+    "kennt WeintCodex nicht" - und die war für den häufigsten Fall
+    schlicht falsch. Angriffskraft und Waffenschaden kennt es sehr
+    wohl; sie lassen sich nur nicht sockeln, verzaubern oder
+    umschmieden, also gäbe es hier nichts, was ein Gewicht darauf
+    steuern könnte. Der Satz las sich wie eine Lücke in unseren
+    Tabellen, die jemand schliessen müsste, und genau so wurde er
+    gemeldet.
+
+    * `unusable` - ein echtes Gewicht auf einem Wert, den keine der
+      drei Entscheidungen bewegen kann. Nichts zu tun.
+    * `unknown` - ein Name, den wir nicht zuordnen konnten. Das ist
+      der Fall, der eine Meldung wert ist.
+    * `zeroed` - ein Wert, den die Quelle **mit null** gewichtet hat.
+      Er fehlt in der Liste, und ohne diese Auskunft ist das von
+      "verlorengegangen" nicht zu unterscheiden - dieselbe Linie wie
+      `stars == 0` im Analyzer. Nur der Sim führt sie, denn seine
+      Ausgabe trägt immer alle 22 Werte; eine getippte Paarliste sagt
+      über einen Wert, der nicht darin steht, gar nichts.
     """
 
     weights: dict[str, float] = field(default_factory=dict)
 
-    ignored: list[str] = field(default_factory=list)
+    unusable: list[str] = field(default_factory=list)
+
+    unknown: list[str] = field(default_factory=list)
+
+    zeroed: list[str] = field(default_factory=list)
 
     caps: list[CapHint] = field(default_factory=list)
 
     caps_ignored: list[str] = field(default_factory=list)
+
+    #
+    # Schwellen, die im Sim von Hand gesetzt wurden
+    # (`breakpointLimits`). Wie die Grenzen: genannt, nicht
+    # angewendet - die Tempo-Treppe rechnet das Addon selbst aus
+    # zwei Zahlen je Effekt aus (`data/breakpoints.lua`), und eine
+    # abgeschriebene Wunschzahl wäre genau die Handpflege, gegen die
+    # jene Datei geschrieben ist. Bis 2.5.0 fiel dieser dritte Block
+    # der Ausgabe still unter den Tisch.
+    #
+
+    limits: list[str] = field(default_factory=list)
 
     sim_class: str = ""
 
@@ -685,7 +724,11 @@ def parse_sim(text: str) -> Parsed:
 
     weights: dict[str, float] = {}
 
-    ignored: list[str] = []
+    unusable: list[str] = []
+
+    unknown: list[str] = []
+
+    zeroed: list[str] = []
 
     for index, value in enumerate(stats):
 
@@ -696,9 +739,27 @@ def parse_sim(text: str) -> Parsed:
             if value != 0:
                 weights[key] = value
 
+            else:
+
+                #
+                # Der Sim führt immer alle 22 Werte, also ist eine Null
+                # hier eine Aussage: "bringt diesem Charakter nichts".
+                # Sie muss gesagt werden - sonst verschwindet der Wert
+                # aus der Liste, und das ist von "die App hat ihn
+                # verloren" nicht zu unterscheiden.
+                #
+
+                zeroed.append(key)
+
         elif value != 0:
 
-            ignored.append(SIM_STAT_NAME.get(index, f"Feld {index}"))
+            name = SIM_STAT_NAME.get(index)
+
+            if name:
+                unusable.append(name)
+
+            else:
+                unknown.append(f"Feld {index}")
 
     pseudo = _sim_array(text, "epWeightsStats", "pseudoStats")
 
@@ -706,8 +767,16 @@ def parse_sim(text: str) -> Parsed:
 
         for index, value in enumerate(pseudo):
 
-            if value != 0:
-                ignored.append(SIM_PSEUDO_NAME.get(index, f"Feld {index}"))
+            if value == 0:
+                continue
+
+            name = SIM_PSEUDO_NAME.get(index)
+
+            if name:
+                unusable.append(name)
+
+            else:
+                unknown.append(f"Abgeleitetes Feld {index}")
 
     if not weights:
 
@@ -720,9 +789,12 @@ def parse_sim(text: str) -> Parsed:
 
     return Parsed(
         weights=weights,
-        ignored=ignored,
+        unusable=unusable,
+        unknown=unknown,
+        zeroed=zeroed,
         caps=caps,
         caps_ignored=caps_ignored,
+        limits=_sim_limits(text),
         sim_class=_sim_class(text),
         source="sim",
     )
@@ -789,6 +861,57 @@ def _sim_caps(text: str) -> tuple[list[CapHint], list[str]]:
     return caps, ignored
 
 
+def _sim_limits(text: str) -> list[str]:
+    """
+    Die Schwellen, die jemand im Sim von Hand gesetzt hat.
+
+    Genannt und nicht angewendet, aus demselben Grund wie die Grenzen:
+    die Tempo-Treppe rechnet das Addon aus Laufzeit und Grundtickabstand
+    selbst aus, und eine abgeschriebene Wunschzahl gilt immer nur für
+    eine Ausrüstungsstufe und eine Buffkombination.
+
+    Bis 2.5.0 wurde dieser dritte Block der Ausgabe gar nicht gelesen -
+    also fiel er still unter den Tisch, und das ist genau der Ausgang,
+    gegen den der Rest dieser Datei geschrieben ist.
+    """
+
+    out: list[str] = []
+
+    stats = _sim_array(text, "breakpointLimits", "stats")
+
+    if stats is not None and len(stats) == SIM_STAT_COUNT:
+
+        for index, value in enumerate(stats):
+
+            if value <= 0:
+                continue
+
+            key = SIM_STAT_KEY.get(index)
+
+            label = (
+                STAT_LABELS.get(key, key)
+                if key
+                else SIM_STAT_NAME.get(index, f"Feld {index}")
+            )
+
+            out.append(f"{label} {value:g}")
+
+    pseudo = _sim_array(text, "breakpointLimits", "pseudoStats")
+
+    if pseudo is not None and len(pseudo) == SIM_PSEUDO_COUNT:
+
+        for index, value in enumerate(pseudo):
+
+            if value <= 0:
+                continue
+
+            label = SIM_PSEUDO_NAME.get(index, f"Feld {index}")
+
+            out.append(f"{label} {value:g}")
+
+    return out
+
+
 def parse(text: str) -> Parsed:
     """
     Der Einstieg: welcher der beiden Wege gilt.
@@ -814,9 +937,15 @@ def parse(text: str) -> Parsed:
             "Beweglichkeit 100, CritRating=0.55, eine Zeile je Wert."
         ))
 
-    weights, ignored = result
+    weights, unknown = result
 
-    return Parsed(weights=weights, ignored=ignored, source="pairs")
+    #
+    # Hier ist "kennt WeintCodex nicht" die richtige Auskunft: vor der
+    # Zahl stand ein Name, und den konnten wir nicht zuordnen. Anders
+    # als bei der Sim-Ausgabe wissen wir nicht, was gemeint war.
+    #
+
+    return Parsed(weights=weights, unknown=unknown, source="pairs")
 
 
 #

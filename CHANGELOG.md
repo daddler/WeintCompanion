@@ -2,6 +2,55 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.5.1
+
+**Nach dem Einlesen steht jetzt da, wo jeder Wert geblieben ist.**
+Die Liste zeigte sechs Werte, der Sim hatte acht gewichtet — und was
+mit den übrigen war, stand nirgends. Wer nachzählte, musste annehmen,
+dass die App etwas verschluckt. Jeder Wert bekommt jetzt seine
+Antwort, und es sind vier verschiedene:
+
+- **Mit null gewichtet.** Der Sim hat ihn angesehen und für diesen
+  Charakter mit nichts bewertet. Er fehlt in der Liste, weil er nichts
+  beiträgt — nicht, weil er verlorenging. Steht jetzt namentlich da.
+- **Hier nicht verwertbar.** Angriffskraft und Waffenschaden gewichtet
+  der Sim mit, aber kein Sockelstein, keine Verzauberung und keine
+  Umschmiedung bewegt sie. Es gäbe nichts, was so ein Gewicht steuern
+  könnte.
+- **Nicht erkannt.** Ein Name, der zu keinem Wert passt. Das ist der
+  einzige Fall, der eine Meldung wert ist.
+- **Zu klein für die Skala.** Ein Gewicht, das gegenüber dem grössten
+  unter 1 von 100 liegt.
+
+**Vorher hiess das alles „kennt WeintCodex nicht", und das war
+falsch.** Angriffskraft kennt es sehr wohl. Der Satz las sich wie eine
+Lücke, die jemand schliessen müsste — dabei war nichts zu tun.
+
+**Und die Schwellen aus dem Sim werden genannt.** Wer im Sim eine
+Tempo-Schwelle von Hand gesetzt hat, sah davon bisher nichts. Sie wird
+weiterhin nicht übernommen — die Tempo-Schwellen rechnet das Addon
+selbst aus —, aber sie fällt nicht mehr stillschweigend unter den
+Tisch.
+
+Die Zeile über die Grenzen sagt ausserdem genauer, für wen sie gelten:
+für alle dieser Spezialisierung, nicht für jeden.
+
+### Technisch
+- `Parsed` trägt statt einer `ignored`-Liste drei getrennte
+  (`unusable`, `unknown`, `zeroed`) plus `limits`. Die alte hatte eine
+  Überschrift für vier verschiedene Sachverhalte, und für den
+  häufigsten war sie schlicht unwahr — genau so wurde sie gemeldet.
+- Aus einer **Sim-Ausgabe** kann nichts „unbekannt" sein: alle 22
+  Werte und 16 abgeleiteten Felder haben einen Namen. `unknown` füllt
+  daher nur der Paarleser, wo vor einer Zahl wirklich ein Name steht,
+  den wir nicht zuordnen können.
+- `breakpointLimits` wird gelesen und benannt. Nicht zu lesen hiess,
+  den dritten Block der Ausgabe still fallen zu lassen — der Ausgang,
+  gegen den der Rest der Datei geschrieben ist.
+- `tests/test_stat_weights.py` hält alle vier Antworten fest, dazu die
+  Regel, dass eine getippte Paarliste über einen Wert, der nicht darin
+  steht, **nichts** behauptet (nur der Sim führt immer alle 22).
+
 ## 2.5.0
 
 **Neu: Simmen, und das Ergebnis geht von selbst ins Spiel.**

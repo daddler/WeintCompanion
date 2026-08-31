@@ -77,6 +77,7 @@ from core.browser import open_url
 from core.stat_weights import (
     SPECS,
     STAT_LABELS,
+    STAT_ORDER,
     WeightSet,
     build_transfer,
     class_label,
@@ -743,15 +744,33 @@ class SimPage(Page):
 
         self.result.setText(_weights_text(weights))
 
-        self.notes.setText(" ".join(self._note_lines(parsed, negatives)))
+        self.notes.setText(
+            " ".join(self._note_lines(parsed, negatives, weights)),
+        )
 
         self.apply_button.setEnabled(True)
 
-    def _note_lines(self, parsed, negatives) -> list[str]:
+    def _note_lines(self, parsed, negatives, weights) -> list[str]:
         """
         Was neben den Gewichten noch zu sagen ist - und alles davon
         wird gesagt, nicht verschwiegen: wer es nicht sieht, hält das
         Ergebnis für vollständig.
+
+        WARUM DAS HIER VIER GETRENNTE SÄTZE SIND.
+
+        Bis 2.5.0 stand alles unter einer Überschrift ("kennt
+        WeintCodex nicht"), und die war für den häufigsten Fall
+        schlicht falsch: Angriffskraft und Waffenschaden kennt es sehr
+        wohl. Der Satz las sich wie eine Lücke in unseren Tabellen -
+        und wurde genau so gemeldet. Vier Fälle, vier Antworten, und
+        drei davon verlangen nichts:
+
+        * mit null gewichtet   -> der Sim hat sie angesehen
+        * hier nicht verwertbar -> kein Stein, keine Verzauberung,
+                                   keine Umschmiedung bewegt sie
+        * nicht erkannt        -> das ist der Fall für eine Meldung
+        * unter 1 gerundet     -> vorhanden, aber zu klein für die
+                                   Skala des Addons
         """
 
         lines: list[str] = []
@@ -764,11 +783,62 @@ class SimPage(Page):
                 + "."
             )
 
-        if parsed.ignored:
+        #
+        # Was in der Liste fehlt, weil die Quelle es mit null bewertet
+        # hat. Ohne diesen Satz ist das von "die App hat den Wert
+        # verloren" nicht zu unterscheiden - dieselbe Linie wie
+        # `stars == 0` im Analyzer.
+        #
+
+        if parsed.zeroed:
 
             lines.append(
-                "Nicht übernommen (kennt WeintCodex nicht): "
-                + ", ".join(parsed.ignored)
+                "Mit null gewichtet (bringt diesem Charakter laut Sim "
+                "nichts): "
+                + ", ".join(
+                    STAT_LABELS.get(key, key)
+                    for key in STAT_ORDER
+                    if key in parsed.zeroed
+                )
+                + "."
+            )
+
+        #
+        # Und was unter 1 rutscht: vorhanden, aber auf der Skala des
+        # Addons (grösstes Gewicht = 100, ganze Zahlen) nicht mehr
+        # darstellbar. Auch das ist ein stilles Verschwinden.
+        #
+
+        rounded = [
+            key
+            for key in STAT_ORDER
+            if parsed.weights.get(key, 0) > 0 and not weights.get(key)
+        ]
+
+        if rounded:
+
+            lines.append(
+                "Zu klein für die Skala (unter 1 von 100): "
+                + ", ".join(STAT_LABELS.get(key, key) for key in rounded)
+                + "."
+            )
+
+        if parsed.unusable:
+
+            lines.append(
+                "Hier nicht verwertbar: "
+                + ", ".join(parsed.unusable)
+                + ". Diese Werte gewichtet der Sim mit, aber kein "
+                "Sockelstein, keine Verzauberung und keine Umschmiedung "
+                "bewegt sie — es gäbe hier nichts, was ein Gewicht "
+                "darauf steuern könnte."
+            )
+
+        if parsed.unknown:
+
+            lines.append(
+                "Nicht erkannt (kennt WeintCodex nicht): "
+                + ", ".join(parsed.unknown)
                 + "."
             )
 
@@ -782,8 +852,9 @@ class SimPage(Page):
 
             lines.append(
                 f"Grenzen aus dem Sim: {named}. Sie werden nicht "
-                f"übernommen — eine Grenze gilt für jeden gleich und "
-                f"steht im Spec-Profil des Addons."
+                f"übernommen — eine Grenze gilt für alle dieser "
+                f"Spezialisierung und steht im Spec-Profil des Addons, "
+                f"das sie beim Sockeln und Umschmieden auch durchsetzt."
             )
 
         if parsed.caps_ignored:
@@ -792,6 +863,15 @@ class SimPage(Page):
                 "Nicht gelesene Grenzen: "
                 + ", ".join(parsed.caps_ignored)
                 + "."
+            )
+
+        if parsed.limits:
+
+            lines.append(
+                "Schwellen aus dem Sim: "
+                + " · ".join(parsed.limits)
+                + ". Auch sie werden nicht übernommen — die "
+                "Tempo-Schwellen rechnet das Addon selbst aus."
             )
 
         expected = spec_of(self.selected_spec())
