@@ -287,6 +287,21 @@ Sechs Dinge daran sind nicht Geschmack:
 
 `refresh()` zeichnet ausschliesslich und fasst das Einfügefeld **nie** an — die Seite wird bei jeder `state_changed` neu gezeichnet, und ein halb eingefügter Text unter den Fingern des Nutzers ist dieselbe Falle wie beim Adressfeld in Einstellungen → Discord.
 
+### Heiler simmen woanders: QE Live (`core/qelive.py`, seit 2.7.0)
+
+Gesimmt wird für Schadensausteiler auf wowsims.com/mop. Für Heiler ist das die falsche Adresse: geplant wird dort **questionablyepic.com/live** (QE Live), dessen „Classic" derzeit Mists of Pandaria ist, und alle sechs MoP-Heiler sind vertreten. *Simmen* ist deshalb **eine Seite mit zwei Zweigen**, und welchen sie zeigt, entscheidet `qelive.spec(key)` — gefragt wird also nicht „ist das ein Heiler", sondern „führt QE Live diese Spezialisierung", dieselbe Zurückhaltung wie bei `sim_url()`.
+
+Zwei Dinge kann QE Live nicht, und die Seite muss beide **sagen** statt sie aussehen zu lassen wie einen Fehler:
+
+- **Es gibt keine Gewichtung je Charakter.** Sein *Top Gear* rechnet mit einem vollständigen Heilmodell und antwortet mit einem Ausrüstungssatz; was es je Spec führt, sind Vorgabegewichte aus seinem Quelltext, für jeden Spieler dieselben. Das Einfügefeld in Schritt 2 bleibt für Heiler also leer — und sagt das (`paste_gap`), statt einer leeren Karte zu gleichen, die von einer kaputten nicht zu unterscheiden wäre. Ausgeblendet wird es nicht: eine von Hand getippte Gewichtung geht dort weiterhin (*lock, don't hide*).
+- **Es gibt keine Adresse, die eine Ausrüstung trägt.** `_gear_link()` antwortet für eine QE-Spec mit `""`; ein gebauter Link führte auf eine Seite, die ihn ignoriert, und das sähe aus wie eine unterwegs verlorene Ausrüstung. Den Importtext baut das **Addon** (`modules/qelive.lua`, seit WeintCodex 2.9.1.0) und er wandert über die Zwischenablage — eine zweite Fassung derselben Daten durch diese App hindurch wäre genau die Kopie, die veraltet, wenn sie gebraucht wird (dieselbe Begründung, aus der `modules/simexport.lua` drüben nur das *Datum* des fremden Exports liest).
+
+*Nur die Seite* und *Export kopieren* sind im Heiler-Zweig entsprechend ausgeblendet: der eine täte dasselbe wie der Hauptknopf, der andere erzeugt ein Format, das QE Live nicht liest. Das ist keine Rollensperre, sondern ein Weg, der hier nur eine Tür hat — `_draw_source()` stellt beim Zurückschalten alles wieder her, weil es dieselben Widgets sind.
+
+**Die Zahlen sind dieselben wie im Addon.** `SPECS` trägt die skalierten Gewichte, die `modules/qelive.lua` aus `data/qelive.lua` errechnet („größtes Gewicht = 100"); `tests/test_qelive.py` und `.github/tests/qelive_test.lua` drüben prüfen dieselben Werte. Wo die beiden auseinanderlaufen, widersprechen sich Spiel und Desktop bei einer Frage, die nur eine Antwort hat — dieselbe Auflage wie beim Parser der Sim-Gewichte. **Ein Null-Gewicht ist dabei eine Lücke und keine Aussage** (`gaps`): beide Priester tragen bei QE Live `haste: 0`, und eine 0 hiesse im Addon „egal", worauf der Umschmiede-Planer das Tempo restlos wegschmiedete. `weights_note()` benennt sie, und ebenso, dass QE Live zwei seiner Modelle selbst als Beta führt — wer das nicht weiss, hält eine grobe Auskunft für eine genaue.
+
+Kein Qt, kein `httpx`, keine Datei — aus demselben Grund wie `roster_target()` und `build_profile_payload()`: *welcher Satz dasteht* ist genau die Stelle, an der etwas falsch sein kann, und ein Fenster braucht man dafür nicht.
+
 ### Wer steckt hinter einem Discord-Konto? (`core/character_links.py`)
 
 Der Kalender-Invite in WeintCodex lädt **echte Charakternamen** ein. Der Bot kannte sie nur von Spielern, die die Companion verknüpft *und* ihre Twinkverwaltung gepflegt haben — für alle anderen schickte er den **Discord-Anzeigenamen** weiter, den es im Spiel nicht gibt. `C_Calendar.EventInvite` läuft dort ins Leere und meldet den Fehlschlag nicht, also zählte die Einladung sogar als gelungen mit; die Lücke fiel frühestens am leeren Kalender auf. Gildenfremde können die Companion kaum nutzen, für sie war das kein Übergangszustand.

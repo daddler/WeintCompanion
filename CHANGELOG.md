@@ -2,6 +2,37 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.7.0
+
+**Als Heiler führt *Simmen* jetzt zu QE Live.**
+Gesimmt wird für Schadensausteiler auf wowsims. Für Heiler ist das die
+falsche Adresse — geplant wird dort questionablyepic.com/live, und alle
+sechs Heiler-Spezialisierungen sind vertreten. Die Seite erkennt an
+deiner Spezialisierung selbst, welchen der beiden Wege sie zeigt.
+
+**Der Weg dorthin ist ein anderer, und die Seite sagt welcher.**
+QE Live nimmt die Ausrüstung nur als eingefügten Text an — eine Adresse,
+die sie mitbringt, gibt es dort nicht. Der Text steht im Spiel unter
+*Charakter → Simmen* zum Kopieren bereit (auch über `/wc qe`). Danach
+hier die Seite öffnen und ihn dort unter *Import* einfügen.
+
+**Und was nicht zurückkommt, steht auch da.**
+QE Live rechnet keine Gewichtung je Charakter; sein *Top Gear*
+antwortet mit einem Ausrüstungssatz. Das Feld für die Sim-Ausgabe bleibt
+für Heiler deshalb leer und sagt warum, statt so auszusehen, als wäre
+etwas kaputt. Die Gewichte, die QE Live für die Spezialisierung führt,
+liegen im Spiel unter *Priorisierung* bereit.
+
+### Neu
+- *Simmen* zeigt für Heiler den Weg zu QE Live: eigener Knopf, eigene Adresse, eigene Anleitung
+- Für zwei Spezialisierungen führt QE Live gar kein Tempo-Gewicht und für zwei weitere nur ein Beta-Modell — beides steht auf der Seite, statt eine grobe Auskunft wie eine genaue aussehen zu lassen
+
+### Technisch
+- `core/qelive.py` ist die reine Hälfte (Spec-Tabelle, skalierte Gewichte, die drei Sätze) — kein Qt, kein `httpx`, aus demselben Grund wie `roster_target()` und `build_profile_payload()`
+- **Die Zahlen sind dieselben wie im Addon.** `tests/test_qelive.py` und `.github/tests/qelive_test.lua` drüben halten dieselben skalierten Gewichte — wo die beiden auseinanderlaufen, widersprechen sich Spiel und Desktop bei einer Frage, die nur eine Antwort hat
+- `_gear_link()` gibt für eine QE-Spec nichts zurück: ein gebauter Link führte auf eine Seite, die ihn ignoriert, und das sähe aus wie eine unterwegs verlorene Ausrüstung
+- *Nur die Seite* und *Export kopieren* sind im Heiler-Zweig ausgeblendet — der eine täte dasselbe wie der Hauptknopf, der andere erzeugt ein Format, das QE Live nicht liest
+
 ## 2.6.0
 
 **Der Sim öffnet sich jetzt mit deiner Ausrüstung.**

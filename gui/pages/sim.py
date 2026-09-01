@@ -96,6 +96,7 @@ from core.wowsims_export import (
     parse_export,
 )
 from core.wowsims_link import build_link
+from core import qelive
 from gui.pages._page import Page
 from gui.theme import tokens
 from gui.theme.fonts import font
@@ -232,7 +233,14 @@ class SimPage(Page):
 
         self._step(card, "1", "Charakter simmen")
 
-        self._hint(
+        #
+        # Der Satz wechselt mit der Spezialisierung: für Heiler geht
+        # der Weg über QE Live, und dort gibt es weder eine Adresse,
+        # die die Ausrüstung mitbringt, noch etwas, das zurückkommt.
+        # Siehe `_draw_source()`.
+        #
+
+        self.source_hint = self._hint(
             card,
             "Der Sim öffnet sich mit deiner Ausrüstung, wenn der "
             "WowSimsExporter sie im Spiel gemeldet hat. Danach reicht "
@@ -370,6 +378,18 @@ class SimPage(Page):
         card = Card()
 
         self._step(card, "2", "Ergebnis einfügen")
+
+        #
+        # Für Heiler bleibt diese Karte stehen und bekommt einen Satz:
+        # QE Live liefert nichts, was hier hineingehört. Eine Karte,
+        # die nichts sagt, ist von einer kaputten nicht zu
+        # unterscheiden - und wer sie leer lässt, sucht die Ausgabe,
+        # die es dort nicht gibt. Ausgeblendet wird sie nicht: eine
+        # von Hand getippte Gewichtung geht hier weiterhin (lock,
+        # don't hide).
+        #
+
+        self.paste_gap = self._hint(card, "", tokens.STATE_TEXT["warn"])
 
         self.input = QPlainTextEdit()
 
@@ -704,7 +724,98 @@ class SimPage(Page):
         if filled and sheets:
             self._on_character_changed()
 
+    def _healer(self):
+        """
+        Die QE-Live-Spezialisierung zur Auswahl, oder `None`.
+
+        Gefragt wird nicht "ist das ein Heiler", sondern "führt QE Live
+        diese Spezialisierung" - dieselbe Zurückhaltung wie bei
+        `sim_url()`, und dieselbe Frage, die das Addon in
+        `modules/qelive.lua` stellt.
+        """
+
+        return qelive.spec(self.selected_spec())
+
+    def _draw_healer_source(self, entry):
+        """
+        Der Heiler-Zweig derselben Karte.
+
+        Zwei Dinge fallen hier weg, und beide, weil QE Live sie nicht
+        kann: eine Adresse, die die Ausrüstung mitbringt, und ein
+        Export für *Import → Addon*. Ein zweiter Knopf, der dasselbe
+        tut wie der erste, ist keine Auswahl - er ist die Frage, worin
+        sich die beiden unterscheiden.
+        """
+
+        self.source_hint.setText(qelive.guidance(entry))
+
+        self.open_button.setText("QE Live öffnen")
+
+        self.open_button.setEnabled(True)
+
+        self.plain_button.setVisible(False)
+
+        self.copy_export_button.setVisible(False)
+
+        self.gear_copy_state.setText("")
+
+        self.url_label.setText(qelive.URL)
+
+        #
+        # Die Ausrüstungszeile sagt hier nichts über eine Meldung des
+        # WowSimsExporters - der spielt in diesem Weg keine Rolle. Sie
+        # sagt, woher der Text kommt.
+        #
+
+        self.gear_state.setText(
+            f"{entry.label} · die Ausrüstung kommt als Text aus dem Spiel"
+        )
+
+        restyle(
+            self.gear_state,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+        self.gear_note.setText(qelive.weights_note(entry))
+
+        self.paste_gap.setText(
+            "QE Live gibt keine Wertegewichte heraus — für diese "
+            "Spezialisierung bleibt dieses Feld leer. Wer trotzdem eine "
+            "Gewichtung von Hand einsetzen will, kann sie hier "
+            "einfügen; ihre Vorgabewerte liegen im Spiel unter "
+            "Priorisierung bereit."
+        )
+
     def _draw_source(self):
+
+        entry = self._healer()
+
+        if entry is not None:
+
+            self._draw_healer_source(entry)
+
+            return
+
+        #
+        # Zurück auf den wowsims-Zweig: die Knöpfe bleiben zwischen zwei
+        # Spezialisierungen dieselben Widgets, und was der Heiler-Zweig
+        # ausgeblendet hat, muss hier wieder dastehen.
+        #
+
+        self.source_hint.setText(
+            "Der Sim öffnet sich mit deiner Ausrüstung, wenn der "
+            "WowSimsExporter sie im Spiel gemeldet hat. Danach reicht "
+            "dort Suggest Reforges — die Zeichenkette, die dabei "
+            "herauskommt, kommt in Schritt 2."
+        )
+
+        self.open_button.setText("Sim mit meiner Ausrüstung öffnen")
+
+        self.paste_gap.setText("")
+
+        self.plain_button.setVisible(True)
+
+        self.copy_export_button.setVisible(True)
 
         key = self.selected_spec()
 
@@ -835,6 +946,16 @@ class SimPage(Page):
 
     def _gear_link(self) -> str:
 
+        #
+        # QE Live nimmt die Ausrüstung nur als eingefügten Text an; eine
+        # Adresse, die sie mitbringt, gibt es dort nicht. Ein gebauter
+        # Link führte auf eine Seite, die ihn ignoriert - und das sähe
+        # aus wie eine Ausrüstung, die unterwegs verloren ging.
+        #
+
+        if self._healer() is not None:
+            return ""
+
         if not fits_spec(self._export, self.selected_spec()):
             return ""
 
@@ -851,6 +972,17 @@ class SimPage(Page):
         nicht. Welcher Satz das ist, entscheidet `gap_text()`; hier
         steht er nur.
         """
+
+        #
+        # Für Heiler hat `_draw_healer_source()` die beiden Zeilen
+        # schon gesetzt. Sie hier ein zweites Mal zu beschreiben hiesse,
+        # den WowSimsExporter zum Thema zu machen, der in diesem Weg
+        # keine Rolle spielt.
+        #
+
+        if self._healer() is not None:
+
+            return
 
         reason = self._lookup.reason if self._lookup else NO_WOW
 
@@ -946,6 +1078,12 @@ class SimPage(Page):
         open_url(link, getattr(self.manager, "logger", None))
 
     def _open_plain(self):
+
+        if self._healer() is not None:
+
+            open_url(qelive.URL, getattr(self.manager, "logger", None))
+
+            return
 
         url = sim_url(self.selected_spec()) or BASE_PAGE
 
