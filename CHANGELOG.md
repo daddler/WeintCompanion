@@ -2,6 +2,43 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.8.0
+
+**Die Academy im Spiel weiß jetzt, was sie hier weiß.**
+Lernkurve, Begründung des Trainingsplans und die Übungsserie an der
+Trainingspuppe entstehen seit jeher auf dem Desktop — ins Spiel
+geschickt wurde davon nichts. Ab sofort schon: WeintCodex 2.9.2.0
+zeigt den Verlauf über die aufgezeichneten Pulls, den Grund für die
+Reihenfolge des Plans und den Stand deiner Übungstage. Gerechnet wird
+weiterhin nur hier, damit Spiel und Desktop nicht zwei Antworten auf
+dieselbe Frage geben.
+
+**Deine Übungstage stehen jetzt auch hier.**
+Drei Tage in Folge mit einer gewerteten Sitzung an der Puppe haken die
+Rotationslektion ab. Gezählt wurde das immer schon, zu sehen war es
+nirgends — weder hier noch im Spiel. Unter *Academy → Trainingsplan*
+steht jetzt, wie weit die Serie ist.
+
+**Ein Charakter mit Realmzusatz war für die Academy zwei Charaktere.**
+Der Rotationshelfer meldet den nackten Namen ("Windschritt"), die
+Auswertung läuft unter der Schreibweise des Berichts
+("Windschritt-DieAldor"). Der Fortschritt lag danach unter zwei
+Namen, und keiner der beiden war vollständig: die nach drei
+Übungstagen abgehakte Lektion tauchte nirgends wieder auf, ohne
+Fehler und ohne Meldung. Vorhandene Dateien werden beim nächsten Start
+einmalig zusammengeführt; abgehakt bleibt, was unter einem der beiden
+Namen abgehakt war.
+
+### Behoben
+- Der Trainingsplan auf dieser Seite suchte den Fortschritt unter einem Platzhalternamen, wenn der gewählte Charakter im Pull gar nicht vorkam. Er zeigte dann alle Lektionen wieder als offen
+
+### Technisch
+- `AcademyService` schlüsselt `completed`, `excluded` und `dummy_practice` über `analyzer/names.py` statt über rohe Zeichenketten. `_key_for()` ist die eine Stelle, an der "welcher Charakter ist das" beantwortet wird; `_merge_names()` führt zwei Schreibweisen beim Laden zusammen (die qualifizierte gewinnt, ein nackter Name findet sie weiterhin). `set_progress()` und `practice_store()` sind die Zugänge dafür — `apply_addon_progress()` und `apply_dummy_practice_session()` schreiben nicht mehr in `academy.data` hinein
+- `academy_state` trägt zusätzlich `planNote`, `note`, `gapText`, `progress` und `practice`. Alles additiv und alles fertig formuliert; `_progress()` liest ausschließlich `analyzer/academy/progression.py`, dieselbe Quelle wie die Verlaufskarte hier
+- Die Punkte des schwächsten Bereichs reisen bewusst **nicht** mit: zwei Reihen unterschiedlicher Länge nebeneinander wären Pulls, die nicht dieselben sind. Der Satz sagt dasselbe und kann dabei nicht falsch ausgerichtet sein
+- `streak_state()`/`practice_text()`/`practice_payload()`/`practice_for_lessons()` in `core/academy_dummy_sync.py` sind rein und die einzige Stelle, an der die Serie in Worte gefasst wird. Eine gespeicherte Zahl ist dort noch keine laufende Serie: gezählt wird nur weiter, wenn die letzte Sitzung von heute oder gestern ist — dieselbe Regel, nach der auch fortgeschrieben wird
+- `gapText` kommt aus `rating_gap_text()`, also aus der Academy-Fassung des Satzes und nicht aus WeintTVs: hier bleiben Bereiche unbewertet, dort bleiben Karten leer
+
 ## 2.7.1
 
 **Wenn sich Downloads und Backups anhäufen, sagt die App es jetzt.**

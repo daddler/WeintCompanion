@@ -34,6 +34,12 @@ from analyzer.academy.models import (
     PlayerProfile,
     TrainingPlan,
 )
+from analyzer.academy.progression import (
+    build_trend,
+    category_sentence,
+    summary_text,
+    weakest_category,
+)
 from analyzer.models import RaidSnapshot
 
 #
@@ -44,7 +50,7 @@ from analyzer.models import RaidSnapshot
 # lahmlegen, der nur pytest installiert und sonst nichts.
 #
 
-from gui.widgets.tv.analysis_gap import analysis_gap
+from gui.widgets.tv.analysis_gap import analysis_gap, rating_gap_text
 
 
 #
@@ -307,6 +313,72 @@ def _identity(profile: PlayerProfile, character: str) -> str:
     return ""
 
 
+def _line(trend) -> list[float]:
+    """
+    Eine Linie als Zahlenreihe - gerundet, weil zwei Nachkommastellen
+    schon mehr sind, als fünf Sterne hergeben.
+    """
+
+    if trend is None:
+        return []
+
+    return [round(value, 2) for value in trend.points]
+
+
+def _progress(records) -> dict:
+    """
+    Die Lernkurve in der Form, in der das Addon sie zeichnet.
+
+    **Gerechnet wird hier nichts.** Punkte, Richtung und die beiden
+    Sätze entstehen in `analyzer/academy/progression.py` - derselben
+    Stelle, aus der die Verlaufskarte auf dem Desktop liest. Eine
+    zweite Rechnung für dieselbe Kurve wäre die Doppelung, an der
+    Spiel und Desktop irgendwann verschiedene Entwicklungen zeigen.
+
+    Ohne aufgezeichnete Pulls bleibt `points` leer und `text` sagt
+    genau das - eine erfundene Linie aus einem Punkt wäre die
+    schlechtere Antwort.
+    """
+
+    records = tuple(records or ())
+
+    overall = build_trend(records)
+
+    category = weakest_category(records)
+
+    area = build_trend(records, category) if category else None
+
+    return {
+        "pulls": len(records),
+
+        "text": summary_text(records, overall),
+
+        "points": _line(overall),
+
+        "first": round(overall.first, 2) if overall else 0.0,
+        "last": round(overall.last, 2) if overall else 0.0,
+        "direction": overall.direction if overall else "",
+
+        #
+        # Der Bereich, der über die aufgezeichneten Pulls im Mittel am
+        # schwächsten steht - nicht der des letzten Kampfes, sonst
+        # spränge er von Pull zu Pull auf einen anderen.
+        #
+        # Seine Punkte reisen bewusst **nicht** mit: die Ingame-Karte
+        # zeichnet eine Reihe, und zwei Reihen unterschiedlicher Länge
+        # (ein Pull ohne Bewertung dieses Bereichs ist dort kein Punkt)
+        # nebeneinanderzustellen hiesse, Pulls zu vergleichen, die
+        # nicht dieselben sind. Der Satz sagt dasselbe und kann dabei
+        # nicht falsch ausgerichtet sein.
+        #
+        "area": {
+            "category": category,
+            "label": CATEGORY_LABELS.get(category, category),
+            "text": category_sentence(area),
+        },
+    }
+
+
 def build_academy_state(
     profile: PlayerProfile,
     plan: TrainingPlan,
@@ -314,6 +386,8 @@ def build_academy_state(
     completed,
     excluded,
     character: str = "",
+    records=(),
+    practice=(),
 ) -> dict:
     """
     Bewertung, Trainingsplan und Fortschritt eines Charakters.
@@ -360,6 +434,19 @@ def build_academy_state(
         "gap": _gap(snapshot),
 
         #
+        # Derselbe Sachverhalt in Worten - und zwar in den Worten der
+        # Academy, nicht denen von WeintTV: hier bleiben Bereiche
+        # unbewertet, dort bleiben Karten leer. `gap` allein ist ein
+        # Schlüssel, den das Addon selbst hätte ausformulieren müssen,
+        # also eine zweite Formulierung desselben Befundes.
+        #
+        # Leer bleibt er absichtlich, wo jede Zeile ohnehin schon
+        # "noch keine Daten" sagt (kein Raid, kein Pull) - ein zweiter
+        # Satz darunter wäre Wiederholung.
+        #
+        "gapText": rating_gap_text(snapshot),
+
+        #
         # Stand dieser Charakter überhaupt im ausgewerteten Pull? Ohne
         # die Angabe zeigt das Addon fünf Null-Stern-Zeilen und kann
         # nicht sagen, ob die Bewertung fehlt oder schlecht ist.
@@ -393,6 +480,38 @@ def build_academy_state(
 
         "plan": [item.lesson_id for item in plan.items],
         "results": results,
+
+        #
+        # Warum der Plan so sortiert ist. Er folgt der Lernkurve,
+        # sobald sie genug Pulls kennt - und dann kann seine
+        # Reihenfolge den Sternen daneben widersprechen, die zu
+        # *diesem* Kampf gehören. Ohne diesen Satz sieht das im Spiel
+        # nach einem Fehler aus; auf dem Desktop steht er seit 2.3.5
+        # über dem Plan. Leer heisst: es zählt allein der gezeigte
+        # Kampf, also wie eh und je.
+        #
+        "planNote": plan.note,
+
+        #
+        # Der Satz zum Profil selbst (etwa: gegen wen hier verglichen
+        # wird). Ebenfalls fertig formuliert.
+        #
+        "note": profile.note,
+
+        #
+        # "Werde ich besser?" - die Frage, die ein einzelner Pull
+        # nicht beantwortet. Der Desktop zeichnet die Kurve seit
+        # 2.3.5 auf; im Spiel gab es sie bis 2.8.0 nicht.
+        #
+        "progress": _progress(records),
+
+        #
+        # Die Übungsserie am Trainingsdummy, je Spec-Schlüssel des
+        # Addons. Sie entsteht aus den Sitzungen, die das Addon
+        # selbst meldet - und war dort bis 2.8.0 unsichtbar: erst am
+        # dritten Tag erschien wortlos ein Haken.
+        #
+        "practice": list(practice or ()),
 
         "completed": sorted(completed),
         "excluded": sorted(excluded),

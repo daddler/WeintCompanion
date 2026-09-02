@@ -31,6 +31,7 @@ from analyzer.academy.models import (
     SkillRating,
     TrainingPlan,
 )
+from analyzer.academy.progression import PullRecord
 from analyzer.models import (
     AbilityDamage,
     ActivityEntry,
@@ -562,3 +563,136 @@ def test_hasActor_unterscheidet_unbewertet_von_schlecht():
 
     assert ohne["hasActor"] is False
     assert mit["hasActor"] is True
+
+
+#
+# --------------------------------------------------
+# Lernkurve, Plan-Begründung und Übungsserie
+# --------------------------------------------------
+#
+# Alle drei entstehen auf dem Desktop und wurden bis 2.8.0 nicht
+# zugestellt. Im Spiel fehlte damit die Antwort auf "werde ich
+# besser?", der Plan konnte den Sternen daneben ohne Erklärung
+# widersprechen, und die Übungsserie am Dummy war bis zum dritten Tag
+# unsichtbar.
+#
+
+
+def _record(day, sequence, ratings, key=""):
+
+    return PullRecord(
+        key=key or f"report#{sequence}",
+        day=day,
+        sequence=sequence,
+        encounter="Horridon",
+        spec="Windwandler",
+        ratings=tuple(ratings.items()),
+    )
+
+
+def test_state_carries_the_curve_as_finished_numbers_and_sentences():
+
+    records = (
+        _record("20260901", 1, {"rotation": 2, "movement": 4}),
+        _record("20260901", 2, {"rotation": 3, "movement": 4}),
+        _record("20260902", 3, {"rotation": 4, "movement": 4}),
+    )
+
+    state = build_academy_state(
+        _profile(()),
+        TrainingPlan(),
+        _snapshot(),
+        frozenset(),
+        frozenset(),
+        records=records,
+    )
+
+    progress = state["progress"]
+
+    assert progress["pulls"] == 3
+
+    # Die Gesamtlinie ist der Mittelwert je Pull - dieselbe Einheit
+    # wie die Bereichslinie, damit das Addon nichts umrechnen muss.
+    assert progress["points"] == [3.0, 3.5, 4.0]
+    assert progress["direction"] == "up"
+    assert "3 Pulls" in progress["text"]
+
+    # Die zweite Linie ist der über ALLE Pulls schwächste Bereich,
+    # nicht der des letzten Kampfes - sonst spränge sie von Pull zu
+    # Pull auf einen anderen.
+    assert progress["area"]["category"] == "rotation"
+    assert "Rotation" in progress["area"]["text"]
+
+    # Seine Punkte reisen nicht mit: zwei Reihen unterschiedlicher
+    # Länge nebeneinander wären Pulls, die nicht dieselben sind.
+    assert "points" not in progress["area"]
+
+
+def test_state_claims_no_curve_without_records():
+    """
+    Eine Linie aus einem Punkt ist keine Entwicklung. Ohne
+    aufgezeichnete Pulls bleibt sie leer und der Satz sagt genau das.
+    """
+
+    state = build_academy_state(
+        _profile(()),
+        TrainingPlan(),
+        _snapshot(),
+        frozenset(),
+        frozenset(),
+    )
+
+    assert state["progress"]["pulls"] == 0
+    assert state["progress"]["points"] == []
+    assert state["progress"]["area"]["text"] == ""
+    assert state["progress"]["text"]
+
+
+def test_state_carries_the_reason_for_the_plan_order():
+
+    plan = TrainingPlan(
+        items=(PlanItem(lesson=_lesson("a")),),
+        note="Welche Bereiche dieser Plan aufgreift, folgt den letzten 5 Pulls.",
+    )
+
+    state = build_academy_state(
+        _profile(()),
+        plan,
+        _snapshot(),
+        frozenset(),
+        frozenset(),
+    )
+
+    assert state["planNote"] == plan.note
+
+
+def test_state_carries_the_practice_streak_unchanged():
+    """
+    Sie kommt fertig formuliert an: dieselbe Serie im Spiel anders zu
+    beschreiben als auf dem Desktop wäre genau die zweite Rechnung,
+    gegen die dieser Zuschnitt geschrieben ist.
+    """
+
+    practice = [{
+        "specKey": "WARRIOR_ARMS",
+        "lessonId": "warrior-arms.rotation.dummy_practice",
+        "streak": 2,
+        "target": 3,
+        "missing": 1,
+        "alive": True,
+        "practicedToday": False,
+        "done": False,
+        "lastDate": "20260901",
+        "text": "Tag 2 von 3 geschafft.",
+    }]
+
+    state = build_academy_state(
+        _profile(()),
+        TrainingPlan(),
+        _snapshot(),
+        frozenset(),
+        frozenset(),
+        practice=practice,
+    )
+
+    assert state["practice"] == practice
