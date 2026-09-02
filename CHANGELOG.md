@@ -2,6 +2,240 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.7.0
+
+**Als Heiler führt *Simmen* jetzt zu QE Live.**
+Gesimmt wird für Schadensausteiler auf wowsims. Für Heiler ist das die
+falsche Adresse — geplant wird dort questionablyepic.com/live, und alle
+sechs Heiler-Spezialisierungen sind vertreten. Die Seite erkennt an
+deiner Spezialisierung selbst, welchen der beiden Wege sie zeigt.
+
+**Der Weg dorthin ist ein anderer, und die Seite sagt welcher.**
+QE Live nimmt die Ausrüstung nur als eingefügten Text an — eine Adresse,
+die sie mitbringt, gibt es dort nicht. Der Text steht im Spiel unter
+*Charakter → Simmen* zum Kopieren bereit (auch über `/wc qe`). Danach
+hier die Seite öffnen und ihn dort unter *Import* einfügen.
+
+**Und was nicht zurückkommt, steht auch da.**
+QE Live rechnet keine Gewichtung je Charakter; sein *Top Gear*
+antwortet mit einem Ausrüstungssatz. Das Feld für die Sim-Ausgabe bleibt
+für Heiler deshalb leer und sagt warum, statt so auszusehen, als wäre
+etwas kaputt. Die Gewichte, die QE Live für die Spezialisierung führt,
+liegen im Spiel unter *Priorisierung* bereit.
+
+### Neu
+- *Simmen* zeigt für Heiler den Weg zu QE Live: eigener Knopf, eigene Adresse, eigene Anleitung
+- Für zwei Spezialisierungen führt QE Live gar kein Tempo-Gewicht und für zwei weitere nur ein Beta-Modell — beides steht auf der Seite, statt eine grobe Auskunft wie eine genaue aussehen zu lassen
+
+### Technisch
+- `core/qelive.py` ist die reine Hälfte (Spec-Tabelle, skalierte Gewichte, die drei Sätze) — kein Qt, kein `httpx`, aus demselben Grund wie `roster_target()` und `build_profile_payload()`
+- **Die Zahlen sind dieselben wie im Addon.** `tests/test_qelive.py` und `.github/tests/qelive_test.lua` drüben halten dieselben skalierten Gewichte — wo die beiden auseinanderlaufen, widersprechen sich Spiel und Desktop bei einer Frage, die nur eine Antwort hat
+- `_gear_link()` gibt für eine QE-Spec nichts zurück: ein gebauter Link führte auf eine Seite, die ihn ignoriert, und das sähe aus wie eine unterwegs verlorene Ausrüstung
+- *Nur die Seite* und *Export kopieren* sind im Heiler-Zweig ausgeblendet — der eine täte dasselbe wie der Hauptknopf, der andere erzeugt ein Format, das QE Live nicht liest
+
+## 2.6.0
+
+**Der Sim öffnet sich jetzt mit deiner Ausrüstung.**
+Bisher endete die Hilfe beim Öffnen der richtigen Seite. Die
+Ausrüstung musste man dort Stück für Stück selbst zusammenklicken —
+sechzehn Teile mit Steinen, Verzauberungen und Aufwertungsstufen. Wer
+das einmal gemacht hat, simmt nicht jede Woche erneut, und eine
+Gewichtung, die zur Ausrüstung von vor vier Wochen gehört, ist
+schlechter als ihr Ruf.
+
+Jetzt steht sie schon drin. Drücken musst du im Sim nur noch
+*Suggest Reforges*.
+
+**Dafür wird ein zweites Addon gebraucht**, und zwar das, das wowsims
+selbst dafür nennt: der *WowSimsExporter*. Fehlt er, steht das auf der
+Seite samt Adresse — und alles andere geht weiter wie bisher.
+
+**Und im Spiel gibt es jetzt einen Knopf dafür.** WeintCodex 2.9.0.0
+bringt *Charakter → Simmen*: er stellt deinen jetzigen Stand bereit.
+World of Warcraft schreibt seine Daten nämlich erst beim Neuladen oder
+beim Ausloggen heraus — vorher sieht der Rechner deine Ausrüstung von
+vorhin.
+
+### Neu
+- **Ein Knopf *Sim mit meiner Ausrüstung öffnen*** unter *Simmen*.
+  Er nennt darüber, wessen Ausrüstung er schickt und wie alt sie ist
+- **Wie alt, steht in Worten** („gerade eben", „vor 4 Stunden",
+  „gestern"). Das Alter ist hier die eigentliche Auskunft: eine Meldung
+  von gestern beschreibt die Ausrüstung von gestern
+- **Steht nichts da, steht da warum** — WoW nicht gefunden, Addon
+  fehlt, Addon hat noch nichts gemeldet, Meldung ohne Ausrüstung. Vier
+  Gründe, vier Antworten, und drei davon verlangen etwas völlig anderes
+- **Deine Zweitspezialisierung darf mit.** Dieselbe Rüstung, andere
+  Seite im Sim — das geht. Die Ausrüstung eines anderen Charakters
+  nicht, und dann sagt die Seite es und bietet die Seite ohne
+  Ausrüstung an
+- **Ein Knopf *Export kopieren*** für das ganze Bild: im Sim unter
+  *Import → Addon* einfügen, dann kommen auch Talente, Glyphen und
+  Berufe mit
+
+### Geändert
+- Schritt 1 sagte „die Ausrüstung stellst du im Sim selbst ein" — das
+  stimmt so nicht mehr
+- Der bisherige Knopf heisst jetzt *Nur die Seite* und tut, was er
+  immer tat
+
+### Technisch
+- **Die Adresse trägt die Ausrüstung als Protobuf** im Fragment, mit
+  Deflate gepackt und Base64 geschrieben, dazu `?i=g` für „nur dieser
+  Bereich". Genau dafür ist der Sim gebaut (er nennt es *partial link
+  import*) und mischt die Lieferung in das, was dort schon eingestellt
+  ist. Voller Vertrag in `docs/wowsims-exporter-bridge.md`
+- **Nur die Ausrüstung, und das ist keine Sparsamkeit.** Der Sim räumt
+  jeden Bereich vollständig ab, den die Adresse benennt; Talente und
+  Glyphen liegen bei ihm in *einem* Bereich, und Glyphen führt er als
+  Gegenstands-Nummern, während das Addon Zauber-Nummern meldet — diese
+  Übersetzung kennt nur der Sim. Den Bereich mitzuschicken hiesse:
+  Talente kommen an, Glyphen sind weg, lautlos. Ein Bereich, den wir
+  nicht vollständig füllen können, wird nicht geschickt (dieselbe Linie
+  wie `stars == 0`). Für das ganze Bild gibt es *Export kopieren*
+- **Jede Protobuf-Feldnummer steht als benannte Konstante mit der
+  Zeile aus dem Sim-Repository daneben.** Ein Protobuf trägt keine
+  Feldnamen; verschiebt sich eine Nummer, käme die Ausrüstung lautlos
+  falsch an. `tests/test_wowsims_link.py` baut die Nachricht aus einer
+  **echten** Sim-Ausgabe und liest sie mit einem eigenen Decoder
+  zurück — ein Encoder, der sich selbst bestätigt, beweist nichts
+- **Ein leerer Platz bleibt ein Platz.** Der Sim vergibt die Plätze der
+  Reihe nach; fiele der leere Zweitwaffenplatz eines Zweihandkämpfers
+  heraus, rückte alles dahinter vor
+- **`addon/wse_reader.py` liest `WSEDB` aus allen AceDB-Profilen und
+  allen WoW-Konten**, neuester Eintrag gewinnt. Geschrieben wird in
+  diese Datei nie. Eine halb geschriebene Datei (WoW schreibt beim
+  Ausloggen) ergibt „nichts gefunden" und keinen Absturz
+- **`core/wowsims_export.py` ordnet Klasse + Spec über eine Tabelle
+  zu**, nicht über eine Ableitung: das Addon schreibt `marksman` und
+  `disc`, unsere Profile heissen `HUNTER_MARKSMANSHIP` und
+  `PRIEST_DISCIPLINE`. Dieselbe Lehre wie bei `sim_url()`
+- `fits_spec()`, `age_text()` und `gap_text()` liegen im Qt-freien
+  Modul, nicht in der Seite — welcher Satz dasteht, ist genau die
+  Stelle, an der etwas falsch sein kann (dieselbe Aufteilung wie bei
+  `gui/widgets/tv/analysis_gap.py`)
+
+## 2.5.1
+
+**Nach dem Einlesen steht jetzt da, wo jeder Wert geblieben ist.**
+Die Liste zeigte sechs Werte, der Sim hatte acht gewichtet — und was
+mit den übrigen war, stand nirgends. Wer nachzählte, musste annehmen,
+dass die App etwas verschluckt. Jeder Wert bekommt jetzt seine
+Antwort, und es sind vier verschiedene:
+
+- **Mit null gewichtet.** Der Sim hat ihn angesehen und für diesen
+  Charakter mit nichts bewertet. Er fehlt in der Liste, weil er nichts
+  beiträgt — nicht, weil er verlorenging. Steht jetzt namentlich da.
+- **Hier nicht verwertbar.** Angriffskraft und Waffenschaden gewichtet
+  der Sim mit, aber kein Sockelstein, keine Verzauberung und keine
+  Umschmiedung bewegt sie. Es gäbe nichts, was so ein Gewicht steuern
+  könnte.
+- **Nicht erkannt.** Ein Name, der zu keinem Wert passt. Das ist der
+  einzige Fall, der eine Meldung wert ist.
+- **Zu klein für die Skala.** Ein Gewicht, das gegenüber dem grössten
+  unter 1 von 100 liegt.
+
+**Vorher hiess das alles „kennt WeintCodex nicht", und das war
+falsch.** Angriffskraft kennt es sehr wohl. Der Satz las sich wie eine
+Lücke, die jemand schliessen müsste — dabei war nichts zu tun.
+
+**Und die Schwellen aus dem Sim werden genannt.** Wer im Sim eine
+Tempo-Schwelle von Hand gesetzt hat, sah davon bisher nichts. Sie wird
+weiterhin nicht übernommen — die Tempo-Schwellen rechnet das Addon
+selbst aus —, aber sie fällt nicht mehr stillschweigend unter den
+Tisch.
+
+Die Zeile über die Grenzen sagt ausserdem genauer, für wen sie gelten:
+für alle dieser Spezialisierung, nicht für jeden.
+
+### Technisch
+- `Parsed` trägt statt einer `ignored`-Liste drei getrennte
+  (`unusable`, `unknown`, `zeroed`) plus `limits`. Die alte hatte eine
+  Überschrift für vier verschiedene Sachverhalte, und für den
+  häufigsten war sie schlicht unwahr — genau so wurde sie gemeldet.
+- Aus einer **Sim-Ausgabe** kann nichts „unbekannt" sein: alle 22
+  Werte und 16 abgeleiteten Felder haben einen Namen. `unknown` füllt
+  daher nur der Paarleser, wo vor einer Zahl wirklich ein Name steht,
+  den wir nicht zuordnen können.
+- `breakpointLimits` wird gelesen und benannt. Nicht zu lesen hiess,
+  den dritten Block der Ausgabe still fallen zu lassen — der Ausgang,
+  gegen den der Rest der Datei geschrieben ist.
+- `tests/test_stat_weights.py` hält alle vier Antworten fest, dazu die
+  Regel, dass eine getippte Paarliste über einen Wert, der nicht darin
+  steht, **nichts** behauptet (nur der Sim führt immer alle 22).
+
+## 2.5.0
+
+**Neu: Simmen, und das Ergebnis geht von selbst ins Spiel.**
+Wer seinen Charakter auf wowsims.com/mop simmt, musste das Ergebnis
+bisher von Hand ins Spiel tragen: Zeichenkette kopieren, ingame die
+richtige Unterseite suchen und dort in ein sehr kleines Feld einfügen.
+
+Der neue Bereich *Simmen* nimmt das ab. Er öffnet den Sim auf der
+Seite deiner Spezialisierung, liest die Ausgabe, die du zurückgibst,
+und bringt sie ins Addon. Nach dem nächsten `/reload` liegt die
+Gewichtung dort bereit — oder sofort, wenn du den Import-String
+benutzt.
+
+**Drei Schritte, und sie stehen so auf der Seite:**
+
+1. *Sim öffnen* — für den gewählten Charakter und seine
+   Spezialisierung. Die Ausrüstung stellst du im Sim selbst ein, das
+   weiß nur er.
+2. *Ergebnis einfügen* — die Zeichenkette aus *Suggest Reforges*,
+   dieselbe, die auch ReforgeLite liest. Ein Wertname mit einer Zahl
+   geht genauso.
+3. *Ins Spiel bringen* — die Companion stellt es zu (im Spiel nach dem
+   nächsten `/reload`), oder du kopierst den String und fügst ihn
+   ingame unter *Import* ein. Der wirkt sofort, ohne Neuladen.
+
+**Wirksam wird die Gewichtung erst auf deinen Klick.**
+Im Spiel füllt sie die Felder unter *Charakter → Priorisierung* und
+wartet dort — genau wie ein selbst eingefügter Text. Eine Gewichtung,
+die sich nach einem Login von selbst ändert, sieht aus wie ein Fehler.
+
+**Was der Sim sonst noch mitschickt, wird gesagt und nicht
+übernommen.** Die Trefferwertungs- und Waffenkunde-Grenzen gelten für
+jeden gleich und stehen im Addon; die Seite nennt sie und sagt, wenn
+sie abweichen. Ist die Ausgabe für eine andere Klasse gerechnet, steht
+das da, bevor du etwas übernimmst.
+
+**Zweitspezialisierung:** die Gewichtung gehört im Spiel zu genau
+einer, und die lässt sich hier umstellen.
+
+### Technisch
+- `core/stat_weights.py` ist die reine Hälfte (Parser für beide
+  Lesewege, Skalierung, die Zuordnung Spec → Sim-Seite, der
+  `WCIMPORT:SW:`-String, die Nutzlast der Inbox-Nachricht) — kein Qt,
+  kein `httpx`, kein Dateizugriff, aus demselben Grund wie
+  `build_profile_payload()` und `parse_schedule()`.
+  `core/stat_weights_store.py` legt in `stat_weights.json` unter
+  `Paths.config()` ab (dahinter steht ein Sim-Lauf, kein
+  Zwischenspeicher), `core/stat_weights_sync.py` stellt über einen
+  eigenen Inbox-Kanal zu.
+- **Der Leseweg für die Sim-Ausgabe ist die Übersetzung von
+  `modules/statweights.lua`, keine zweite Idee davon.** Derselbe Text
+  muss hier und ingame dieselben Zahlen ergeben; `tests/` und
+  `.github/tests/` drüben prüfen beide dieselbe echte Ausgabe gegen
+  dieselben erwarteten Zahlen.
+- **Er muss laut scheitern.** Die Gewichte stehen dort als blosse
+  Zahlenreihe, und welcher Wert gemeint ist, sagt allein die Position.
+  Verschiebt der Sim seine Reihenfolge, bekäme jeder Wert lautlos das
+  Gewicht eines anderen — geprüft wird deshalb die Länge der Reihe,
+  bevor ein einziger Wert übernommen wird.
+- **Die Zuordnung Profilschlüssel → Sim-Seite ist eine Tabelle und
+  keine Ableitung.** `HUNTER_BEASTMASTERY` hiesse abgeleitet
+  `beastmastery` und heisst dort `beast_mastery`; eine Ableitung, die
+  bei zwei von 34 daneben greift, führt genau dort ins Leere, und ein
+  toter Knopf ist von einer nicht simmbaren Spec nicht zu
+  unterscheiden. Ein unbekannter Schlüssel wird nicht geraten.
+- **Die Kennung eines Vorschlags hängt am Inhalt**, nicht an der Uhr.
+  Das Addon merkt sich je Spec die zuletzt erledigte Kennung; sonst
+  stünde derselbe Vorschlag nach jedem Login wieder da, weil zugestellt
+  immer die ganze Liste wird.
+- Voller Vertrag beider Wege in `docs/stat-weights-bridge.md`. Braucht
+  WeintCodex 2.8.0.0.
+
 ## 2.4.4
 
 **Die Verbindung zum Bot geht wieder.**

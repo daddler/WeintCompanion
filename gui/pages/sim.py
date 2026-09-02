@@ -1,0 +1,1464 @@
+"""
+Simmen: das Ergebnis von wowsims in WeintCodex bringen.
+
+Gesimmt wird auf [wowsims.com/mop]. Was dort herauskommt, sind
+**Wertegewichte** - und die sind die Schnittstelle: das Addon rechnet
+ohnehin mit Gewichten, an drei Stellen (Sockel, Verzauberungen,
+Umschmieden). Bisher war der Weg dazwischen von Hand zu gehen, und man
+musste ihn kennen: Seite der eigenen Spezialisierung heraussuchen,
+Ergebnis kopieren, im Spiel die richtige Unterseite finden und dort in
+ein Eingabefeld einfügen, das man erst suchen muss.
+
+**Die Companion simmt nicht selbst, und das ist eine Entscheidung.**
+Ein brauchbarer Sim wäre eine eigene Spielsimulation; einer, der nur
+so aussieht, wäre schlimmer als keiner, weil seine Zahlen aussehen wie
+echte. Dieselbe Linie wie im Addon (dort gibt es aus demselben Grund
+keinen Sim) und wie beim Rotationshelfer, der den Tankspecs lieber
+keine Prioritätenliste gibt als eine erfundene. Diese Seite übernimmt
+den **Weg**, nicht die Rechnung.
+
+Drei Schritte, in dieser Reihenfolge, und die Seite nummeriert sie:
+
+1. Sim öffnen - auf der Seite der gewählten Spezialisierung, nicht auf
+   der Startseite. Ein Knopf, der den Handgriff verlangt, den er
+   abnehmen sollte, nimmt nichts ab.
+2. Ergebnis einfügen - die Zeichenkette aus *Suggest Reforges*,
+   dieselbe, die ReforgeLite liest. Ein Wertname plus Zahl geht
+   genauso.
+3. Ins Spiel bringen - **auf zwei Wegen**, und beide stehen da:
+
+   * Die Companion stellt die Gewichtung über die Addon-Brücke zu; im
+     Spiel steht sie nach dem nächsten `/reload` bereit.
+   * Oder der `WCIMPORT:SW:`-String, der sich ohne Neuladen unter
+     *Import* einfügen lässt.
+
+   Der zweite Weg ist nicht nur bequemer: WoW liest seine
+   SavedVariables zur Laufzeit nicht erneut, und wer gerade im Raid
+   steht, lädt nicht neu.
+
+**Was ankommt, ist ein Vorschlag und keine Einstellung.** Im Spiel
+füllt er die Felder auf *Priorisierung* und wird erst auf Klick
+wirksam - dieselbe Regel, die dort für einen von Hand eingefügten Text
+schon gilt. Eine Gewichtung, die sich nach einem Login von selbst
+geändert hat, wäre von einem Fehler nicht zu unterscheiden. Die Seite
+sagt das an beiden Wegen.
+
+Und dieselbe Zurückhaltung an zwei weiteren Stellen:
+
+* **Die Grenzen aus dem Sim werden genannt, nicht übernommen.** 7,5 %
+  Treffer und 15 % Waffenkunde gelten für jeden gleich; sie sind eine
+  Aussage über das Spiel und stehen im Spec-Profil des Addons. Weicht
+  der Sim ab, ist das eine Datenfrage für einen Menschen.
+* **Eine Ausgabe für eine andere Klasse wird gemeldet, nicht
+  abgewiesen.** Vielleicht simmt jemand für seinen Zweitcharakter -
+  aber wissen soll er es.
+
+`refresh()` zeichnet ausschliesslich und fasst das Eingabefeld **nie**
+an: die Seite wird bei jeder `state_changed` neu gezeichnet, und ein
+halb eingefügter Text unter den Fingern des Nutzers wegzuräumen ist
+dieselbe Falle wie beim Adressfeld in Einstellungen → Discord.
+"""
+
+from __future__ import annotations
+
+import time
+
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QGuiApplication
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPlainTextEdit,
+    QVBoxLayout,
+)
+
+from addon.wse_reader import NO_WOW, WseReader
+from core.browser import open_url
+from core.stat_weights import (
+    SPECS,
+    STAT_LABELS,
+    STAT_ORDER,
+    WeightSet,
+    build_transfer,
+    class_label,
+    normalize,
+    ordered,
+    parse,
+    sim_url,
+    spec as spec_of,
+    spec_label,
+)
+from core.wowsims_export import (
+    age_text,
+    fits_spec,
+    gap_text,
+    parse_export,
+)
+from core.wowsims_link import build_link
+from core import qelive
+from gui.pages._page import Page
+from gui.theme import tokens
+from gui.theme.fonts import font
+from gui.theme.restyle import restyle
+from gui.widgets.card import Card
+from gui.widgets.eyebrow import eyebrow_label
+from gui.widgets.hero_banner import HeroButton
+from gui.widgets.select import Select
+from gui.widgets.wrapped_label import enable_wrap
+
+
+BASE_PAGE = "https://www.wowsims.com/mop/"
+
+
+def _spec_items():
+    """
+    Alle Spezialisierungen, nach Klasse und Name - dieselbe Ordnung,
+    in der man sie sucht.
+    """
+
+    return [
+        (f"{class_label(entry.class_token)} · {entry.label}", entry.key)
+        for entry in sorted(
+            SPECS,
+            key=lambda item: (class_label(item.class_token), item.label),
+        )
+    ]
+
+
+class SimPage(Page):
+
+    def __init__(self, manager, parent=None):
+
+        super().__init__(
+            manager,
+            eyebrow="CHARAKTER",
+            title="Sim-Ergebnis übernehmen.",
+            parent=parent,
+        )
+
+        self.store = getattr(manager, "stat_weights", None)
+
+        self.sync = getattr(manager, "stat_weights_sync", None)
+
+        #
+        # Was zuletzt eingelesen wurde: die skalierte Gewichtung, noch
+        # nicht abgelegt. Erst der Knopf darunter macht sie zu einem
+        # Eintrag - was von aussen kommt, sieht man sich an, bevor es
+        # gilt.
+        #
+
+        self._parsed = None
+
+        self._weights: dict[str, int] = {}
+
+        #
+        # Was der WowSimsExporter zuletzt in seine SavedVariables
+        # geschrieben hat. Gelesen wird in `on_enter()`, nicht in
+        # `refresh()`: eine Datei anzufassen ist keine Zeichenarbeit,
+        # und `refresh()` laeuft bei jeder `state_changed`.
+        #
+
+        self._lookup = None
+
+        self._export = None
+
+        self._follow_export = False
+
+        self._build_source_card()
+
+        self._build_paste_card()
+
+        self._build_delivery_card()
+
+        self.body.addStretch(1)
+
+        self.refresh()
+
+    # --------------------------------------------------
+    # Aufbau
+    # --------------------------------------------------
+
+    def _step(self, card: Card, number: str, text: str):
+
+        row = QHBoxLayout()
+
+        row.setContentsMargins(0, 0, 0, 0)
+
+        row.setSpacing(tokens.SPACE[2])
+
+        step = QLabel(number)
+
+        step.setFont(font("mono"))
+
+        restyle(
+            step,
+            f"color:{tokens.TEXT['faint']};background:transparent;",
+        )
+
+        row.addWidget(step, 0, Qt.AlignTop)
+
+        title = QLabel(text)
+
+        title.setFont(font("card"))
+
+        restyle(title, f"color:{tokens.WHITE};background:transparent;")
+
+        row.addWidget(title, 1)
+
+        card.root.addLayout(row)
+
+    def _hint(self, card: Card, text: str, color: str = "") -> QLabel:
+
+        label = QLabel(text)
+
+        label.setFont(font("small"))
+
+        enable_wrap(label)
+
+        restyle(
+            label,
+            f"color:{color or tokens.TEXT['muted']};background:transparent;",
+        )
+
+        card.root.addWidget(label)
+
+        return label
+
+    # --------------------------------------------------
+
+    def _build_source_card(self):
+
+        card = Card()
+
+        self._step(card, "1", "Charakter simmen")
+
+        #
+        # Der Satz wechselt mit der Spezialisierung: für Heiler geht
+        # der Weg über QE Live, und dort gibt es weder eine Adresse,
+        # die die Ausrüstung mitbringt, noch etwas, das zurückkommt.
+        # Siehe `_draw_source()`.
+        #
+
+        self.source_hint = self._hint(
+            card,
+            "Der Sim öffnet sich mit deiner Ausrüstung, wenn der "
+            "WowSimsExporter sie im Spiel gemeldet hat. Danach reicht "
+            "dort Suggest Reforges — die Zeichenkette, die dabei "
+            "herauskommt, kommt in Schritt 2.",
+        )
+
+        row = QHBoxLayout()
+
+        row.setContentsMargins(0, 0, 0, 0)
+
+        row.setSpacing(tokens.SPACE[2])
+
+        character_column = QVBoxLayout()
+
+        character_column.setContentsMargins(0, 0, 0, 0)
+
+        character_column.setSpacing(4)
+
+        character_column.addWidget(eyebrow_label("CHARAKTER"))
+
+        self.character_select = Select()
+
+        self.character_select.currentIndexChanged.connect(
+            self._on_character_changed,
+        )
+
+        character_column.addWidget(self.character_select)
+
+        row.addLayout(character_column, 1)
+
+        spec_column = QVBoxLayout()
+
+        spec_column.setContentsMargins(0, 0, 0, 0)
+
+        spec_column.setSpacing(4)
+
+        spec_column.addWidget(eyebrow_label("SPEZIALISIERUNG"))
+
+        self.spec_select = Select()
+
+        self.spec_select.set_items(_spec_items())
+
+        self.spec_select.currentIndexChanged.connect(
+            self._on_spec_changed,
+        )
+
+        spec_column.addWidget(self.spec_select)
+
+        row.addLayout(spec_column, 1)
+
+        card.root.addLayout(row)
+
+        #
+        # Warum die Spezialisierung neben dem Charakter steht und nicht
+        # nur aus ihm folgt: eine zweite Spec ist der Normalfall, und
+        # wer sie simmt, will sie hier auch wählen können.
+        #
+
+        self.spec_hint = self._hint(
+            card,
+            "Zweitspezialisierung? Hier umstellen — die Gewichtung "
+            "gehört im Spiel zu genau einer.",
+            tokens.TEXT["faint"],
+        )
+
+        buttons = QHBoxLayout()
+
+        buttons.setContentsMargins(0, 0, 0, 0)
+
+        buttons.setSpacing(tokens.SPACE[2])
+
+        self.open_button = HeroButton("Sim mit meiner Ausrüstung öffnen")
+
+        self.open_button.clicked.connect(self._open_sim)
+
+        buttons.addWidget(self.open_button)
+
+        self.plain_button = HeroButton("Nur die Seite", primary=False)
+
+        self.plain_button.clicked.connect(self._open_plain)
+
+        buttons.addWidget(self.plain_button)
+
+        self.copy_export_button = HeroButton(
+            "Export kopieren",
+            primary=False,
+        )
+
+        self.copy_export_button.clicked.connect(self._copy_export)
+
+        buttons.addWidget(self.copy_export_button)
+
+        buttons.addStretch(1)
+
+        card.root.addLayout(buttons)
+
+        #
+        # Was die Adresse mitbringt und was nicht. Der Satz steht hier
+        # und nicht in der Doku: die Adresse liefert nur die
+        # Ausrüstung, und wer das nicht weiss, sucht nach seinen
+        # Glyphen und hält ihr Fehlen für einen Fehler.
+        #
+
+        self.gear_state = self._hint(card, "")
+
+        self.gear_note = self._hint(card, "", tokens.TEXT["faint"])
+
+        #
+        # Die Rückmeldung des Kopierens hat eine eigene Zeile, weil
+        # `_draw_gear()` bei jeder `state_changed` über die obige
+        # schreibt - das "Kopiert." wäre nach Sekunden weg, und wer
+        # kurz wegsieht, hält den Knopf für kaputt.
+        #
+
+        self.gear_copy_state = self._hint(card, "", tokens.TEXT["faint"])
+
+        self.url_label = QLabel("")
+
+        self.url_label.setFont(font("small"))
+
+        self.url_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+
+        restyle(
+            self.url_label,
+            f"color:{tokens.TEXT['faint']};background:transparent;",
+        )
+
+        card.root.addWidget(self.url_label)
+
+        self.addWidget(card)
+
+    def _build_paste_card(self):
+
+        card = Card()
+
+        self._step(card, "2", "Ergebnis einfügen")
+
+        #
+        # Für Heiler bleibt diese Karte stehen und bekommt einen Satz:
+        # QE Live liefert nichts, was hier hineingehört. Eine Karte,
+        # die nichts sagt, ist von einer kaputten nicht zu
+        # unterscheiden - und wer sie leer lässt, sucht die Ausgabe,
+        # die es dort nicht gibt. Ausgeblendet wird sie nicht: eine
+        # von Hand getippte Gewichtung geht hier weiterhin (lock,
+        # don't hide).
+        #
+
+        self.paste_gap = self._hint(card, "", tokens.STATE_TEXT["warn"])
+
+        self.input = QPlainTextEdit()
+
+        self.input.setMinimumHeight(120)
+
+        self.input.setFont(font("mono"))
+
+        self.input.setPlaceholderText(
+            "Die Ausgabe des Sims hier ganz hinein — dieselbe, die auch "
+            "ReforgeLite liest. Ein Wertname und eine Zahl je Zeile geht "
+            "genauso."
+        )
+
+        card.root.addWidget(self.input)
+
+        buttons = QHBoxLayout()
+
+        buttons.setContentsMargins(0, 0, 0, 0)
+
+        buttons.setSpacing(tokens.SPACE[2])
+
+        self.read_button = HeroButton("Einlesen")
+
+        self.read_button.clicked.connect(self._read)
+
+        buttons.addWidget(self.read_button)
+
+        self.clear_button = HeroButton("Feld leeren", primary=False)
+
+        self.clear_button.clicked.connect(self._clear_input)
+
+        buttons.addWidget(self.clear_button)
+
+        buttons.addStretch(1)
+
+        card.root.addLayout(buttons)
+
+        #
+        # Drei getrennte Zeilen, und das ist Absicht: ein Befund, ein
+        # Hinweis und ein Fehler raten zu Verschiedenem. Ein Hinweis,
+        # der wie ein Fehler aussieht, wird entweder fälschlich ernst
+        # genommen oder lehrt, Fehler zu übersehen.
+        #
+
+        self.result = QLabel("")
+
+        self.result.setFont(font("small"))
+
+        enable_wrap(self.result)
+
+        restyle(
+            self.result,
+            f"color:{tokens.WHITE};background:transparent;",
+        )
+
+        card.root.addWidget(self.result)
+
+        self.notes = QLabel("")
+
+        self.notes.setFont(font("small"))
+
+        enable_wrap(self.notes)
+
+        restyle(
+            self.notes,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+        card.root.addWidget(self.notes)
+
+        self.problem = QLabel("")
+
+        self.problem.setFont(font("small"))
+
+        enable_wrap(self.problem)
+
+        restyle(
+            self.problem,
+            f"color:{tokens.STATE_TEXT['warn']};background:transparent;",
+        )
+
+        card.root.addWidget(self.problem)
+
+        self.apply_button = HeroButton("Für diese Spezialisierung übernehmen")
+
+        self.apply_button.clicked.connect(self._apply)
+
+        self.apply_button.setEnabled(False)
+
+        card.root.addWidget(self.apply_button, 0, Qt.AlignLeft)
+
+        self.addWidget(card)
+
+    def _build_delivery_card(self):
+
+        card = Card()
+
+        self._step(card, "3", "Ins Spiel bringen")
+
+        self.stored = QLabel("")
+
+        self.stored.setFont(font("body"))
+
+        enable_wrap(self.stored)
+
+        restyle(
+            self.stored,
+            f"color:{tokens.WHITE};background:transparent;",
+        )
+
+        card.root.addWidget(self.stored)
+
+        self.stored_weights = QLabel("")
+
+        self.stored_weights.setFont(font("mono"))
+
+        enable_wrap(self.stored_weights)
+
+        restyle(
+            self.stored_weights,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+        card.root.addWidget(self.stored_weights)
+
+        self.delivery_hint = self._hint(card, "")
+
+        self.transfer = QLineEdit()
+
+        self.transfer.setReadOnly(True)
+
+        self.transfer.setFont(font("mono"))
+
+        self.transfer.setFixedHeight(36)
+
+        card.root.addWidget(self.transfer)
+
+        buttons = QHBoxLayout()
+
+        buttons.setContentsMargins(0, 0, 0, 0)
+
+        buttons.setSpacing(tokens.SPACE[2])
+
+        self.copy_button = HeroButton("String kopieren")
+
+        self.copy_button.clicked.connect(self._copy_transfer)
+
+        buttons.addWidget(self.copy_button)
+
+        self.remove_button = HeroButton("Gewichtung entfernen", primary=False)
+
+        self.remove_button.clicked.connect(self._remove)
+
+        buttons.addWidget(self.remove_button)
+
+        buttons.addStretch(1)
+
+        card.root.addLayout(buttons)
+
+        self.copy_state = QLabel("")
+
+        self.copy_state.setFont(font("small"))
+
+        enable_wrap(self.copy_state)
+
+        restyle(
+            self.copy_state,
+            f"color:{tokens.TEXT['faint']};background:transparent;",
+        )
+
+        card.root.addWidget(self.copy_state)
+
+        self.addWidget(card)
+
+    # --------------------------------------------------
+    # Zustand
+    # --------------------------------------------------
+
+    def on_enter(self):
+
+        self.read_export()
+
+        self.refresh()
+
+    # --------------------------------------------------
+    # Die Ausrüstung aus dem Spiel
+    # --------------------------------------------------
+
+    def read_export(self):
+        """
+        Liest die SavedVariables des WowSimsExporter.
+
+        Ausdrücklich nicht in `refresh()`: die Seite wird bei jeder
+        `state_changed` neu gezeichnet, und eine Datei je Zeichnung
+        anzufassen wäre dieselbe Sorte Aufwand wie ein Netzabruf im
+        Zeichnen (siehe `ConnectionsPage.refresh()`).
+        """
+
+        reader = WseReader(getattr(self.manager.state, "wow_path", None))
+
+        try:
+            self._lookup = reader.read()
+
+        except Exception:
+
+            #
+            # Eine fremde Datei, an der wir nichts ändern können - sie
+            # darf die Seite nicht mitnehmen.
+            #
+
+            self._lookup = None
+
+            self._export = None
+
+            self._follow_export = False
+
+            return
+
+        newest = self._lookup.newest
+
+        self._export = parse_export(newest.data) if newest else None
+
+        self.gear_copy_state.setText("")
+
+        #
+        # Beim Betreten folgt die Auswahl dem, was das Spiel gemeldet
+        # hat. Ohne das stünde die Liste auf ihrem ersten Eintrag, und
+        # der Knopf wäre ausgerechnet in dem Fall tot, für den es ihn
+        # gibt. Nur beim Betreten: wer danach umstellt, hat sich etwas
+        # dabei gedacht, und `refresh()` läuft bei jeder
+        # `state_changed`.
+        #
+
+        self._follow_export = True
+
+    def selected_spec(self) -> str:
+
+        return self.spec_select.value() or ""
+
+    def selected_character(self) -> dict:
+
+        key = self.character_select.value()
+
+        for sheet in self._sheets():
+
+            if _sheet_key(sheet) == key:
+                return sheet
+
+        return {}
+
+    def _sheets(self) -> list[dict]:
+
+        characters = getattr(self.manager, "characters", None)
+
+        if characters is None:
+            return []
+
+        try:
+            return characters.characters()
+
+        except Exception:
+            return []
+
+    # --------------------------------------------------
+
+    def refresh(self):
+        """
+        Zeichnet - und fasst das Eingabefeld nicht an.
+        """
+
+        self._fill_characters()
+
+        self._follow_reported_spec()
+
+        self._draw_source()
+
+        self._draw_gear()
+
+        self._draw_stored()
+
+    def _follow_reported_spec(self):
+        """
+        Stellt die Auswahl auf die Spezialisierung, deren Ausrüstung
+        gemeldet wurde - einmal je Besuch.
+
+        Sie schlägt die Spec aus dem Ausrüstungsbogen, wenn beide sich
+        widersprechen: hier geht es um die Ausrüstung, und die gehört
+        zu genau dem Charakter, den der Exporter gemeldet hat.
+        """
+
+        if not self._follow_export:
+            return
+
+        self._follow_export = False
+
+        if self._export is None:
+            return
+
+        key = self._export.spec_key
+
+        if key and spec_of(key):
+            self.spec_select.select_value(key)
+
+    def _fill_characters(self):
+
+        sheets = self._sheets()
+
+        items = [
+            (
+                f"{sheet.get('name', '?')} · "
+                f"{sheet.get('spec') or spec_label(sheet.get('spec_key', ''))}",
+                _sheet_key(sheet),
+            )
+            for sheet in sheets
+        ]
+
+        if not items:
+
+            #
+            # Kein gemeldeter Charakter heisst nicht "diese Seite geht
+            # nicht": die Spezialisierung lässt sich von Hand wählen,
+            # und der Sim braucht ohnehin keinen Namen. Gesagt wird es
+            # trotzdem, sonst sieht die leere Liste nach Fehler aus.
+            #
+
+            items = [("Noch kein Charakter gemeldet", "")]
+
+        filled = self.character_select.set_items(items)
+
+        self.character_select.setEnabled(bool(sheets))
+
+        if filled and sheets:
+            self._on_character_changed()
+
+    def _healer(self):
+        """
+        Die QE-Live-Spezialisierung zur Auswahl, oder `None`.
+
+        Gefragt wird nicht "ist das ein Heiler", sondern "führt QE Live
+        diese Spezialisierung" - dieselbe Zurückhaltung wie bei
+        `sim_url()`, und dieselbe Frage, die das Addon in
+        `modules/qelive.lua` stellt.
+        """
+
+        return qelive.spec(self.selected_spec())
+
+    def _draw_healer_source(self, entry):
+        """
+        Der Heiler-Zweig derselben Karte.
+
+        Zwei Dinge fallen hier weg, und beide, weil QE Live sie nicht
+        kann: eine Adresse, die die Ausrüstung mitbringt, und ein
+        Export für *Import → Addon*. Ein zweiter Knopf, der dasselbe
+        tut wie der erste, ist keine Auswahl - er ist die Frage, worin
+        sich die beiden unterscheiden.
+        """
+
+        self.source_hint.setText(qelive.guidance(entry))
+
+        self.open_button.setText("QE Live öffnen")
+
+        self.open_button.setEnabled(True)
+
+        self.plain_button.setVisible(False)
+
+        self.copy_export_button.setVisible(False)
+
+        self.gear_copy_state.setText("")
+
+        self.url_label.setText(qelive.URL)
+
+        #
+        # Die Ausrüstungszeile sagt hier nichts über eine Meldung des
+        # WowSimsExporters - der spielt in diesem Weg keine Rolle. Sie
+        # sagt, woher der Text kommt.
+        #
+
+        self.gear_state.setText(
+            f"{entry.label} · die Ausrüstung kommt als Text aus dem Spiel"
+        )
+
+        restyle(
+            self.gear_state,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+        self.gear_note.setText(qelive.weights_note(entry))
+
+        self.paste_gap.setText(
+            "QE Live gibt keine Wertegewichte heraus — für diese "
+            "Spezialisierung bleibt dieses Feld leer. Wer trotzdem eine "
+            "Gewichtung von Hand einsetzen will, kann sie hier "
+            "einfügen; ihre Vorgabewerte liegen im Spiel unter "
+            "Priorisierung bereit."
+        )
+
+    def _draw_source(self):
+
+        entry = self._healer()
+
+        if entry is not None:
+
+            self._draw_healer_source(entry)
+
+            return
+
+        #
+        # Zurück auf den wowsims-Zweig: die Knöpfe bleiben zwischen zwei
+        # Spezialisierungen dieselben Widgets, und was der Heiler-Zweig
+        # ausgeblendet hat, muss hier wieder dastehen.
+        #
+
+        self.source_hint.setText(
+            "Der Sim öffnet sich mit deiner Ausrüstung, wenn der "
+            "WowSimsExporter sie im Spiel gemeldet hat. Danach reicht "
+            "dort Suggest Reforges — die Zeichenkette, die dabei "
+            "herauskommt, kommt in Schritt 2."
+        )
+
+        self.open_button.setText("Sim mit meiner Ausrüstung öffnen")
+
+        self.paste_gap.setText("")
+
+        self.plain_button.setVisible(True)
+
+        self.copy_export_button.setVisible(True)
+
+        key = self.selected_spec()
+
+        url = sim_url(key)
+
+        if url:
+
+            self.url_label.setText(url)
+
+            self.plain_button.setEnabled(True)
+
+        else:
+
+            #
+            # Ein unbekannter Profilschlüssel wird nicht geraten - die
+            # Seite einer fremden Spezialisierung sähe genauso aus wie
+            # die richtige.
+            #
+
+            self.url_label.setText(
+                f"{BASE_PAGE} — für diese Spezialisierung ist hier keine "
+                f"eigene Seite hinterlegt."
+            )
+
+            self.plain_button.setEnabled(True)
+
+    def _draw_stored(self):
+
+        key = self.selected_spec()
+
+        entry = self.store.get(key) if self.store else None
+
+        if entry is None:
+
+            self.stored.setText(
+                f"Für {spec_label(key)} ist noch keine Gewichtung "
+                f"übernommen."
+            )
+
+            self.stored_weights.setText("")
+
+            self.delivery_hint.setText(
+                "Sobald oben etwas eingelesen und übernommen ist, steht "
+                "hier beides: die Zustellung ins Spiel und der String zum "
+                "Einfügen ohne Neuladen."
+            )
+
+            self.transfer.setText("")
+
+            self.transfer.setEnabled(False)
+
+            self.copy_button.setEnabled(False)
+
+            self.remove_button.setEnabled(False)
+
+            self.header.setTitle("Sim-Ergebnis übernehmen.")
+
+            return
+
+        self.stored.setText(
+            f"{spec_label(entry.spec_key)}"
+            f"{_from_character(entry)} · {_stamp(entry.created)}"
+        )
+
+        self.stored_weights.setText(_weights_text(entry.weights))
+
+        self.delivery_hint.setText(
+            "Die Companion hat sie an das Addon übergeben — im Spiel "
+            "liegt sie nach dem nächsten /reload unter Charakter → "
+            "Priorisierung bereit und wird dort auf deinen Klick "
+            "wirksam. Ohne Neuladen: den String hier kopieren und im "
+            "Spiel unter Import einfügen."
+        )
+
+        self.transfer.setText(build_transfer(entry))
+
+        self.transfer.setEnabled(True)
+
+        self.copy_button.setEnabled(True)
+
+        self.remove_button.setEnabled(True)
+
+        self.header.setTitle(
+            f"Gewichtung für {spec_label(entry.spec_key)} liegt bereit."
+        )
+
+    # --------------------------------------------------
+    # Handlungen
+    # --------------------------------------------------
+
+    def _on_character_changed(self):
+
+        sheet = self.selected_character()
+
+        key = (sheet.get("spec_key") or "").strip().upper()
+
+        if key and spec_of(key):
+            self.spec_select.select_value(key)
+
+        self._draw_source()
+
+        self._draw_gear()
+
+        self._draw_stored()
+
+    def _on_spec_changed(self):
+
+        self._draw_source()
+
+        #
+        # Der Ausrüstungs-Zustand hängt an der gewählten Spec (die
+        # Klasse muss passen) - ohne diese Zeile bliebe der Knopf auf
+        # dem Stand von vorhin, und beim Wechsel auf die Zweitspec
+        # wäre er tot, obwohl die Ausrüstung dieselbe ist.
+        #
+
+        self._draw_gear()
+
+        self._draw_stored()
+
+    # --------------------------------------------------
+    # Schritt 1: was der Sim bekommt
+    # --------------------------------------------------
+
+    def _export_class(self) -> str:
+
+        return (self._export.char_class if self._export else "").upper()
+
+    def _gear_link(self) -> str:
+
+        #
+        # QE Live nimmt die Ausrüstung nur als eingefügten Text an; eine
+        # Adresse, die sie mitbringt, gibt es dort nicht. Ein gebauter
+        # Link führte auf eine Seite, die ihn ignoriert - und das sähe
+        # aus wie eine Ausrüstung, die unterwegs verloren ging.
+        #
+
+        if self._healer() is not None:
+            return ""
+
+        if not fits_spec(self._export, self.selected_spec()):
+            return ""
+
+        url = sim_url(self.selected_spec())
+
+        if not url:
+            return ""
+
+        return build_link(url, self._export.items)
+
+    def _draw_gear(self):
+        """
+        Zeichnet, was der Sim bekommt - und wenn nichts, warum
+        nicht. Welcher Satz das ist, entscheidet `gap_text()`; hier
+        steht er nur.
+        """
+
+        #
+        # Für Heiler hat `_draw_healer_source()` die beiden Zeilen
+        # schon gesetzt. Sie hier ein zweites Mal zu beschreiben hiesse,
+        # den WowSimsExporter zum Thema zu machen, der in diesem Weg
+        # keine Rolle spielt.
+        #
+
+        if self._healer() is not None:
+
+            return
+
+        reason = self._lookup.reason if self._lookup else NO_WOW
+
+        note = (
+            "Die Adresse bringt die Ausrüstung mit. Talente und Glyphen "
+            "bleiben, wie du sie im Sim eingestellt hast — für die geht "
+            "Export kopieren und im Sim Import → Addon."
+        )
+
+        if fits_spec(self._export, self.selected_spec()):
+
+            export = self._export
+
+            self.gear_state.setText(
+                f"{export.full_name} · {export.item_count} Teile · "
+                f"gemeldet {age_text(self._lookup.newest.stamp)}"
+            )
+
+            restyle(
+                self.gear_state,
+                f"color:{tokens.WHITE};background:transparent;",
+            )
+
+            if export.problems:
+                note = " ".join(export.problems) + " " + note
+
+            self.gear_note.setText(note)
+
+            self.open_button.setEnabled(True)
+
+            self.copy_export_button.setEnabled(True)
+
+            return
+
+        self.open_button.setEnabled(False)
+
+        self.copy_export_button.setEnabled(bool(self._export))
+
+        if self._export and self._export.usable:
+
+            #
+            # Gefunden, passt aber nicht zur gewählten Klasse. Das ist
+            # keine Störung, sondern eine Auskunft: gemeldet wird
+            # immer der zuletzt gespielte Charakter.
+            #
+
+            self.gear_state.setText(
+                f"Zuletzt gemeldet wurde {self._export.full_name} "
+                f"({class_label(self._export_class())}) — das passt nicht "
+                f"zur gewählten Spezialisierung."
+            )
+
+            self.gear_note.setText(
+                "Im Spiel auf diesen Charakter wechseln und dort unter "
+                "Charakter → Simmen bereitstellen. Solange öffnet Nur "
+                "die Seite den Sim ohne Ausrüstung."
+            )
+
+        else:
+
+            self.gear_state.setText(gap_text(reason, self._export))
+
+            self.gear_note.setText(
+                "Ohne gemeldete Ausrüstung stellst du sie im Sim selbst "
+                "ein — der Weg zurück in Schritt 2 und 3 ändert sich "
+                "dadurch nicht."
+            )
+
+        restyle(
+            self.gear_state,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+    # --------------------------------------------------
+
+    def _open_sim(self):
+
+        link = self._gear_link()
+
+        if not link:
+
+            #
+            # Der Knopf ist dann gesperrt; hierher kommt man nur, wenn
+            # sich der Zustand zwischen Zeichnen und Klick geändert
+            # hat. Die Seite ohne Ausrüstung ist die richtige Antwort
+            # darauf - ein Klick, der nichts tut, wäre es nicht.
+            #
+
+            self._open_plain()
+
+            return
+
+        open_url(link, getattr(self.manager, "logger", None))
+
+    def _open_plain(self):
+
+        if self._healer() is not None:
+
+            open_url(qelive.URL, getattr(self.manager, "logger", None))
+
+            return
+
+        url = sim_url(self.selected_spec()) or BASE_PAGE
+
+        open_url(url, getattr(self.manager, "logger", None))
+
+    def _copy_export(self):
+        """
+        Der Export-Text für *Import → Addon* im Sim.
+
+        Er bringt mit, was die Adresse nicht mitbringen kann: Talente,
+        Glyphen, Volk und Berufe. Den Weg gibt es also nicht als
+        Rückfall, sondern weil er mehr kann.
+        """
+
+        if not self._export:
+            return
+
+        clipboard = QGuiApplication.clipboard()
+
+        if clipboard is None:
+
+            self.gear_copy_state.setText(
+                "Kopieren geht auf diesem System nicht — im Spiel führt "
+                "/wse export zum selben Text."
+            )
+
+            return
+
+        clipboard.setText(self._export.raw)
+
+        self.gear_copy_state.setText(
+            "Kopiert. Im Sim oben unter Import → Addon einfügen — so "
+            "kommen auch Talente, Glyphen und Berufe mit."
+        )
+
+    def _clear_input(self):
+
+        self.input.setPlainText("")
+
+        self._parsed = None
+
+        self._weights = {}
+
+        self.result.setText("")
+
+        self.notes.setText("")
+
+        self.problem.setText("")
+
+        self.apply_button.setEnabled(False)
+
+    def _read(self):
+
+        text = self.input.toPlainText()
+
+        parsed = parse(text)
+
+        if parsed.problem:
+
+            self.result.setText("")
+
+            self.notes.setText("")
+
+            self.problem.setText(parsed.problem)
+
+            self.apply_button.setEnabled(False)
+
+            self._weights = {}
+
+            return
+
+        weights, negatives = normalize(parsed.weights)
+
+        if not weights:
+
+            self.result.setText("")
+
+            self.notes.setText("")
+
+            self.problem.setText(
+                "Darin steht keine brauchbare Gewichtung — alle Werte "
+                "sind null oder negativ."
+            )
+
+            self.apply_button.setEnabled(False)
+
+            self._weights = {}
+
+            return
+
+        self._parsed = parsed
+
+        self._weights = weights
+
+        self.problem.setText("")
+
+        self.result.setText(_weights_text(weights))
+
+        self.notes.setText(
+            " ".join(self._note_lines(parsed, negatives, weights)),
+        )
+
+        self.apply_button.setEnabled(True)
+
+    def _note_lines(self, parsed, negatives, weights) -> list[str]:
+        """
+        Was neben den Gewichten noch zu sagen ist - und alles davon
+        wird gesagt, nicht verschwiegen: wer es nicht sieht, hält das
+        Ergebnis für vollständig.
+
+        WARUM DAS HIER VIER GETRENNTE SÄTZE SIND.
+
+        Bis 2.5.0 stand alles unter einer Überschrift ("kennt
+        WeintCodex nicht"), und die war für den häufigsten Fall
+        schlicht falsch: Angriffskraft und Waffenschaden kennt es sehr
+        wohl. Der Satz las sich wie eine Lücke in unseren Tabellen -
+        und wurde genau so gemeldet. Vier Fälle, vier Antworten, und
+        drei davon verlangen nichts:
+
+        * mit null gewichtet   -> der Sim hat sie angesehen
+        * hier nicht verwertbar -> kein Stein, keine Verzauberung,
+                                   keine Umschmiedung bewegt sie
+        * nicht erkannt        -> das ist der Fall für eine Meldung
+        * unter 1 gerundet     -> vorhanden, aber zu klein für die
+                                   Skala des Addons
+        """
+
+        lines: list[str] = []
+
+        if negatives:
+
+            lines.append(
+                "Negative Gewichte gibt es hier nicht — auf 0 gesetzt: "
+                + ", ".join(STAT_LABELS.get(key, key) for key in negatives)
+                + "."
+            )
+
+        #
+        # Was in der Liste fehlt, weil die Quelle es mit null bewertet
+        # hat. Ohne diesen Satz ist das von "die App hat den Wert
+        # verloren" nicht zu unterscheiden - dieselbe Linie wie
+        # `stars == 0` im Analyzer.
+        #
+
+        if parsed.zeroed:
+
+            lines.append(
+                "Mit null gewichtet (bringt diesem Charakter laut Sim "
+                "nichts): "
+                + ", ".join(
+                    STAT_LABELS.get(key, key)
+                    for key in STAT_ORDER
+                    if key in parsed.zeroed
+                )
+                + "."
+            )
+
+        #
+        # Und was unter 1 rutscht: vorhanden, aber auf der Skala des
+        # Addons (grösstes Gewicht = 100, ganze Zahlen) nicht mehr
+        # darstellbar. Auch das ist ein stilles Verschwinden.
+        #
+
+        rounded = [
+            key
+            for key in STAT_ORDER
+            if parsed.weights.get(key, 0) > 0 and not weights.get(key)
+        ]
+
+        if rounded:
+
+            lines.append(
+                "Zu klein für die Skala (unter 1 von 100): "
+                + ", ".join(STAT_LABELS.get(key, key) for key in rounded)
+                + "."
+            )
+
+        if parsed.unusable:
+
+            lines.append(
+                "Hier nicht verwertbar: "
+                + ", ".join(parsed.unusable)
+                + ". Diese Werte gewichtet der Sim mit, aber kein "
+                "Sockelstein, keine Verzauberung und keine Umschmiedung "
+                "bewegt sie — es gäbe hier nichts, was ein Gewicht "
+                "darauf steuern könnte."
+            )
+
+        if parsed.unknown:
+
+            lines.append(
+                "Nicht erkannt (kennt WeintCodex nicht): "
+                + ", ".join(parsed.unknown)
+                + "."
+            )
+
+        if parsed.caps:
+
+            named = " · ".join(
+                f"{STAT_LABELS.get(cap.stat, cap.stat)} "
+                f"{_percent(cap.percent)} %"
+                for cap in parsed.caps
+            )
+
+            lines.append(
+                f"Grenzen aus dem Sim: {named}. Sie werden nicht "
+                f"übernommen — eine Grenze gilt für alle dieser "
+                f"Spezialisierung und steht im Spec-Profil des Addons, "
+                f"das sie beim Sockeln und Umschmieden auch durchsetzt."
+            )
+
+        if parsed.caps_ignored:
+
+            lines.append(
+                "Nicht gelesene Grenzen: "
+                + ", ".join(parsed.caps_ignored)
+                + "."
+            )
+
+        if parsed.limits:
+
+            lines.append(
+                "Schwellen aus dem Sim: "
+                + " · ".join(parsed.limits)
+                + ". Auch sie werden nicht übernommen — die "
+                "Tempo-Schwellen rechnet das Addon selbst aus."
+            )
+
+        expected = spec_of(self.selected_spec())
+
+        if (
+            parsed.sim_class
+            and expected
+            and parsed.sim_class != expected.class_token
+        ):
+
+            lines.append(
+                f"Achtung: diese Ausgabe ist für "
+                f"{class_label(parsed.sim_class)} gerechnet, gewählt ist "
+                f"{class_label(expected.class_token)} · {expected.label}."
+            )
+
+        return lines
+
+    def _apply(self):
+
+        if not self._weights or self.store is None:
+            return
+
+        key = self.selected_spec()
+
+        if not key:
+            return
+
+        sheet = self.selected_character()
+
+        entry = self.store.put(
+            WeightSet(
+                spec_key=key,
+                weights=dict(self._weights),
+                character=str(sheet.get("name", "")),
+                realm=str(sheet.get("realm", "")),
+                source=(self._parsed.source if self._parsed else "sim"),
+                created=int(time.time()),
+            )
+        )
+
+        #
+        # Sofort zustellen statt auf den Sync-Takt zu warten: wer hier
+        # drückt, will gleich `/reload` tippen (dieselbe Überlegung wie
+        # beim "Fertig" der WeakAuras-Seite).
+        #
+
+        if self.sync is not None:
+            self.sync.publish_now()
+
+        self._clear_input()
+
+        self.refresh()
+
+        logger = getattr(self.manager, "logger", None)
+
+        if logger is not None:
+
+            logger.success(
+                f"Sim-Gewichtung für {spec_label(entry.spec_key)} "
+                f"übernommen."
+            )
+
+    def _remove(self):
+
+        if self.store is None:
+            return
+
+        if not self.store.remove(self.selected_spec()):
+            return
+
+        #
+        # Auch das Löschen wird zugestellt: im Spiel verschwindet der
+        # Vorschlag dadurch, dass er in der nächsten Zustellung fehlt.
+        #
+
+        if self.sync is not None:
+            self.sync.publish_now()
+
+        self.copy_state.setText("")
+
+        self.refresh()
+
+    def _copy_transfer(self):
+
+        text = self.transfer.text()
+
+        if not text:
+            return
+
+        clipboard = QGuiApplication.clipboard()
+
+        if clipboard is None:
+
+            #
+            # Kein Zwischenspeicher (kommt auf einem X-losen System
+            # vor): dann steht der String im Feld darüber und lässt
+            # sich von Hand markieren. Ein Knopf, der stumm nichts
+            # tut, ist der schlechtere Ausgang.
+            #
+
+            self.copy_state.setText(
+                "Kopieren geht auf diesem System nicht — der String "
+                "steht oben und lässt sich markieren."
+            )
+
+            return
+
+        clipboard.setText(text)
+
+        self.copy_state.setText(
+            "Kopiert. Im Spiel unter Import einfügen — dort wirkt er "
+            "sofort, ohne /reload."
+        )
+
+
+# --------------------------------------------------
+
+
+def _sheet_key(sheet: dict) -> str:
+
+    name = str(sheet.get("name", "")).strip()
+
+    realm = str(sheet.get("realm", "")).strip()
+
+    return f"{name}-{realm}" if realm else name
+
+
+def _from_character(entry) -> str:
+
+    return f" · {entry.character}" if entry.character else ""
+
+
+def _stamp(created: int) -> str:
+
+    if not created:
+        return "ohne Datum"
+
+    return time.strftime("%d.%m.%Y", time.localtime(created))
+
+
+def _percent(value: float) -> str:
+
+    return f"{value:.1f}".replace(".", ",")
+
+
+def _weights_text(weights: dict[str, int]) -> str:
+
+    return " · ".join(
+        f"{STAT_LABELS.get(key, key)} {value}"
+        for key, value in ordered(weights)
+    )
