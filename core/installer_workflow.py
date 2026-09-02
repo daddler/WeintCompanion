@@ -124,8 +124,17 @@ class InstallerWorkflow:
 
             try:
 
+                #
+                # Der WoW-Ordner kommt mit: das Backup sichert seit
+                # 2.7.1 auch die SavedVariables des Addons, also
+                # Bossnotizen, Twinks und Fortschritt. Der Addon-Ordner
+                # allein waere das Backup dessen, was ohnehin bei
+                # GitHub liegt (siehe core/backup.py).
+                #
+
                 backup = self.manager.backup.create_backup(
-                    state.addon_path
+                    state.addon_path,
+                    state.wow_path,
                 )
 
                 logger.success(
@@ -201,6 +210,17 @@ class InstallerWorkflow:
         logger.success(
             "Installation abgeschlossen."
         )
+
+        #
+        # Gerade sind ein Archiv und ein Backup dazugekommen: neu
+        # zaehlen lassen, statt bis zum naechsten traegen Takt zu
+        # warten (siehe core/storage_watch.py).
+        #
+
+        watch = getattr(self.manager, "storage_watch", None)
+
+        if watch is not None:
+            watch.invalidate()
 
         #
         # Status komplett aktualisieren

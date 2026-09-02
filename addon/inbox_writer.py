@@ -128,6 +128,12 @@ class InboxWriter:
             + "},\n"
         )
 
-        upsert_variable(file, "WeintCompanionInboxDB", body)
+        #
+        # Der Rückgabewert wird durchgereicht: upsert_variable()
+        # schreibt nicht, wenn WoW die Datei zwischen unserem Lesen
+        # und unserem Ersetzen selbst geschrieben hat (siehe dort).
+        # "Diesmal nicht" ist kein Fehler - der nächste Takt schreibt
+        # erneut, und die Live-Brücke trägt denselben Inhalt ohnehin.
+        #
 
-        return True
+        return upsert_variable(file, "WeintCompanionInboxDB", body)

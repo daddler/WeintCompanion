@@ -2,6 +2,83 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 2.7.1
+
+**Wenn sich Downloads und Backups anhäufen, sagt die App es jetzt.**
+Jede Aktualisierung des Addons legt zwei Dateien an: das
+heruntergeladene Archiv und ein Backup des Addon-Ordners. Gelöscht wird
+beides nie von selbst — richtig so, ein Backup, das sich selbst
+wegräumt, ist keins. Nur wusste davon niemand: die Zahlen standen
+allein unter *Einstellungen → Backups*, und dorthin geht niemand, der
+nichts sucht. Ab sechs Dateien in einem der beiden Ordner meldet sich
+die App unten rechts, nennt die Menge in Megabyte und führt auf Klick
+direkt dorthin. Wer aufgeräumt hat, hört erst beim nächsten Volllaufen
+wieder etwas.
+
+**Das Backup vor einer Aktualisierung sichert jetzt auch deine
+Spieldaten.**
+Bisher sicherte es nur den Addon-Ordner — also Dateien, die jederzeit
+wieder von GitHub kommen — und nicht das, was du selbst eingetragen
+hast: Bossnotizen, Twinkliste, Fortschritt, Academy. Genau andersherum,
+denn nur eines von beidem ist unwiederbringlich. Unter *Einstellungen →
+Backups* steht dafür ein *Zurückholen*, das den Stand aus dem jüngsten
+Backup wiederherstellt; die jetzigen Dateien bleiben daneben liegen.
+
+**Und die App überschreibt die Spieldaten von WeintCodex nicht mehr
+blind.**
+Sie schreibt ihre Zustellung ans Addon in dieselbe Datei, in der WoW
+deine Notizen und deinen Fortschritt ablegt. Fiel WoWs eigener
+Schreibvorgang — beim Abmelden oder nach `/reload` — genau zwischen
+Lesen und Zurückschreiben, war alles aus der laufenden Sitzung weg,
+ersetzt durch den Stand vom Anmelden. Ohne Fehler, ohne Meldung. Jetzt
+wird unmittelbar vorher noch einmal nachgesehen, und im Zweifel wird
+nicht geschrieben.
+
+Ein Wort dazu, was daran **nicht** unsere Seite ist: *World of Warcraft
+schreibt seine gespeicherten Daten erst beim Abmelden und nach
+`/reload` auf die Festplatte.* Wer den Client abwürgt oder abstürzt,
+verliert alles seit dem Anmelden. Vor einem Update also einmal sauber
+ausloggen.
+
+### Neu
+- Meldung, wenn mehr als fünf Downloads oder mehr als fünf Backups
+  liegen — mit Knopf direkt in den Bereich, in dem sie sich löschen
+  lassen. Ist das Fenster im Tray geparkt, kommt sie als Sprechblase
+- *Einstellungen → Backups* nennt neben der Anzahl jetzt auch den
+  belegten Platz und sagt, wofür die Dateien da sind
+- *Einstellungen → Backups* holt den Spielstand von WeintCodex aus dem
+  jüngsten Backup zurück, benannt mit dessen Datum
+
+### Behoben
+- Das Backup vor einer Aktualisierung enthielt den Addon-Ordner, aber
+  nicht deine eingetragenen Daten
+- Die App konnte beim Schreiben ihrer Zustellung ans Addon einen
+  Schreibvorgang von WoW überholen und damit die Daten der laufenden
+  Sitzung auf den Stand vom Anmelden zurücksetzen
+
+### Technisch
+- `core/storage_usage.py` ist die Qt-freie Hälfte (Grenze, Zählung,
+  Formulierung), `core/storage_watch.py` der Wächter im Sync-Takt. Er
+  meldet die **Änderung**, nicht die Zählung — sonst zeichnete
+  `state_changed` die sichtbare Seite alle fünf Sekunden neu. Gezählt
+  wird **je Ordner**: drei Downloads und vier Backups sind zwei
+  Aufräumarbeiten und nicht sieben Dateien
+- `MainWindow._announce_storage()` merkt sich die Anzahl, bei der
+  zuletzt gemeldet wurde, und meldet erst nach `WARN_COUNT` weiteren
+  Dateien erneut. Fällt ein Ordner unter die Grenze, wird der Merker
+  vergessen: das nächste Volllaufen ist ein neuer Anlass
+- `upsert_variable()` prüft unmittelbar vor dem `os.replace()` erneut
+  Grösse und Änderungszeit der Datei und wiederholt sonst den ganzen
+  Ablauf (`WRITE_ATTEMPTS`). Der Rückgabewert sagt, ob geschrieben
+  wurde; `False` ist kein Fehler, weil dieselbe Zustellung im nächsten
+  Takt erneut geschrieben wird und ausserdem über die Live-Brücke im
+  Addon-Ordner geht
+- `BackupManager.create_backup()` baut das Archiv jetzt selbst statt
+  über `shutil.make_archive()`: der Addon-Ordner liegt unter
+  `WeintCodex/…`, der Spielstand unter `WTF/…`. `restore()` packt
+  ausschliesslich den Addon-Teil aus, sonst entstünde ein `WTF`-Ordner
+  mitten in `Interface/AddOns`
+
 ## 2.7.0
 
 **Als Heiler führt *Simmen* jetzt zu QE Live.**
