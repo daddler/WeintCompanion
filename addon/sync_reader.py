@@ -394,10 +394,17 @@ class SyncReader:
 
         lines.append("},")
 
-        upsert_variable(
+        #
+        # Auch hier der Rückgabewert von upsert_variable(): wurde die
+        # Datei zwischenzeitlich von WoW geschrieben, bleibt die
+        # gelieferte Nachricht in der Warteschlange und geht im
+        # nächsten Takt erneut hinaus. Ein zweites Zustellen ist der
+        # deutlich kleinere Schaden als ein zurückgesetzter
+        # Spielstand.
+        #
+
+        return upsert_variable(
             file,
             "WeintCompanionDB",
             "\n".join(lines) + "\n",
         )
-
-        return True

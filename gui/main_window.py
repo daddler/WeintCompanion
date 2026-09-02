@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon,
 )
 
+from core import storage_usage
 from core.companion_manager import CompanionManager
 from core.resources import Resources
 
@@ -131,6 +132,13 @@ class MainWindow(QMainWindow):
         #
 
         self._announced_updates: dict[str, str] = {}
+
+        #
+        # Bis zu welcher Anzahl je Ordner schon aufs Aufräumen
+        # hingewiesen wurde - siehe _announce_storage().
+        #
+
+        self._announced_storage: dict[str, int] = {}
 
         #
         # Siehe _on_state_changed(): verhindert, dass eine Seite über
@@ -681,6 +689,8 @@ class MainWindow(QMainWindow):
 
         self._announce_updates()
 
+        self._announce_storage()
+
     def _announce_updates(self):
         """
         Ein gefundenes Update einmal als Meldung einblenden.
@@ -741,6 +751,84 @@ class MainWindow(QMainWindow):
                 toast.actionTriggered.connect(self._open_addon_page)
 
             self._announce_in_tray(text)
+
+    def _announce_storage(self):
+        """
+        Einmal sagen, wenn sich Downloads oder Backups anhäufen.
+
+        Jede Addon-Aktualisierung legt beides an und räumt keins von
+        beiden je wieder weg (siehe `core/installer_workflow.py`).
+        Die Zahlen stehen zwar seit jeher unter *Einstellungen →
+        Backups* - aber dorthin geht niemand, der nichts sucht, und
+        so lagen nach einem halben Jahr Releases zwei Dutzend Dateien
+        da, von denen niemand wusste.
+
+        Gemeldet wird wie ein wartendes Update: als Einblendung unten
+        rechts mit einem Knopf, der direkt in den Bereich führt, plus
+        Sprechblase, wenn das Fenster gerade nicht zu sehen ist. Ein
+        Dialog wäre hier falsch - es ist nichts kaputt, es ist nur
+        etwas aufzuräumen, und ein Dialog verlangt eine Antwort, bevor
+        man weiterarbeiten darf.
+
+        **Gemerkt wird die Anzahl, bei der zuletzt gemeldet wurde**,
+        und erneut gemeldet erst wieder nach `WARN_COUNT` weiteren
+        Dateien. Ohne dieses Gedenken käme die Meldung nach jeder
+        einzelnen Aktualisierung wieder - und eine Meldung, die man
+        jedes Mal wegklickt, ist eine, die man nicht mehr liest. Fällt
+        ein Ordner unter die Grenze zurück (jemand hat aufgeräumt),
+        wird der Merker vergessen: das nächste Volllaufen ist ein
+        neuer Anlass.
+        """
+
+        watch = getattr(self.manager, "storage_watch", None)
+
+        if watch is None:
+            return
+
+        report = watch.report
+
+        crowded = []
+
+        for folder in report.folders:
+
+            if not folder.over_limit:
+
+                #
+                # Aufgeräumt - der nächste Überlauf darf wieder
+                # gemeldet werden.
+                #
+
+                self._announced_storage.pop(folder.key, None)
+                continue
+
+            announced = self._announced_storage.get(folder.key)
+
+            if (
+                announced is not None
+                and folder.count < announced + storage_usage.WARN_COUNT
+            ):
+                continue
+
+            self._announced_storage[folder.key] = folder.count
+
+            crowded.append(folder)
+
+        if not crowded:
+            return
+
+        text = storage_usage.cleanup_text(report)
+
+        toast = self.notify(text, "warn", "Aufräumen")
+
+        if toast is not None and hasattr(toast, "actionTriggered"):
+
+            toast.actionTriggered.connect(self._open_storage_section)
+
+        self._announce_in_tray(text)
+
+    def _open_storage_section(self):
+
+        self.open_settings_section("backups")
 
     def _announce_in_tray(self, text: str):
         """

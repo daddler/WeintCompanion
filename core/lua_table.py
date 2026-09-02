@@ -91,7 +91,35 @@ def extract_variable_body(text: str, var_name: str) -> str | None:
     return text[open_index + 1:close_index]
 
 
-def upsert_variable(path: Path, var_name: str, body: str) -> None:
+#
+# Wie oft ein Schreibvorgang wiederholt wird, wenn WoW die Datei
+# zwischen unserem Lesen und unserem Ersetzen selbst geschrieben hat.
+# Drei Anläufe reichen: der Zeitraum dazwischen ist ein Wimpernschlag,
+# und wer ihn dreimal hintereinander trifft, schreibt gerade fortlaufend.
+#
+
+WRITE_ATTEMPTS = 3
+
+
+def _stamp(path: Path):
+    """
+    Woran erkannt wird, dass die Datei sich unter uns geändert hat.
+
+    Grösse UND Änderungszeit, weil die Zeitauflösung mancher
+    Dateisysteme grob genug ist, dass zwei Schreibvorgänge kurz
+    hintereinander dieselbe tragen.
+    """
+
+    try:
+        info = path.stat()
+
+    except OSError:
+        return None
+
+    return (info.st_mtime_ns, info.st_size)
+
+
+def upsert_variable(path: Path, var_name: str, body: str) -> bool:
     """
     Ersetzt (oder ergänzt) den Block "var_name = { ... }" in einer
     WoW-SavedVariables-Datei, ohne die übrigen darin gespeicherten
@@ -106,46 +134,88 @@ def upsert_variable(path: Path, var_name: str, body: str) -> None:
 
     body: der Inhalt zwischen den äußeren "{"/"}" (diese beiden
     Klammern werden von dieser Funktion selbst ergänzt).
-    """
 
-    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    **Diese Funktion überschreibt nie eine Fassung der Datei, die sie
+    nicht gelesen hat.** Das ist die eine Stelle, an der die Companion
+    Nutzerdaten verlieren könnte, und der Ablauf ist ein Lesen,
+    Ändern, Zurückschreiben auf einer Datei, die WoW gehört: WoW hält
+    seine SavedVariables im Arbeitsspeicher und schreibt sie bei
+    /reload und beim Abmelden vollständig zurück. Fällt dieser
+    Schreibvorgang zwischen unser Lesen und unser Ersetzen, wäre alles
+    weg, was in dieser Sitzung dazugekommen ist - Bossnotizen,
+    Twinkliste, Lernfortschritt -, ersetzt durch den Stand vom letzten
+    Anmelden. Nichts daran fiele auf: die Datei ist gültiges Lua,
+    vollständig, nur älter. Geprüft wird deshalb unmittelbar vor dem
+    Ersetzen erneut, ob die Datei noch die ist, die gelesen wurde.
+
+    Der Rückgabewert sagt, ob geschrieben wurde. `False` heisst "in
+    diesem Anlauf nicht" und ist kein Fehler: die Zustellung Richtung
+    Addon wird ohnehin bei jedem Takt erneut geschrieben, und
+    ausserdem über die Live-Brücke im Addon-Ordner (siehe
+    addon/live_bridge.py). Eine wiederholte Zustellung kostet nichts,
+    ein überschriebener Spielstand ist unwiederbringlich.
+    """
 
     needle = f"{var_name} = {{"
 
-    start = text.find(needle)
-
     new_block = f"{var_name} = {{\n{body}}}"
 
-    if start == -1:
+    for _ in range(WRITE_ATTEMPTS):
 
-        if text and not text.endswith("\n"):
-            text += "\n"
+        before = _stamp(path)
 
-        text += new_block + "\n"
+        text = path.read_text(encoding="utf-8") if path.exists() else ""
 
-    else:
+        start = text.find(needle)
 
-        open_index = start + len(needle) - 1
+        if start == -1:
 
-        close_index = _find_matching_brace(text, open_index)
+            merged = text
 
-        text = text[:start] + new_block + text[close_index + 1:]
+            if merged and not merged.endswith("\n"):
+                merged += "\n"
 
-    #
-    # Write-Temp-Then-Rename: diese Datei ist WoWs SavedVariables-
-    # Datei, die ALLE Variablen des Addons enthält, nicht nur die
-    # hier bearbeitete. Ein Crash mitten in einem direkten
-    # path.write_text() würde die komplette Datei (samt unrelated
-    # Spielstand) abschneiden/beschädigen - os.replace() ist auf dem
-    # jeweiligen Dateisystem atomar, es gibt also nie einen
-    # sichtbaren Zwischenzustand.
-    #
+            merged += new_block + "\n"
 
-    tmp_path = path.with_suffix(path.suffix + ".tmp")
+        else:
 
-    tmp_path.write_text(text, encoding="utf-8")
+            open_index = start + len(needle) - 1
 
-    os.replace(tmp_path, path)
+            close_index = _find_matching_brace(text, open_index)
+
+            merged = text[:start] + new_block + text[close_index + 1:]
+
+        #
+        # Write-Temp-Then-Rename: diese Datei ist WoWs SavedVariables-
+        # Datei, die ALLE Variablen des Addons enthält, nicht nur die
+        # hier bearbeitete. Ein Crash mitten in einem direkten
+        # path.write_text() würde die komplette Datei (samt unrelated
+        # Spielstand) abschneiden/beschädigen - os.replace() ist auf dem
+        # jeweiligen Dateisystem atomar, es gibt also nie einen
+        # sichtbaren Zwischenzustand.
+        #
+
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+
+        tmp_path.write_text(merged, encoding="utf-8")
+
+        #
+        # Letzte Frage vor dem Ersetzen: ist die Datei noch die, aus
+        # der oben gelesen wurde? Das Fenster zwischen dieser Prüfung
+        # und dem os.replace() lässt sich nicht schliessen (es gibt
+        # keine Dateisperre, die WoW beachtet), aber es ist um
+        # Grössenordnungen kleiner als das Lesen samt Zusammenbauen.
+        #
+
+        if _stamp(path) == before:
+
+            os.replace(tmp_path, path)
+
+            return True
+
+        tmp_path.unlink(missing_ok=True)
+
+    return False
 
 
 #

@@ -24,6 +24,7 @@ from core.discord_auth import DiscordAuth
 from core.access_profile_sync import AccessProfileSync
 from core.discord_roster_sync import DiscordRosterSync
 from core.raid_schedule_sync import RaidScheduleSync
+from core.storage_watch import StorageWatch
 from core.update_watch import UpdateWatch
 from core.last_pull_sync import LastPullSync
 from addon.addon_inbox import AddonInbox
@@ -165,6 +166,16 @@ class CompanionManager(QObject):
         #
 
         self.update_watch = UpdateWatch(self)
+
+        #
+        # Zählt Downloads und Backups mit. Jede Aktualisierung legt
+        # beides an und räumt keins von beiden je wieder weg (siehe
+        # core/installer_workflow.py); die Zahlen standen zwar seit
+        # jeher unter Einstellungen -> Backups, aber dorthin geht
+        # niemand, der nichts sucht. Siehe core/storage_watch.py.
+        #
+
+        self.storage_watch = StorageWatch(self.logger)
 
         #
         # Der letzte Pull für die Übersicht. Ebenfalls kein Absender
@@ -512,6 +523,25 @@ class CompanionManager(QObject):
 
             self.logger.error(
                 f"Raidtermin-Abruf fehlgeschlagen: {exc}"
+            )
+
+        #
+        # Nachsehen, ob sich Downloads und Backups anhaeufen. Kostet
+        # nichts (zwei Ordner auflisten) und laeuft trotzdem nur alle
+        # fuenf Minuten - die beiden Ordner aendern sich durch eine
+        # Installation oder durch das Aufraeumen, und beide melden
+        # sich ueber invalidate() selbst. Siehe core/storage_watch.py.
+        #
+
+        try:
+
+            if self.storage_watch.process():
+                dirty = True
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"Speicherplatz-Pruefung fehlgeschlagen: {exc}"
             )
 
         #

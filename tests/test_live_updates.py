@@ -500,7 +500,8 @@ class _Signal:
         self.emitted += 1
 
 
-def _worker(schedule_changed: bool, update_changed: bool):
+def _worker(schedule_changed: bool, update_changed: bool,
+            storage_changed: bool = False):
     """
     Ruft den echten `_run_sync_worker()` auf einem Platzhalter auf.
 
@@ -534,6 +535,9 @@ def _worker(schedule_changed: bool, update_changed: bool):
         ),
         raid_schedule_sync=types.SimpleNamespace(
             process=lambda: schedule_changed
+        ),
+        storage_watch=types.SimpleNamespace(
+            process=lambda: storage_changed
         ),
         state_changed=_Signal(),
         _sync_lock=threading.Lock(),
@@ -571,3 +575,13 @@ def test_zwei_aenderungen_ergeben_trotzdem_nur_eine_meldung():
     """
 
     assert _worker(True, True).state_changed.emitted == 1
+
+
+def test_volle_ordner_ziehen_die_anzeige_ebenfalls_nach():
+    """
+    Die Meldung "hier sammelt sich etwas an" hängt an derselben
+    Verdrahtung wie ein wartendes Update - also muss auch sie einen
+    Durchgang als "es hat sich etwas geändert" melden können.
+    """
+
+    assert _worker(False, False, True).state_changed.emitted == 1
