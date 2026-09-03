@@ -23,6 +23,7 @@ import pytest
 from core.addon_analysis_sync import AddonAnalysisSync
 from core.academy_progress_sync import apply_addon_progress, parse_addon_progress
 
+from analyzer.academy.progression import PullRecord
 from analyzer.academy.models import PlayerProfile, TrainingPlan
 from analyzer.models import Actor, RaidSnapshot
 
@@ -90,6 +91,37 @@ class _Academy:
 
     def excluded_for(self, name):
         return frozenset(self.data["excluded"].get(name, []))
+
+    #
+    # Seit 2.8.0 geht der zurückgemeldete Stand über den Service, weil
+    # dort entschieden wird, welcher Charakter gemeint ist.
+    #
+    def set_progress(self, character, completed, excluded):
+
+        changed = False
+
+        for section, values in (
+            ("completed", list(completed)),
+            ("excluded", list(excluded)),
+        ):
+
+            if self.data[section].get(character) != values:
+
+                self.data[section][character] = values
+                changed = True
+
+        return changed
+
+    #
+    # Die Lernkurve und die Übungsserie reisen seit 2.8.0 mit. Hier
+    # bleiben sie leer - dass eine leere Kurve keine Linie behauptet,
+    # prüft tests/test_addon_payloads.py.
+    #
+    def curve_for(self, profile, character=""):
+        return ()
+
+    def practice_for(self, character):
+        return {}
 
     def save(self):
         self.saved += 1
@@ -374,3 +406,69 @@ def test_ohne_ausgewaehlten_charakter_wird_nichts_zugestellt():
     AddonAnalysisSync(manager, inbox).process()
 
     assert inbox.published == []
+
+
+#
+# --------------------------------------------------
+# Lernkurve und Übungsserie reisen mit
+# --------------------------------------------------
+#
+# Beide entstehen auf dem Desktop und wurden bis 2.8.0 nicht
+# zugestellt. Der Test hängt an der **Verdrahtung**: dass die Kurve
+# aus `curve_for()` kommt (derselbe Aufruf, aus dem auch die
+# Reihenfolge des Trainingsplans folgt) und die Serie aus dem
+# Übungsspeicher - ein vergessenes Argument fiele sonst nirgends auf,
+# das Feld wäre schlicht leer.
+#
+
+
+def test_the_curve_and_the_practice_streak_are_delivered():
+
+    manager = _Manager(_snapshot())
+
+    manager.academy.curve_for = lambda profile, character="": (
+        PullRecord(
+            key="r#1",
+            day="20260901",
+            sequence=1,
+            ratings=(("rotation", 2),),
+        ),
+        PullRecord(
+            key="r#2",
+            day="20260902",
+            sequence=2,
+            ratings=(("rotation", 4),),
+        ),
+    )
+
+    manager.academy.practice_for = lambda character: {
+        "WARRIOR_ARMS": {
+            "lastDate": "20260902",
+            "streak": 2,
+        },
+    }
+
+    inbox = _Inbox()
+
+    AddonAnalysisSync(manager, inbox).process()
+
+    state = next(
+        message["payload"]
+        for message in inbox.published[0][1]
+        if message["type"] == "academy_state"
+    )
+
+    assert state["progress"]["pulls"] == 2
+    assert state["progress"]["points"] == [2.0, 4.0]
+
+    #
+    # Die Serie kommt fertig formuliert an - und mit der Lektions-ID,
+    # damit die Zeile im Spiel an der richtigen Karte landet.
+    #
+
+    assert state["practice"][0]["specKey"] == "WARRIOR_ARMS"
+    assert (
+        state["practice"][0]["lessonId"]
+        == "warrior-arms.rotation.dummy_practice"
+    )
+    assert state["practice"][0]["text"]

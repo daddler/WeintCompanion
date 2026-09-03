@@ -46,6 +46,10 @@ from analyzer.academy.models import (
 )
 from analyzer.models import RaidSnapshot
 
+from core.academy_dummy_sync import (
+    practice_for_lessons,
+    practice_payload,
+)
 from core.raid_data_service import SOURCE_MOCK
 from core.resources import Resources
 
@@ -649,6 +653,29 @@ class AcademyPage(QWidget):
 
         self.plan_layout.addWidget(self.plan_note)
 
+        #
+        # Die Übungsserie am Trainingsdummy. Sie entsteht aus den
+        # Sitzungen, die das Addon meldet, wurde gespeichert - und
+        # bis 2.8.0 nirgends gezeigt: wer zwei Tage hintereinander
+        # geübt hatte, sah davon nichts, und am dritten erschien
+        # wortlos ein Haken. Genau der Kreis, für den es den
+        # Rotationshelfer gibt, war an seiner sichtbarsten Stelle
+        # unsichtbar.
+        #
+
+        self.practice_note = QLabel("")
+
+        self.practice_note.setWordWrap(True)
+
+        self.practice_note.setStyleSheet(
+            f"font-size:12px;color:{Colors.TEXT_MUTED};"
+            "background:transparent;border:none;"
+        )
+
+        self.practice_note.setVisible(False)
+
+        self.plan_layout.addWidget(self.practice_note)
+
         self.plan_layout.addStretch()
 
         self._lesson_cards: list[LessonCard] = []
@@ -871,7 +898,17 @@ class AcademyPage(QWidget):
         # Seite etwas von einer Wiedergabe wissen müsste.
         #
 
-        self._plan = self.academy.build_plan(self._profile, snapshot)
+        #
+        # Mit dem gewählten Charakter, nicht mit `profile.name`: das
+        # ist wörtlich "-", sobald der Spieler im Pull fehlt, und der
+        # Fortschritt würde unter diesem Unnamen gesucht - der Plan
+        # zeigte dann alle Lektionen wieder als offen.
+        #
+        self._plan = self.academy.build_plan(
+            self._profile,
+            snapshot,
+            character=self.academy.player_name(),
+        )
 
         self._apply_overview()
 
@@ -1217,6 +1254,24 @@ class AcademyPage(QWidget):
 
     # --------------------------------------------------
 
+    def _practice_text(self) -> str:
+        """
+        Der Satz zur Übungsserie am Trainingsdummy - leer, wenn für
+        diese Spezialisierung noch nichts geübt wurde.
+
+        Formuliert wird er in core/academy_dummy_sync.py, dort wird
+        auch entschieden, was eine Serie fortsetzt. Ein eigener Satz
+        hier liefe irgendwann anders aus als der, den das Addon
+        zugestellt bekommt.
+        """
+
+        state = practice_for_lessons(
+            practice_payload(self.academy, self.academy.player_name()),
+            [item.lesson_id for item in self._plan.items],
+        )
+
+        return (state or {}).get("text", "")
+
     def _apply_plan(self):
 
         #
@@ -1249,6 +1304,15 @@ class AcademyPage(QWidget):
             #
 
             self._plan.note,
+
+            #
+            # Die Übungsserie gehört mit hinein: sie ändert sich durch
+            # eine gemeldete Sitzung, ohne dass sich am Plan etwas
+            # bewegt - ohne sie bliebe "Tag 2 von 3" stehen, nachdem
+            # längst Tag 3 gemeldet wurde.
+            #
+
+            self._practice_text(),
         )
 
         if signature == self._plan_signature:
@@ -1259,6 +1323,12 @@ class AcademyPage(QWidget):
         self.plan_note.setText(self._plan.note)
 
         self.plan_note.setVisible(bool(self._plan.note))
+
+        praxis = self._practice_text()
+
+        self.practice_note.setText(praxis)
+
+        self.practice_note.setVisible(bool(praxis))
 
         #
         # Alte Karten entfernen. deleteLater() statt sofortigem

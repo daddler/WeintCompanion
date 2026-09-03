@@ -81,6 +81,13 @@ class AcademyService:
         self.load()
 
         #
+        # Zusammenlegen, was derselbe Charakter unter zwei
+        # Schreibweisen ist - siehe `_merge_names()`.
+        #
+
+        self._merge_names()
+
+        #
         # Die Lernkurve liegt in einer **eigenen** Datei: hier stehen
         # Angaben des Nutzers (erledigt, abgewählt), dort Messwerte
         # des Programms. Ein Defekt in der einen darf die andere nicht
@@ -199,6 +206,150 @@ class AcademyService:
                 f"Academy-Fortschritt konnte nicht gespeichert "
                 f"werden: {exc}"
             )
+
+    # --------------------------------------------------
+    # Ein Charakter, ein Schlüssel
+    # --------------------------------------------------
+    #
+    # **Derselbe Spieler heißt je nach Quelle anders geschrieben**, und
+    # bis 2.8.0 stand hier überall ein roher Zeichenkettenvergleich.
+    # Für die drei Ablagen dieser Datei war das kein Schönheitsfehler,
+    # sondern ein stiller Datenverlust: der Rotationstrainer meldet
+    # seine Übungssitzung unter dem nackten Clientnamen ("Aldrin"), die
+    # Auswertung läuft unter der Schreibweise des Berichts
+    # ("Aldrin-DieAldor"). Die Drei-Tage-Serie hakte die Lektion damit
+    # unter einem Namen ab, unter dem sie nie wieder gesucht wurde -
+    # ingame und auf dem Desktop blieb sie offen, ohne Fehler und ohne
+    # Meldung. Und der aus dem Addon zurückgemeldete Fortschritt legte
+    # denselben Charakter ein zweites Mal an.
+    #
+    # `analyzer/names.py` beantwortet die Frage "derselbe Charakter?"
+    # seit jeher; sie war hier nur nie gestellt worden. Dieselben drei
+    # Regeln gelten im Addon (`core/names.lua`), das seinen eigenen
+    # Academy-Speicher längst so aufschlüsselt.
+    #
+
+    SECTIONS = ("completed", "excluded", "dummy_practice")
+
+    def _known_names(self) -> list[str]:
+        """
+        Jede Schreibweise, unter der schon etwas abgelegt ist.
+        """
+
+        names: list[str] = []
+
+        for section in self.SECTIONS:
+
+            for name in self.data.get(section, {}):
+
+                if name not in names:
+                    names.append(name)
+
+        return names
+
+    def _key_for(self, character: str) -> str:
+        """
+        Der Schlüssel, unter dem dieser Charakter geführt wird.
+
+        Vorhandene Schreibweisen gewinnen: sonst entstünde neben
+        "Aldrin-DieAldor" ein zweiter Eintrag "Aldrin", und keiner der
+        beiden wäre vollständig. Ist noch nichts da, gilt die
+        übergebene Schreibweise.
+        """
+
+        if not character:
+            return ""
+
+        return match_name(character, self._known_names()) or character
+
+    def _merge_names(self):
+        """
+        Zwei Schreibweisen desselben Charakters zu einer machen -
+        einmalig beim Laden.
+
+        Gewinnt die Schreibweise **mit** Realm: sie ist die genauere,
+        und ein nackter Name findet sie über `match_name()` weiterhin
+        (ein fehlender Realm ist ein Platzhalter, kein Widerspruch).
+        Zusammengeführt wird vereinigend, nicht ersetzend - was unter
+        einem der beiden Namen abgehakt war, bleibt abgehakt.
+        """
+
+        canonical: dict[str, str] = {}
+
+        for name in self._known_names():
+
+            existing = match_name(name, list(canonical))
+
+            if existing is None:
+
+                canonical[name] = name
+
+                continue
+
+            #
+            # Beide meinen denselben Charakter. Der qualifizierte Name
+            # wird der Schlüssel; ist schon einer da, bleibt er.
+            #
+
+            if "-" in name and "-" not in existing:
+
+                canonical[name] = name
+                canonical[existing] = name
+
+            else:
+
+                canonical[name] = existing
+
+        if all(source == target for source, target in canonical.items()):
+            return
+
+        for section in self.SECTIONS:
+
+            merged: dict = {}
+
+            for name, value in self.data.get(section, {}).items():
+
+                key = canonical.get(name, name)
+
+                if key not in merged:
+
+                    merged[key] = value
+
+                    continue
+
+                #
+                # Listen vereinigen, Übungsserien je Spec übernehmen -
+                # die jüngere gewinnt, weil sie den späteren Tag trägt.
+                #
+
+                if isinstance(value, list):
+
+                    merged[key] = merged[key] + [
+                        entry
+                        for entry in value
+                        if entry not in merged[key]
+                    ]
+
+                elif isinstance(value, dict):
+
+                    for spec_key, record in value.items():
+
+                        current = merged[key].get(spec_key)
+
+                        if current is None or str(
+                            record.get("lastDate", "")
+                        ) > str(current.get("lastDate", "")):
+
+                            merged[key][spec_key] = record
+
+            self.data[section] = merged
+
+        self.manager.logger.info(
+            "Academy: Fortschritt zweier Schreibweisen desselben "
+            "Charakters zusammengeführt."
+        )
+
+        self.save()
 
     # --------------------------------------------------
     # Charakterauswahl
@@ -693,7 +844,7 @@ class AcademyService:
             return frozenset()
 
         return frozenset(
-            self.data["completed"].get(player_name, [])
+            self.data["completed"].get(self._key_for(player_name), [])
         )
 
     def is_completed(self, player_name: str, lesson_id: str) -> bool:
@@ -713,8 +864,10 @@ class AcademyService:
         if not player_name or not lesson_id:
             return
 
+        key = self._key_for(player_name)
+
         entries = list(
-            self.data["completed"].get(player_name, [])
+            self.data["completed"].get(key, [])
         )
 
         changed = False
@@ -734,7 +887,7 @@ class AcademyService:
         if not changed:
             return
 
-        self.data["completed"][player_name] = entries
+        self.data["completed"][key] = entries
 
         self.save()
 
@@ -759,15 +912,84 @@ class AcademyService:
         Setzt den Lernpfad eines Charakters zurück.
         """
 
-        if player_name not in self.data["completed"]:
+        key = self._key_for(player_name)
+
+        if key not in self.data["completed"]:
             return
 
-        del self.data["completed"][player_name]
+        del self.data["completed"][key]
 
         self.save()
 
         self.manager.logger.info(
             f"Academy: Lernpfad von {player_name} zurückgesetzt."
+        )
+
+    def set_progress(self, character: str, completed, excluded) -> bool:
+        """
+        Den vom Addon zurückgemeldeten Stand eines Charakters
+        übernehmen. Gibt zurück, ob sich etwas geändert hat.
+
+        Liegt hier und nicht beim Aufrufer, weil die Zuordnung
+        "welcher Charakter ist das" genau eine Stelle haben muss
+        (siehe `_key_for()`): das Addon meldet die Schreibweise, unter
+        der es die Auswertung erhalten hat, und die muss nicht die
+        sein, unter der hier schon etwas liegt.
+        """
+
+        key = self._key_for(character)
+
+        if not key:
+            return False
+
+        changed = False
+
+        for section, values in (
+            ("completed", list(completed)),
+            ("excluded", list(excluded)),
+        ):
+
+            if self.data[section].get(key) != values:
+
+                self.data[section][key] = values
+
+                changed = True
+
+        return changed
+
+    # --------------------------------------------------
+    # Übung am Trainingsdummy
+    # --------------------------------------------------
+
+    def practice_store(self, character: str) -> dict:
+        """
+        Die Übungsserien eines Charakters, je Spec-Schlüssel des
+        Addons - zum Lesen **und** zum Schreiben.
+
+        Die Regeln, was eine Serie trägt, stehen in
+        core/academy_dummy_sync.py; hier steht nur, wo sie liegt.
+        """
+
+        key = self._key_for(character)
+
+        if not key:
+            return {}
+
+        return self.data.setdefault("dummy_practice", {}).setdefault(key, {})
+
+    def practice_for(self, character: str) -> dict:
+        """
+        Dieselben Serien, aber ohne einen Eintrag anzulegen - für
+        Leser (Anzeige, Zustellung ans Addon).
+        """
+
+        key = self._key_for(character)
+
+        if not key:
+            return {}
+
+        return dict(
+            self.data.get("dummy_practice", {}).get(key, {})
         )
 
     # --------------------------------------------------
@@ -785,7 +1007,7 @@ class AcademyService:
             return frozenset()
 
         return frozenset(
-            self.data["excluded"].get(player_name, [])
+            self.data["excluded"].get(self._key_for(player_name), [])
         )
 
     def is_enabled(self, player_name: str, lesson_id: str) -> bool:
@@ -805,8 +1027,10 @@ class AcademyService:
         if not player_name or not lesson_id:
             return
 
+        key = self._key_for(player_name)
+
         entries = list(
-            self.data["excluded"].get(player_name, [])
+            self.data["excluded"].get(key, [])
         )
 
         changed = False
@@ -826,7 +1050,7 @@ class AcademyService:
         if not changed:
             return
 
-        self.data["excluded"][player_name] = entries
+        self.data["excluded"][key] = entries
 
         self.save()
 
@@ -865,10 +1089,12 @@ class AcademyService:
         "zeig mir wieder alles".
         """
 
-        if player_name not in self.data["excluded"]:
+        key = self._key_for(player_name)
+
+        if key not in self.data["excluded"]:
             return
 
-        del self.data["excluded"][player_name]
+        del self.data["excluded"][key]
 
         self.save()
 

@@ -73,14 +73,16 @@ def apply_addon_progress(academy, payload: str) -> bool:
 
     for name, (completed, excluded) in parse_addon_progress(payload).items():
 
-        if academy.data["completed"].get(name) != completed:
+        #
+        # Über den Service und nicht in `academy.data` hinein: welcher
+        # Charakter gemeint ist, entscheidet dort `_key_for()`. Das
+        # Addon meldet die Schreibweise, unter der es die Auswertung
+        # bekommen hat - schrieb man sie roh weg, stünde derselbe
+        # Spieler je nach Quelle zweimal in der Datei und keiner der
+        # beiden Einträge wäre vollständig.
+        #
 
-            academy.data["completed"][name] = completed
-            changed = True
-
-        if academy.data["excluded"].get(name) != excluded:
-
-            academy.data["excluded"][name] = excluded
+        if academy.set_progress(name, completed, excluded):
             changed = True
 
     if changed:

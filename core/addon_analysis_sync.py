@@ -34,6 +34,7 @@ from addon.addon_payloads import (
 )
 from analyzer.academy import evaluator
 from analyzer.academy.lessons import lessons_for_actor
+from core.academy_dummy_sync import practice_payload
 from core.lua_table import to_lua
 
 
@@ -173,6 +174,18 @@ class AddonAnalysisSync:
                     academy.completed_for(player_name),
                     academy.excluded_for(player_name),
                     character=player_name,
+
+                    #
+                    # Dieselbe Kurve, die auch der Trainingsplan
+                    # gelesen hat (curve_for) und die die
+                    # Verlaufskarte zeichnet. Ein zweiter Aufruf mit
+                    # anderen Argumenten zeigte im Spiel eine andere
+                    # Entwicklung, als die Reihenfolge des Plans
+                    # behauptet.
+                    #
+                    records=academy.curve_for(profile, player_name),
+
+                    practice=practice_payload(academy, player_name),
                 ),
             },
             {
