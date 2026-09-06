@@ -416,6 +416,25 @@ Three places now say that an update is waiting, because one of them is only visi
 
 Both channels are triggered through **one** `UpdateRunner` (`gui/controllers/update_runner.py`), owned by `MainWindow` and handed to any page that exposes `set_update_runner()` (duck-typed in `_ensure_page()`, same as the cross-page signals). It exists because the Overview's update banner and the Addon page both start the same two flows, and each carries a detail that is easy to get wrong a second time: the addon install is deliberately blocking on the main thread with a `processEvents()` in front so the "lädt" state is actually painted; the Companion update runs in a thread, must call `stop_auto_sync()` **before** it (that touches a main-thread `QTimer`), has to restart auto-sync on failure, and quits the process on success. One runner also means one busy flag — two pages cannot start two installs into the same folder.
 
+### Ein Fehlschlag, der sich Erfolg nannte
+
+Gemeldet wurde: „Update lässt sich nicht installieren, bei *Jetzt aktualisieren* startet der Download normal, bricht dann aber einfach wieder ab." Im Protokoll standen zwei Zeilen direkt untereinander:
+
+```
+ERROR   Installation fehlgeschlagen: [WinError 5] Zugriff verweigert: 'C:\Program Files (x86)\World of Warcraft\_classic_…'
+SUCCESS Addon erfolgreich aktualisiert.
+```
+
+Zwei Fehler in einem Bild, und der erste ist der schlimmere.
+
+**`install_or_update()` wirft nicht, es gibt einen `WorkflowResult` zurück.** `UpdateRunner.install_addon()` warf ihn weg und meldete Erfolg, sobald keine Ausnahme flog; `setup_wizard._install_addon()` tat dasselbe. Die Update-Karte zeigte danach weiter dieselbe Fassung, der nächste Klick führte in dieselbe Runde, und der Fehler sah nach einem abgebrochenen Download aus. **Eine Erfolgsmeldung, die nichts geprüft hat, ist schlimmer als gar keine** — sie schickt den Nutzer zur Fehlersuche an eine Stelle, an der nichts kaputt ist. Der Fehler stand an **zwei** Stellen, und deshalb prüft `tests/test_install_failure.py` strukturell mit: in `gui/` und `core/` darf ein Aufruf von `install_or_update()` nirgends als blosse Anweisung dastehen. Eine Regel, die an einer von zwei Stellen gilt, ist keine Regel — dieselbe Lehre wie bei `core/browser.py`.
+
+**„Zugriff verweigert" hat zwei Ursachen, und sie verlangen Entgegengesetztes.** Liegt WoW unter `Program Files`, darf ein gewöhnlich gestartetes Programm dort nicht schreiben (WeintCompanion als Administrator starten); läuft WoW noch, lässt sich der bestehende Addon-Ordner unter Windows nicht umbenennen, auch mit allen Rechten nicht (das Spiel beenden). Von aussen sehen beide identisch aus. `core/install_errors.py` ist die rein rechnende Hälfte — kein Qt, kein Netz, aus demselben Grund wie `net_errors.py`: `is_permission_error()` läuft die Ausnahmekette ab und erkennt über `errno` **und** beide Sprachen des Betriebssystemtexts (`shutil` und `zipfile` verpacken denselben Fehler unter verschiedenen Klassen, ein `isinstance`-Test träfe also nicht), `permission_message()` formuliert.
+
+**Unterschieden wird über eine Probe, nicht über eine Prozessliste.** Ob WoW läuft, ließe sich nur mit einer plattformabhängigen Prozessabfrage beantworten, die auf einer gesperrten Sitzung selbst wieder eine Rechtefrage ist. `probe_writable()` beantwortet dieselbe Frage aus der Sache heraus: lässt sich im Addon-Verzeichnis überhaupt etwas anlegen? Wenn nein, sind es die Rechte. Wenn ja und trotzdem scheitert das Umbenennen, hält jemand den Ordner offen. Sie ist dabei **zurückhaltend** — nur `EACCES`/`EPERM` heißen „nein", alles andere (volle Platte, Netzlaufwerk, zu langer Pfad) heißt „ja" und meldet sich beim eigentlichen Kopiervorgang mit seiner eigenen Meldung. Eine Probe, die im Zweifel blockiert, hielte jemanden von einer Installation ab, die funktioniert hätte.
+
+Drei Folgen, und keine ist Geschmack: `InstallerWorkflow.run()` prüft das Schreibrecht **vor dem Download** (erst fünf Megabyte zu laden, ein Backup anzulegen und dann zu sagen, dass es von Anfang an nicht ging, ist die schlechtere Reihenfolge); `WorkflowResult.message` trägt den Satz aus der Ausnahme statt des pauschalen „Installation fehlgeschlagen." — die Update-Karte der Übersicht zeigt genau diesen Text an; und die Einblendung hängt an `UpdateRunner.finished` in `MainWindow` und nicht an einer Seite, weil es **einen** Läufer gibt, beide Seiten ihn auslösen und *Addon & Updates* die Meldung bis dahin gar nicht entgegennahm (`_on_update_finished` ignorierte `_message`). Sie ist `variant="error"` und bleibt deshalb stehen, bis man sie wegklickt.
+
 ### Every release ships its changelog — this is not optional
 
 **A release whose body is empty is a bug.** The addon's releases were created by hand with the notes field blank, so the Addon page showed "Keine Änderungen gefunden." forever — accurate and useless, since `CHANGELOG.md` was maintained the whole time. The Companion's own card was no better: it listed **commit subjects** (`GitHubUpdater.get_release_commits()`), which are written for whoever wrote them.

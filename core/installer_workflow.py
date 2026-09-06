@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from core.downloader import ChecksumError
+from core.install_errors import permission_message, probe_writable
 from core.paths import Paths
 from core.workflow_result import WorkflowResult
 
@@ -32,6 +33,33 @@ class InstallerWorkflow:
                 success=False,
                 message="Keine Download-URL gefunden.",
             )
+
+        #
+        # SCHREIBRECHT ZUERST, VOR DEM DOWNLOAD.
+        #
+        # Gemeldet wurde: "der Download startet normal, bricht dann aber
+        # einfach wieder ab". Genau so sah es aus - fuenf Megabyte
+        # geladen, ein Backup angelegt, und erst danach scheiterte die
+        # Installation an einem Recht, das schon vorher feststand. Die
+        # Frage kostet nichts und beantwortet sich in Millisekunden;
+        # sie danach zu stellen heisst, jemanden erst warten zu lassen
+        # und ihm dann zu sagen, dass es von Anfang an nicht ging.
+        #
+        # Zurueckhaltend: nur wenn die Probe SICHER "nein" sagt, wird
+        # hier abgebrochen. Sie kann sich irren (Virenscanner,
+        # Netzlaufwerk), und dann soll der echte Kopiervorgang
+        # entscheiden statt einer Vermutung.
+        #
+
+        if state.addon_path and not probe_writable(state.addon_path.parent):
+
+            reason = permission_message(
+                state.addon_path.parent, folder_writable=False
+            )
+
+            logger.error(reason)
+
+            return WorkflowResult(success=False, message=reason)
 
         #
         # Dateiname
@@ -202,9 +230,17 @@ class InstallerWorkflow:
                         "fehlgeschlagen."
                     )
 
+            #
+            # Der Satz aus der Ausnahme, nicht "Installation
+            # fehlgeschlagen." - die Update-Karte zeigt genau diese
+            # Meldung an, und die Ursache steht nur in der Ausnahme.
+            # Siehe core/install_errors.py: bei einer Rechtefrage ist
+            # sie bereits der fertige deutsche Satz.
+            #
+
             return WorkflowResult(
                 success=False,
-                message="Installation fehlgeschlagen.",
+                message=str(exc) or "Installation fehlgeschlagen.",
             )
 
         logger.success(

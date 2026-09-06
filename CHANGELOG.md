@@ -32,16 +32,47 @@ Besonders bei den Sockelsteinen im Spiel sind die Empfehlungen noch
 nicht überall verlässlich — und ohne Rückmeldung fällt kein einziger
 dieser Fälle auf.
 
+**Ein Update, das scheitert, sagte „erfolgreich aktualisiert".**
+Gemeldet wurde: der Download startet normal und bricht dann einfach
+wieder ab. Genau so war es auch — nur stand im Protokoll unmittelbar
+unter der Fehlermeldung eine Erfolgsmeldung. Die Update-Karte zeigte
+weiter dieselbe Fassung, der nächste Klick führte in dieselbe Runde,
+und es sah aus, als läge es am Download.
+
+Ab sofort wird der Fehlschlag gemeldet: als Einblendung mit dem Grund
+und einem Knopf ins Protokoll. Eine Erfolgsmeldung steht nur noch da,
+wo wirklich etwas installiert wurde.
+
+**Und der Grund steht jetzt im Klartext.**
+„Zugriff verweigert" hat zwei völlig verschiedene Ursachen, und sie
+verlangen Entgegengesetztes: Liegt World of Warcraft unter *Program
+Files*, darf ein normal gestartetes Programm dort nichts ändern — dann
+hilft, WeintCompanion einmal als Administrator zu starten. Läuft WoW
+noch, lässt sich der Addon-Ordner nicht ersetzen — dann hilft, das
+Spiel zu beenden.
+
+Die App unterscheidet beides und schreibt den passenden Satz hin,
+statt die Meldung des Betriebssystems durchzureichen.
+
+**Geprüft wird das, bevor geladen wird.**
+Fehlt das Schreibrecht, steht das schon vor dem Download fest.
+Erst fünf Megabyte zu laden, ein Backup anzulegen und dann zu sagen,
+dass es von Anfang an nicht ging, ist die schlechtere Reihenfolge.
+
 ### Neu
 - Die Einführung deckt alle Bereiche der App ab, in Kapiteln
 - Sie erscheint einmalig auch für alle, die die App schon lange benutzen
 - Die letzte Seite trägt einen Knopf in den Feedback-Kanal auf Discord
+- Ein fehlgeschlagenes Update meldet sich als Einblendung mit dem Grund und einem Knopf ins Protokoll
 
 ### Geändert
 - Das Fenster der Einführung ist grösser (700 × 620), der Fließtext steht linksbündig statt zentriert, und neben den Fortschrittspunkten steht die Seitenzahl
 - *Einstellungen → Allgemein*: aus „Willkommens-Tour“ wird *Einführung*, und der Text sagt, was darin steht
 
 ### Behoben
+- Eine fehlgeschlagene Addon-Installation wurde als „Addon erfolgreich aktualisiert" ins Protokoll geschrieben
+- „Zugriff verweigert" beim Aktualisieren nennt jetzt die Ursache und den nächsten Schritt statt der Meldung des Betriebssystems
+- Fehlt das Schreibrecht auf den Addon-Ordner, bricht die Aktualisierung vor dem Download ab statt danach
 - Die Fortschrittspunkte der Einführung blieben bernsteinfarben, auch wenn Arkan oder Jade als Akzent eingestellt war
 
 ### Technisch
@@ -49,6 +80,11 @@ dieser Fälle auf.
 - `TOUR_EDITION` (3) steht als `onboarding_tour_edition` **neben** `onboarding_seen_version`: nicht jede Version schreibt die Tour um, und die meisten sollen weiterhin nur das kurze Popup zeigen. Ein unbrauchbarer Wert zählt als „nie gesehen“ — die Tour noch einmal zu zeigen ist der harmlosere der beiden Irrtümer. Vermerkt wird beim **Zeigen**, nicht beim Durchklicken bis zur letzten Seite
 - `_render_emphasis()` maskiert `&`, `<` und `>`, bevor es `**fett**` auflöst und Absätze in `<br>` übersetzt. Bewusst kein Markdown-Renderer: der Text ist von Hand geschrieben und braucht genau eine Auszeichnung — ein `<` in einem Satz nähme dem Rich-Text-Label sonst stumm den Rest der Seite weg
 - `_update_nav()` setzt die Bildlaufposition je Seite zurück und fragt für den *Später*-Knopf die gespeicherte Absicht statt den aktuellen Zustand des Knopfes; sonst käme er beim Zurückblättern nicht wieder
+- `gui/controllers/update_runner.py` und `gui/dialogs/setup_wizard.py` lesen den `WorkflowResult` von `install_or_update()`, statt „keine Ausnahme" als Erfolg zu werten. `tests/test_install_failure.py` prüft das strukturell mit: ein Aufruf von `install_or_update()` darf in `gui/` und `core/` nirgends als blosse Anweisung dastehen — der Fehler stand an zwei Stellen, und eine Regel, die an einer von zweien gilt, ist keine
+- `core/install_errors.py` ist die rein rechnende Hälfte (kein Qt, kein Netz, wie `net_errors.py`): `is_permission_error()` läuft die Ausnahmekette ab und erkennt über `errno` und beide Sprachen des Betriebssystemtexts, `permission_message()` formuliert. Unterschieden werden die beiden Ursachen über eine **Probe** (`probe_writable()`) statt über eine Prozessliste — lässt sich im Addon-Verzeichnis nichts anlegen, sind es die Rechte; geht das und scheitert trotzdem das Umbenennen des bestehenden Ordners, hält ihn jemand offen
+- Die Probe ist zurückhaltend: sie antwortet nur auf `EACCES`/`EPERM` mit „nein" und im Zweifel mit „ja". Eine volle Platte oder ein Netzlaufwerk melden sich beim eigentlichen Kopiervorgang mit ihrer eigenen Meldung, und eine Probe, die im Zweifel blockiert, hielte jemanden von einer Installation ab, die funktioniert hätte
+- `InstallerWorkflow.run()` prüft das Schreibrecht vor dem Download und trägt den Satz aus der Ausnahme in `WorkflowResult.message` — die Update-Karte zeigt genau diesen Text, und „Installation fehlgeschlagen." nannte die Ursache nicht
+- `MainWindow` hängt die Einblendung an `UpdateRunner.finished` und nicht an eine Seite: es gibt einen Läufer, beide Seiten lösen ihn aus, und *Addon & Updates* nahm die Meldung bis dahin gar nicht entgegen
 - `tests/test_tour.py` hält das fest: jede Seite vollständig, Kapitel zusammenhängend, jede Beschriftung aus `build_page_specs()` im Text erwähnt, jedes Symbol zeichnet wirklich (ein fehlendes SVG ergibt lautlos ein durchsichtiges Bild), und die drei Fälle der Startlogik
 
 ## 2.8.0

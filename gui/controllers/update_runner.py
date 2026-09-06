@@ -106,7 +106,7 @@ class UpdateRunner(QObject):
 
         try:
 
-            self.manager.install_or_update()
+            result = self.manager.install_or_update()
 
         except Exception as exc:
 
@@ -115,6 +115,53 @@ class UpdateRunner(QObject):
             self._busy = False
 
             self.finished.emit(ADDON, False, str(exc))
+
+            return
+
+        #
+        # DAS ERGEBNIS IST DIE ANTWORT, NICHT DIE ABWESENHEIT EINER
+        # AUSNAHME.
+        #
+        # Bis 2.8.0 stand hier nur der Erfolgsfall: der Rueckgabewert
+        # wurde weggeworfen, und `install_or_update()` wirft nicht - es
+        # gibt einen `WorkflowResult` zurueck. Ein Fehlschlag landete
+        # damit im Protokoll und unmittelbar darunter stand
+        #
+        #   ERROR   Installation fehlgeschlagen: [WinError 5] ...
+        #   SUCCESS Addon erfolgreich aktualisiert.
+        #
+        # Genau so wurde es gemeldet: "der Download startet normal,
+        # bricht dann aber einfach wieder ab". Die App sagte, es habe
+        # geklappt, die Update-Karte zeigte weiter dieselbe Fassung an,
+        # und der naechste Klick fuehrte in dieselbe Runde. Eine
+        # Erfolgsmeldung, die nichts geprueft hat, ist schlimmer als
+        # gar keine - sie schickt den Nutzer zur Fehlersuche an eine
+        # Stelle, an der nichts kaputt ist.
+        #
+        # `getattr` statt eines harten Zugriffs: aeltere Aufrufer und
+        # die Tests reichen hier `None` durch, und daraus einen Absturz
+        # zu machen waere der zweite Fehler nach dem ersten.
+        #
+
+        success = bool(getattr(result, "success", True))
+
+        message = getattr(result, "message", "") or ""
+
+        if not success:
+
+            #
+            # Der Ablauf hat den Grund schon ins Protokoll geschrieben
+            # (mit der eigentlichen Ursache, siehe
+            # core/install_errors.py). Hier steht nur noch der Satz,
+            # den die Oberflaeche zeigt - eine zweite Fehlerzeile
+            # daneben waere dieselbe Auskunft zweimal.
+            #
+
+            self._busy = False
+
+            self.finished.emit(
+                ADDON, False, message or "Installation fehlgeschlagen."
+            )
 
             return
 
