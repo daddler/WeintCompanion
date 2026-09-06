@@ -154,6 +154,12 @@ TOUR_PAGES: tuple[TourPage, ...] = (
         "Freigabe, wird der Bereich nicht versteckt, sondern erklärt sich "
         "— sonst wüsstest du nicht, wonach du fragen sollst. Vergeben "
         "wird sie in Discord von der Raidleitung, nicht hier.\n\n"
+        "Du musst nicht: ohne Discord bleibt alles nutzbar, was deinen "
+        "eigenen Rechner betrifft — Addon installieren, aktualisieren, "
+        "sichern, WeakAuras eintragen, simmen. Leer bleiben nur die "
+        "Bereiche, die von aussen kommen. Verbinden und Trennen geht "
+        "jederzeit unter *Einstellungen → Discord*, und beides löscht "
+        "nichts von dem, was schon hier liegt.\n\n"
         "Bleibt die Verbindung stumm, siehst du das unter Verbindungen: "
         "dort steht, was zuletzt versucht wurde und woran es hing.",
     ),
@@ -301,7 +307,10 @@ TOUR_PAGES: tuple[TourPage, ...] = (
         "Kontingent. Nötig ist nur, dass irgendwer im Raid hochlädt — "
         "dein Rechner muss nichts mitschreiben.\n\n"
         "Simulation und echte Berichte landen nie in derselben Lernkurve. "
-        "Die Karte sagt darunter, welche der beiden sie zeigt.",
+        "Die Karte sagt darunter, welche der beiden sie zeigt.\n\n"
+        "Umschalten kannst du jederzeit unter *Einstellungen → Module*. "
+        "Es geht dabei nichts verloren: beide Kurven bleiben liegen, du "
+        "siehst nur die zur gewählten Quelle.",
     ),
 
     # ------------------------------------------------------
@@ -409,18 +418,40 @@ TOUR_PAGES: tuple[TourPage, ...] = (
 
     TourPage(
         "settings", "Zum Schluss",
-        "Einstellungen und Protokoll",
-        "Die Einstellungen sind in Abschnitte geteilt: Allgemein "
-        "(WoW-Pfad, Autostart, diese Tour), Erscheinungsbild, Discord, "
-        "Module, Backups und Über.\n\n"
-        "Einer davon ist im Ernstfall wichtig: unter Discord lässt sich "
-        "die **Adresse des Bots** überschreiben. Der Bot zieht "
-        "gelegentlich auf einen anderen Rechner um, und ohne diese "
-        "Möglichkeit hülfe dann nur ein neues Programm. Die App prüft "
-        "eine eingegebene Adresse, bevor sie sie annimmt.\n\n"
+        "Einstellungen — was an und was aus?",
+        "Die Einstellungen sind in Abschnitte geteilt: Allgemein, "
+        "Erscheinungsbild, Discord, Module, Backups und Über. "
+        "**Nichts davon ist endgültig** — jeder Schalter lässt sich dort "
+        "jederzeit wieder umlegen, und keiner löscht dabei etwas.\n\n"
+        "**Discord verbinden** (Discord): verbunden kommen Raidtermin, "
+        "Anmeldung und die Auswertung eurer Raids herein, und der "
+        "Gildenkalender findet den Weg ins Spiel. Getrennt funktioniert "
+        "alles weiter, was deinen eigenen Rechner betrifft — Addon "
+        "installieren, aktualisieren, sichern —, aber die Übersicht bleibt "
+        "leer. Trennen löscht nichts von dem, was schon hier liegt.\n\n"
+        "**Automatisch starten** (Allgemein): an ist die App beim Anmelden "
+        "schon da und hat den Raidtermin und ein wartendes Update parat. "
+        "Aus musst du daran denken, sie zu öffnen — sonst ändert sich "
+        "nichts.\n\n"
+        "**In den Infobereich minimieren** (Allgemein): an läuft sie "
+        "weiter, wenn du das Fenster schließt, und meldet ein Update als "
+        "Sprechblase. Aus beendet das Schließen die App.\n\n"
+        "**Datenquelle** (Module): *Simulation* zeigt einen vollständigen "
+        "Beispiel-Pull, damit sich WeintTV und die Academy auch ausserhalb "
+        "der Raidzeit ansehen lassen. *WarcraftLogs* zeigt eure echten "
+        "Kämpfe, braucht aber ein verknüpftes Discord-Konto und jemanden "
+        "im Raid, der hochlädt. Umschalten geht jederzeit; die Lernkurven "
+        "der beiden bleiben getrennt.\n\n"
+        "**Diese Einführung** (Allgemein): hier holst du sie zurück, und "
+        "hier schaltest du auch das Fenster nach jedem Update ab.\n\n"
+        "Einer ist im Ernstfall wichtig: unter Discord lässt sich die "
+        "**Adresse des Bots** überschreiben. Der Bot zieht gelegentlich "
+        "auf einen anderen Rechner um, und ohne diese Möglichkeit hülfe "
+        "dann nur ein neues Programm. Eine unbrauchbare Adresse wird "
+        "abgelehnt statt übernommen.\n\n"
         "Unter Protokoll steht, was die App zuletzt getan hat. Wenn etwas "
-        "nicht klappt, ist das die Auskunft, die weiterhilft — und "
-        "genau die, die man einer Meldung beilegt.",
+        "nicht klappt, ist das die Auskunft, die weiterhilft — und genau "
+        "die, die man einer Meldung beilegt.",
     ),
 
     TourPage(

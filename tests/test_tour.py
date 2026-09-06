@@ -120,6 +120,45 @@ def test_tour_mentions_every_navigation_group():
     assert not missing, missing
 
 
+def test_settings_pages_say_what_a_switch_costs():
+    """
+    Ein Schalter ohne Folgenangabe ist eine Frage ohne Antwort.
+
+    Wer nicht weiss, was er sich abschaltet, lässt im Zweifel alles an
+    oder alles aus — und beides ist geraten. Die Tour muss deshalb für
+    die Einstellungen sagen, was das Einschalten bringt, was das
+    Ausschalten kostet, und dass die Entscheidung umkehrbar ist. Das
+    Letzte ist das Wichtigste: es nimmt der Frage das Endgültige.
+    """
+
+    from gui.dialogs.whats_new_dialog import TOUR_PAGES
+
+    pages = [p for p in TOUR_PAGES if "Einstellungen" in p.title]
+
+    assert pages, "keine Seite über die Einstellungen"
+
+    for page in pages:
+
+        body = page.body.lower()
+
+        #
+        # Umkehrbar - in irgendeiner der üblichen Formulierungen.
+        #
+
+        assert any(
+            word in body
+            for word in ("jederzeit", "wieder umlegen", "nicht endgültig")
+        ), page.title
+
+        #
+        # Und beide Richtungen, nicht nur die schöne.
+        #
+
+        assert "aus " in body or "ausgeschaltet" in body, page.title
+
+        assert "an " in body or "eingeschaltet" in body, page.title
+
+
 def test_every_tour_icon_actually_draws(qt_app):
 
     from gui.dialogs.whats_new_dialog import TOUR_PAGES

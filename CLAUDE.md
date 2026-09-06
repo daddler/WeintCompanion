@@ -524,6 +524,8 @@ Sechs Dinge daran sind nicht Geschmack:
 - **`_render_emphasis()` maskiert, bevor es formatiert.** Der Text geht als Rich Text ins Label; ein `<` in einem Satz nähme dem Label sonst stumm den Rest der Seite weg. Bewusst kein Markdown-Renderer: der Text ist von Hand geschrieben und braucht genau eine Auszeichnung (`**fett**`). Unpaarige Sterne lassen kein offenes Tag zurück.
 - **Der *Später*-Knopf fragt die gespeicherte Absicht, nicht seinen eigenen Zustand.** Er wird auf der letzten Seite ausgeblendet (dort heisst der Hauptknopf ohnehin „Los geht's"); fragte er sich selbst, käme er beim Zurückblättern nicht wieder. Im Changelog-Modus gibt es ihn gar nicht — dort täte er dasselbe wie „Schließen".
 
+**Wo ein Schalter vorkommt, stehen beide Richtungen und die Umkehrbarkeit.** Ein Schalter ohne Folgenangabe ist eine Frage ohne Antwort: wer nicht weiss, was er sich abschaltet, lässt im Zweifel alles an oder alles aus, und beides ist geraten. Also: was bringt es eingeschaltet, was fällt ausgeschaltet weg, und — das Wichtigste — dass es sich jederzeit unter *Einstellungen* wieder ändern lässt, ohne dass dabei etwas verloren geht. Das gilt für die Seiten zu Einstellungen, Discord und Datenquelle; `tests/test_tour.py` prüft es.
+
 Die Texte folgen denselben Regeln wie die Patchnotes (siehe *Patchnotes werden für Spieler geschrieben*): kein Dateiname, kein Funktionsname, kein Konfigurationsschlüssel; Wirkung vor Ursache; Seitennamen sind erlaubt, weil sie Bedienung sind. `tests/test_tour.py` hält ausserdem fest, dass **jede** Beschriftung aus `build_page_specs()` im Tourtext vorkommt — eine neue Seite fällt damit dort auf und nicht erst, wenn jemand sie vermisst.
 
 ### Der Ablauf des Popups

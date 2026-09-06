@@ -63,6 +63,7 @@ dass es von Anfang an nicht ging, ist die schlechtere Reihenfolge.
 - Die Einführung deckt alle Bereiche der App ab, in Kapiteln
 - Sie erscheint einmalig auch für alle, die die App schon lange benutzen
 - Die letzte Seite trägt einen Knopf in den Feedback-Kanal auf Discord
+- Sie sagt bei jeder Einstellung, was das Einschalten bringt, was das Ausschalten kostet und dass sich beides jederzeit ändern lässt
 - Ein fehlgeschlagenes Update meldet sich als Einblendung mit dem Grund und einem Knopf ins Protokoll
 
 ### Geändert
@@ -85,6 +86,7 @@ dass es von Anfang an nicht ging, ist die schlechtere Reihenfolge.
 - Die Probe ist zurückhaltend: sie antwortet nur auf `EACCES`/`EPERM` mit „nein" und im Zweifel mit „ja". Eine volle Platte oder ein Netzlaufwerk melden sich beim eigentlichen Kopiervorgang mit ihrer eigenen Meldung, und eine Probe, die im Zweifel blockiert, hielte jemanden von einer Installation ab, die funktioniert hätte
 - `InstallerWorkflow.run()` prüft das Schreibrecht vor dem Download und trägt den Satz aus der Ausnahme in `WorkflowResult.message` — die Update-Karte zeigt genau diesen Text, und „Installation fehlgeschlagen." nannte die Ursache nicht
 - `MainWindow` hängt die Einblendung an `UpdateRunner.finished` und nicht an eine Seite: es gibt einen Läufer, beide Seiten lösen ihn aus, und *Addon & Updates* nahm die Meldung bis dahin gar nicht entgegen
+- Die Seiten zu Einstellungen, Discord und Datenquelle nennen beide Richtungen samt Umkehrbarkeit — ein Schalter ohne Folgenangabe ist eine Frage ohne Antwort, und wer nicht weiss, was er sich abschaltet, lässt im Zweifel alles an oder alles aus. `tests/test_tour.py` prüft das mit
 - `tests/test_tour.py` hält das fest: jede Seite vollständig, Kapitel zusammenhängend, jede Beschriftung aus `build_page_specs()` im Text erwähnt, jedes Symbol zeichnet wirklich (ein fehlendes SVG ergibt lautlos ein durchsichtiges Bild), und die drei Fälle der Startlogik
 
 ## 2.8.0
