@@ -153,7 +153,7 @@ class GeneralSection(SectionContent):
 
         tour_text_col.setSpacing(4)
 
-        tour_label = QLabel("Willkommens-Tour")
+        tour_label = QLabel("Einführung")
 
         tour_label.setStyleSheet(
             f"font-size:14px;font-weight:600;color:{Colors.WHITE};"
@@ -162,7 +162,10 @@ class GeneralSection(SectionContent):
         tour_text_col.addWidget(tour_label)
 
         tour_desc = QLabel(
-            "Zeigt den Rundgang durch die Grundfunktionen erneut."
+            "Der Rundgang durch alle Bereiche der App, in Kapiteln. "
+            "Mit 3.0 vollständig neu — er deckt auch WeintTV, die "
+            "Academy, das Archiv, Simmen und die WeakAuras ab, von "
+            "denen die alte Fassung nichts wusste."
         )
 
         tour_desc.setWordWrap(True)
@@ -175,7 +178,7 @@ class GeneralSection(SectionContent):
 
         tour_layout.addLayout(tour_text_col, 1)
 
-        self.tour_button = HeroButton("Tour anzeigen", primary=False)
+        self.tour_button = HeroButton("Einführung erneut ansehen", primary=False)
 
         self.tour_button.clicked.connect(self._show_tour)
 

@@ -2,6 +2,55 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 3.0.0
+
+**Die Einführung ist neu — und sie ist diesmal vollständig.**
+Der Rundgang beim ersten Start stammte aus 1.0 und bestand aus fünf
+Seiten: Dashboard, Addon-Verwaltung, Discord, Einstellungen. Seither
+sind WeintTV, die Academy, das Archiv mit der Wiedergabe, *Meine
+Charaktere*, *Vorbereitung*, *Simmen*, *WeakAuras* und die
+*Charakterzuordnung* dazugekommen — und die Einführung sprach von keinem
+davon.
+
+Wer sie einmal gesehen hatte, kannte danach eine App, die es so nicht
+mehr gibt, und bekam sie auch nie wieder zu Gesicht: das Popup nach
+einem Update beantwortet „was ist neu“ und nicht „was gibt es hier
+eigentlich alles“.
+
+Der neue Rundgang hat 17 Seiten in fünf Kapiteln: *Erste Schritte*,
+*Addon & Updates*, *Raid & Analyse*, *Deine Charaktere*, *Zum Schluss*.
+Jede Seite sagt, wofür der Bereich da ist und worauf zu achten ist. Das
+Fenster ist grösser, der Text steht linksbündig, und unten links steht
+von Anfang an *Später*.
+
+Du bekommst ihn einmal, auch wenn du die App seit Jahren benutzt.
+Zurückholen lässt er sich jederzeit unter *Einstellungen → Allgemein*.
+
+**Und eine Bitte zum Schluss der Tour.**
+Die letzte Seite führt direkt in den Feedback-Kanal auf Discord.
+Besonders bei den Sockelsteinen im Spiel sind die Empfehlungen noch
+nicht überall verlässlich — und ohne Rückmeldung fällt kein einziger
+dieser Fälle auf.
+
+### Neu
+- Die Einführung deckt alle Bereiche der App ab, in Kapiteln
+- Sie erscheint einmalig auch für alle, die die App schon lange benutzen
+- Die letzte Seite trägt einen Knopf in den Feedback-Kanal auf Discord
+
+### Geändert
+- Das Fenster der Einführung ist grösser (700 × 620), der Fließtext steht linksbündig statt zentriert, und neben den Fortschrittspunkten steht die Seitenzahl
+- *Einstellungen → Allgemein*: aus „Willkommens-Tour“ wird *Einführung*, und der Text sagt, was darin steht
+
+### Behoben
+- Die Fortschrittspunkte der Einführung blieben bernsteinfarben, auch wenn Arkan oder Jade als Akzent eingestellt war
+
+### Technisch
+- `gui/dialogs/whats_new_dialog.py`: `TOUR_PAGES` ist eine Folge von `TourPage` (Symbolname, Kapitel, Titel, Text, optionaler Knopf) statt eines 3-Tupels mit fertigem Pfad — die Seite färbt ihr Symbol selbst über `tinted_pixmap()` im Akzent, und `_DialogPage` liest den Akzent beim Bauen, was hier zulässig ist: der Dialog ist modal und kann einen Wechsel nicht erleben. Die Farben kommen aus `gui/theme/tokens.py` statt aus dem eingefrorenen Übergangsmodul `gui/theme/colors.py`, woher der bernsteinfarbene Punkt stammte
+- `TOUR_EDITION` (3) steht als `onboarding_tour_edition` **neben** `onboarding_seen_version`: nicht jede Version schreibt die Tour um, und die meisten sollen weiterhin nur das kurze Popup zeigen. Ein unbrauchbarer Wert zählt als „nie gesehen“ — die Tour noch einmal zu zeigen ist der harmlosere der beiden Irrtümer. Vermerkt wird beim **Zeigen**, nicht beim Durchklicken bis zur letzten Seite
+- `_render_emphasis()` maskiert `&`, `<` und `>`, bevor es `**fett**` auflöst und Absätze in `<br>` übersetzt. Bewusst kein Markdown-Renderer: der Text ist von Hand geschrieben und braucht genau eine Auszeichnung — ein `<` in einem Satz nähme dem Rich-Text-Label sonst stumm den Rest der Seite weg
+- `_update_nav()` setzt die Bildlaufposition je Seite zurück und fragt für den *Später*-Knopf die gespeicherte Absicht statt den aktuellen Zustand des Knopfes; sonst käme er beim Zurückblättern nicht wieder
+- `tests/test_tour.py` hält das fest: jede Seite vollständig, Kapitel zusammenhängend, jede Beschriftung aus `build_page_specs()` im Text erwähnt, jedes Symbol zeichnet wirklich (ein fehlendes SVG ergibt lautlos ein durchsichtiges Bild), und die drei Fälle der Startlogik
+
 ## 2.8.0
 
 **Die Academy im Spiel weiß jetzt, was sie hier weiß.**
