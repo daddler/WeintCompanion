@@ -407,17 +407,31 @@ class SetupWizard(QDialog):
 
     def _install_addon(self):
 
+        #
+        # Wie im `UpdateRunner`: `install_or_update()` wirft nicht, es
+        # gibt einen `WorkflowResult` zurueck. Ihn wegzuwerfen hiess,
+        # nach einem Fehlschlag "Addon erfolgreich installiert." ins
+        # Protokoll zu schreiben - und hier waere das noch teurer als
+        # dort, weil die Einrichtung damit als abgeschlossen gilt.
+        #
+
         try:
 
             self.manager.logger.info("Starte Addon-Installation...")
 
-            self.manager.install_or_update()
-
-            self.manager.logger.success("Addon erfolgreich installiert.")
+            result = self.manager.install_or_update()
 
         except Exception as exc:
 
             self.manager.logger.error(f"Fehler: {exc}")
+
+            self._refresh_addon_step()
+
+            return
+
+        if getattr(result, "success", True):
+
+            self.manager.logger.success("Addon erfolgreich installiert.")
 
         self._refresh_addon_step()
 

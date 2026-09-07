@@ -103,6 +103,17 @@ class Config:
             "onboarding_seen_version": "",
 
             #
+            # Fassung der Einfuehrungstour, die zuletzt gezeigt wurde.
+            # Steht NEBEN onboarding_seen_version und nicht darin: nicht
+            # jede Version schreibt die Tour um, und die meisten sollen
+            # weiterhin nur das kurze Changelog-Popup zeigen. Wird die Tour
+            # neu geschrieben, steigt die Zahl in whats_new_dialog.py -
+            # und alle bekommen die Einfuehrung noch einmal.
+            #
+
+            "onboarding_tour_edition": 0,
+
+            #
             # Module (WeintTV / WeintAcademy)
             #
 
@@ -193,6 +204,7 @@ class Config:
                     "linux_launcher_value": "",
                     "whats_new_enabled": True,
                     "onboarding_seen_version": "",
+                    "onboarding_tour_edition": 0,
                     "weinttv_enabled": True,
                     "academy_enabled": True,
                     "raid_data_source": "mock",

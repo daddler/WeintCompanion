@@ -4,6 +4,61 @@ Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
 ## 3.0.0
 
+**Die Einführung ist neu — und sie ist diesmal vollständig.**
+Der Rundgang beim ersten Start stammte aus 1.0 und bestand aus fünf
+Seiten: Dashboard, Addon-Verwaltung, Discord, Einstellungen. Seither
+sind WeintTV, die Academy, das Archiv mit der Wiedergabe, *Meine
+Charaktere*, *Vorbereitung*, *Simmen*, *WeakAuras* und die
+*Charakterzuordnung* dazugekommen — und die Einführung sprach von keinem
+davon.
+
+Wer sie einmal gesehen hatte, kannte danach eine App, die es so nicht
+mehr gibt, und bekam sie auch nie wieder zu Gesicht: das Popup nach
+einem Update beantwortet „was ist neu“ und nicht „was gibt es hier
+eigentlich alles“.
+
+Der neue Rundgang hat 17 Seiten in fünf Kapiteln: *Erste Schritte*,
+*Addon & Updates*, *Raid & Analyse*, *Deine Charaktere*, *Zum Schluss*.
+Jede Seite sagt, wofür der Bereich da ist und worauf zu achten ist. Das
+Fenster ist grösser, der Text steht linksbündig, und unten links steht
+von Anfang an *Später*.
+
+Du bekommst ihn einmal, auch wenn du die App seit Jahren benutzt.
+Zurückholen lässt er sich jederzeit unter *Einstellungen → Allgemein*.
+
+**Und eine Bitte zum Schluss der Tour.**
+Die letzte Seite führt direkt in den Feedback-Kanal auf Discord.
+Besonders bei den Sockelsteinen im Spiel sind die Empfehlungen noch
+nicht überall verlässlich — und ohne Rückmeldung fällt kein einziger
+dieser Fälle auf.
+
+**Ein Update, das scheitert, sagte „erfolgreich aktualisiert".**
+Gemeldet wurde: der Download startet normal und bricht dann einfach
+wieder ab. Genau so war es auch — nur stand im Protokoll unmittelbar
+unter der Fehlermeldung eine Erfolgsmeldung. Die Update-Karte zeigte
+weiter dieselbe Fassung, der nächste Klick führte in dieselbe Runde,
+und es sah aus, als läge es am Download.
+
+Ab sofort wird der Fehlschlag gemeldet: als Einblendung mit dem Grund
+und einem Knopf ins Protokoll. Eine Erfolgsmeldung steht nur noch da,
+wo wirklich etwas installiert wurde.
+
+**Und der Grund steht jetzt im Klartext.**
+„Zugriff verweigert" hat zwei völlig verschiedene Ursachen, und sie
+verlangen Entgegengesetztes: Liegt World of Warcraft unter *Program
+Files*, darf ein normal gestartetes Programm dort nichts ändern — dann
+hilft, WeintCompanion einmal als Administrator zu starten. Läuft WoW
+noch, lässt sich der Addon-Ordner nicht ersetzen — dann hilft, das
+Spiel zu beenden.
+
+Die App unterscheidet beides und schreibt den passenden Satz hin,
+statt die Meldung des Betriebssystems durchzureichen.
+
+**Geprüft wird das, bevor geladen wird.**
+Fehlt das Schreibrecht, steht das schon vor dem Download fest.
+Erst fünf Megabyte zu laden, ein Backup anzulegen und dann zu sagen,
+dass es von Anfang an nicht ging, ist die schlechtere Reihenfolge.
+
 **Einen vergangenen Kampf findet man jetzt, statt ihn zu suchen.**
 Das Archiv waren zwei Ausklapplisten nebeneinander: zwanzig gleich
 aussehende Berichte in der einen, an einem Raidabend leicht sechzig
@@ -47,17 +102,41 @@ selbst. Bisher stand dort nur der Bossname. Im Spiel steht derselbe
 Satz — er braucht WeintCodex 3.0.0.0.
 
 ### Neu
+- Die Einführung deckt alle Bereiche der App ab, in Kapiteln
+- Sie erscheint einmalig auch für alle, die die App schon lange benutzen
+- Die letzte Seite trägt einen Knopf in den Feedback-Kanal auf Discord
+- Sie sagt bei jeder Einstellung, was das Einschalten bringt, was das Ausschalten kostet und dass sich beides jederzeit ändern lässt
+- Ein fehlgeschlagenes Update meldet sich als Einblendung mit dem Grund und einem Knopf ins Protokoll
 - Archivbrowser über *Log wählen*: Raidabende links, Pulls nach Boss rechts, Suche, *Nur Kills*, markierter bester Versuch
 - Die Quellenzeile nennt den geladenen Pull mit Abend, Boss, Ausgang und Uhrzeit
 - Academy: Kennzahlen für Unterbrechungen, Tode und Vorbereitung
 - Academy: die Kopfzeile nennt Schwierigkeit und Ausgang des Pulls
 
+### Geändert
+- Das Fenster der Einführung ist grösser (700 × 620), der Fließtext steht linksbündig statt zentriert, und neben den Fortschrittspunkten steht die Seitenzahl
+- *Einstellungen → Allgemein*: aus „Willkommens-Tour“ wird *Einführung*, und der Text sagt, was darin steht
+
 ### Behoben
+- Eine fehlgeschlagene Addon-Installation wurde als „Addon erfolgreich aktualisiert" ins Protokoll geschrieben
+- „Zugriff verweigert" beim Aktualisieren nennt jetzt die Ursache und den nächsten Schritt statt der Meldung des Betriebssystems
+- Fehlt das Schreibrecht auf den Addon-Ordner, bricht die Aktualisierung vor dem Download ab statt danach
+- Die Fortschrittspunkte der Einführung blieben bernsteinfarben, auch wenn Arkan oder Jade als Akzent eingestellt war
 - Die Academy behauptete ohne Kampfdaten „Alle Lektionen erledigt"
 - „0 von 0 Lektionen erledigt" stand da, wo es noch keine Lektionen gibt
 - Die Kennzahlen unter den Sternen lasen den zuletzt veröffentlichten Stand statt den gezeigten. In einer Wiedergabe beschrieben Sterne und Zahlen darunter damit zwei verschiedene Sekunden
 
 ### Technisch
+- `gui/dialogs/whats_new_dialog.py`: `TOUR_PAGES` ist eine Folge von `TourPage` (Symbolname, Kapitel, Titel, Text, optionaler Knopf) statt eines 3-Tupels mit fertigem Pfad — die Seite färbt ihr Symbol selbst über `tinted_pixmap()` im Akzent, und `_DialogPage` liest den Akzent beim Bauen, was hier zulässig ist: der Dialog ist modal und kann einen Wechsel nicht erleben. Die Farben kommen aus `gui/theme/tokens.py` statt aus dem eingefrorenen Übergangsmodul `gui/theme/colors.py`, woher der bernsteinfarbene Punkt stammte
+- `TOUR_EDITION` (3) steht als `onboarding_tour_edition` **neben** `onboarding_seen_version`: nicht jede Version schreibt die Tour um, und die meisten sollen weiterhin nur das kurze Popup zeigen. Ein unbrauchbarer Wert zählt als „nie gesehen“ — die Tour noch einmal zu zeigen ist der harmlosere der beiden Irrtümer. Vermerkt wird beim **Zeigen**, nicht beim Durchklicken bis zur letzten Seite
+- `_render_emphasis()` maskiert `&`, `<` und `>`, bevor es `**fett**` auflöst und Absätze in `<br>` übersetzt. Bewusst kein Markdown-Renderer: der Text ist von Hand geschrieben und braucht genau eine Auszeichnung — ein `<` in einem Satz nähme dem Rich-Text-Label sonst stumm den Rest der Seite weg
+- `_update_nav()` setzt die Bildlaufposition je Seite zurück und fragt für den *Später*-Knopf die gespeicherte Absicht statt den aktuellen Zustand des Knopfes; sonst käme er beim Zurückblättern nicht wieder
+- `gui/controllers/update_runner.py` und `gui/dialogs/setup_wizard.py` lesen den `WorkflowResult` von `install_or_update()`, statt „keine Ausnahme" als Erfolg zu werten. `tests/test_install_failure.py` prüft das strukturell mit: ein Aufruf von `install_or_update()` darf in `gui/` und `core/` nirgends als blosse Anweisung dastehen — der Fehler stand an zwei Stellen, und eine Regel, die an einer von zweien gilt, ist keine
+- `core/install_errors.py` ist die rein rechnende Hälfte (kein Qt, kein Netz, wie `net_errors.py`): `is_permission_error()` läuft die Ausnahmekette ab und erkennt über `errno` und beide Sprachen des Betriebssystemtexts, `permission_message()` formuliert. Unterschieden werden die beiden Ursachen über eine **Probe** (`probe_writable()`) statt über eine Prozessliste — lässt sich im Addon-Verzeichnis nichts anlegen, sind es die Rechte; geht das und scheitert trotzdem das Umbenennen des bestehenden Ordners, hält ihn jemand offen
+- Die Probe ist zurückhaltend: sie antwortet nur auf `EACCES`/`EPERM` mit „nein" und im Zweifel mit „ja". Eine volle Platte oder ein Netzlaufwerk melden sich beim eigentlichen Kopiervorgang mit ihrer eigenen Meldung, und eine Probe, die im Zweifel blockiert, hielte jemanden von einer Installation ab, die funktioniert hätte
+- `InstallerWorkflow.run()` prüft das Schreibrecht vor dem Download und trägt den Satz aus der Ausnahme in `WorkflowResult.message` — die Update-Karte zeigt genau diesen Text, und „Installation fehlgeschlagen." nannte die Ursache nicht
+- `MainWindow` hängt die Einblendung an `UpdateRunner.finished` und nicht an eine Seite: es gibt einen Läufer, beide Seiten lösen ihn aus, und *Addon & Updates* nahm die Meldung bis dahin gar nicht entgegen
+- Die Seiten zu Einstellungen, Discord und Datenquelle nennen beide Richtungen samt Umkehrbarkeit — ein Schalter ohne Folgenangabe ist eine Frage ohne Antwort, und wer nicht weiss, was er sich abschaltet, lässt im Zweifel alles an oder alles aus. `tests/test_tour.py` prüft das mit
+- `tests/test_tour.py` hält das fest: jede Seite vollständig, Kapitel zusammenhängend, jede Beschriftung aus `build_page_specs()` im Text erwähnt, jedes Symbol zeichnet wirklich (ein fehlendes SVG ergibt lautlos ein durchsichtiges Bild), und die drei Fälle der Startlogik
 - `core/archive_index.py` ist die reine Hälfte des Browsers (Gruppieren, Suchen, bester Versuch, Beschriftungen) — kein Qt, kein `httpx`, aus demselben Grund wie `roster_target()`: *welche Zeilen dastehen* ist die Stelle, an der etwas falsch sein kann. `tests/test_archive_index.py` prüft sie ohne Fenster
 - Die Pulls werden **in der Reihenfolge des Abends** gruppiert und nicht alphabetisch: ein Bericht erzählt einen Abend, und wer den letzten Boss sucht, scrollt nach unten
 - `best_try()`: ein Kill schlägt jeden Wipe, unter Wipes gewinnt der niedrigste Bossanteil, bei gleichem Anteil der längere Kampf. Leere Liste ergibt `None` und keinen Platzhalter

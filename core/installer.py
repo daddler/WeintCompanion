@@ -4,6 +4,8 @@ import shutil
 import tempfile
 import zipfile
 
+from core.install_errors import probe_writable, translate
+
 
 class Installer:
 
@@ -34,6 +36,25 @@ class Installer:
             )
 
         #
+        # DARF HIER UEBERHAUPT GESCHRIEBEN WERDEN?
+        #
+        # Die Frage steht vor allem anderen, weil ihre Antwort den Satz
+        # bestimmt, den der Nutzer im Fehlerfall liest: ein Ordner, in
+        # dem sich nichts anlegen laesst, ist eine Rechtefrage; einer,
+        # in dem das geht und der sich trotzdem nicht ersetzen laesst,
+        # wird von jemandem offen gehalten (WoW laeuft). Siehe
+        # core/install_errors.py - von aussen sehen beide identisch aus
+        # ("[WinError 5] Zugriff verweigert"), und sie verlangen
+        # Entgegengesetztes.
+        #
+        # Gemerkt, nicht sofort geworfen: die Probe kann sich irren
+        # (Virenscanner, Netzlaufwerk), und dann soll der echte
+        # Kopiervorgang entscheiden statt einer Vermutung.
+        #
+
+        writable = probe_writable(addon_path.parent)
+
+        #
         # ".new"/".old"-Arbeitsordner neben dem eigentlichen
         # Zielordner, für den atomaren Swap unten. Reste eines
         # vorherigen, abgebrochenen Installationsversuchs zuerst
@@ -48,11 +69,19 @@ class Installer:
             addon_path.name + ".old"
         )
 
-        if new_path.exists():
-            shutil.rmtree(new_path)
+        try:
 
-        if old_path.exists():
-            shutil.rmtree(old_path)
+            if new_path.exists():
+                shutil.rmtree(new_path)
+
+            if old_path.exists():
+                shutil.rmtree(old_path)
+
+        except OSError as exc:
+
+            raise translate(
+                exc, addon_path.parent, folder_writable=writable
+            ) from exc
 
         #
         # ZIP entpacken und die neue Version komplett in "new_path"
@@ -95,10 +124,24 @@ class Installer:
                 "Bereite neue Version vor..."
             )
 
-            shutil.copytree(
-                source,
-                new_path,
-            )
+            #
+            # Der erste Schreibvorgang im Zielverzeichnis. Scheitert er
+            # an den Rechten, ist die Installation gar nicht erst
+            # angelaufen - die bestehende Fassung bleibt unberuehrt.
+            #
+
+            try:
+
+                shutil.copytree(
+                    source,
+                    new_path,
+                )
+
+            except OSError as exc:
+
+                raise translate(
+                    exc, addon_path.parent, folder_writable=writable
+                ) from exc
 
         #
         # Atomarer Swap: alte Version (falls vorhanden) beiseite
@@ -122,6 +165,23 @@ class Installer:
                 os.rename(addon_path, old_path)
 
             os.rename(new_path, addon_path)
+
+        except OSError as exc:
+
+            if old_path.exists() and not addon_path.exists():
+                os.rename(old_path, addon_path)
+
+            #
+            # HIER IST DER HAEUFIGE FALL. Unter Windows laesst sich ein
+            # Verzeichnis nicht umbenennen, solange irgendjemand eine
+            # Datei darin offen haelt - und "Zugriff verweigert" sagt
+            # nicht, dass es WoW ist. Die Probe oben trennt das vom
+            # fehlenden Schreibrecht.
+            #
+
+            raise translate(
+                exc, addon_path, folder_writable=writable
+            ) from exc
 
         except Exception:
 

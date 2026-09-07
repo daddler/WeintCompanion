@@ -352,6 +352,25 @@ class MainWindow(QMainWindow):
         self.update_runner = UpdateRunner(self.manager, self)
 
         #
+        # EIN FEHLGESCHLAGENES UPDATE MUSS MAN SEHEN, OHNE INS
+        # PROTOKOLL ZU SCHAUEN.
+        #
+        # Die Uebersicht zeigt den Grund an ihrer Update-Zeile; "Addon &
+        # Updates" nahm ihn bis 2.8.0 gar nicht entgegen, und wer den
+        # Knopf dort drueckte, sah nur, wie der Ladezustand verschwand.
+        # Zusammen mit dem falschen "erfolgreich aktualisiert" im
+        # Protokoll ergab das eine App, die stumm nichts tat.
+        #
+        # Die Einblendung haengt deshalb hier und nicht an einer Seite:
+        # es gibt genau einen Laeufer, und beide Seiten loesen ihn aus.
+        # Fehlermeldungen bleiben stehen, bis man sie wegklickt (siehe
+        # notify()) - genau richtig fuer eine, die einen naechsten
+        # Schritt nennt.
+        #
+
+        self.update_runner.finished.connect(self._on_update_failed)
+
+        #
         # Navigation
         #
 
@@ -871,6 +890,29 @@ class MainWindow(QMainWindow):
     def _open_addon_page(self):
 
         self.change_page(PageId.ADDON)
+
+    def _on_update_failed(self, _component: str, success: bool, message: str):
+        """
+        Der Grund als Einblendung, wenn eine Installation scheitert.
+
+        Nur bei einem Fehlschlag: der Erfolgsfall steht im Protokoll,
+        und die Seite zeichnet sich ohnehin neu. Ohne Text wird nichts
+        gemeldet - eine leere Einblendung ist eine Meldung ueber unser
+        Unwissen.
+        """
+
+        if success or not message:
+            return
+
+        toast = self.notify(message, "error", "Protokoll")
+
+        if toast is not None and hasattr(toast, "actionTriggered"):
+
+            toast.actionTriggered.connect(self._open_logs_page)
+
+    def _open_logs_page(self):
+
+        self.change_page(PageId.LOGS)
 
     def _apply_forced_nav(self, spec):
         """
