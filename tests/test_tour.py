@@ -378,3 +378,79 @@ def test_an_unusable_edition_counts_as_never_seen(monkeypatch):
     })
 
     assert calls["pages"] == list(TOUR_PAGES)
+
+# --------------------------------------------------
+# Auszeichnungen
+# --------------------------------------------------
+
+
+def test_no_asterisk_survives_the_rendering():
+    """
+    Der Text der Tour benutzt zwei Auszeichnungen: `**fett**` betont
+    einen Satz, `*kursiv*` nennt etwas, das in der Anwendung genau so
+    heisst.
+
+    Die kursive Form fehlte bis 3.0.0 im Renderer, und das war kein
+    Schönheitsfehler: an fünf Stellen standen die **Sternchen selbst**
+    auf dem Bildschirm - "*Einstellungen → Discord*" statt kursiv -,
+    und zwar genau dort, wo der Text jemandem einen Weg nennen soll.
+    Auffallen kann das nur beim Hinsehen; nichts wirft dabei einen
+    Fehler.
+    """
+
+    from gui.dialogs.whats_new_dialog import TOUR_PAGES, _render_emphasis
+
+    leftover = [
+        page.title
+        for page in TOUR_PAGES
+        if "*" in _render_emphasis(page.body)
+    ]
+
+    assert leftover == [], leftover
+
+
+def test_both_kinds_of_emphasis_become_tags():
+
+    from gui.dialogs.whats_new_dialog import _render_emphasis
+
+    assert _render_emphasis("**fett**") == "<b>fett</b>"
+    assert _render_emphasis("*kursiv*") == "<i>kursiv</i>"
+
+    #
+    # Verschachtelt geht, solange die beiden Auszeichnungen nicht auf
+    # demselben Zeichen enden: "***" ist als "**" + "*" oder "*" + "**"
+    # zu lesen, und diese Mehrdeutigkeit löst kein Markdown-Renderer
+    # zufriedenstellend. Sie wird deshalb nicht geraten, sondern
+    # gemieden - der Text der Tour ist von Hand geschrieben, und ein
+    # Leerzeichen davor kostet nichts.
+    #
+
+    assert _render_emphasis("**fett mit *kursiv* darin**") == (
+        "<b>fett mit <i>kursiv</i> darin</b>"
+    )
+
+
+def test_an_unpaired_asterisk_leaves_no_open_tag():
+    """
+    Ein einzelner Stern in einem Satz ist ein Stern - ein halb
+    geöffnetes Tag nähme dem Label alles darunter mit.
+    """
+
+    from gui.dialogs.whats_new_dialog import _render_emphasis
+
+    rendered = _render_emphasis("ein * allein")
+
+    assert rendered == "ein * allein"
+    assert rendered.count("<i>") == rendered.count("</i>")
+
+
+def test_markup_never_beats_escaping():
+    """
+    Der Text geht als Rich Text ins Label; ein `<` in einem Satz nähme
+    ihm sonst stumm den Rest der Seite weg.
+    """
+
+    from gui.dialogs.whats_new_dialog import _render_emphasis
+
+    assert "<script>" not in _render_emphasis("*<script>*")
+    assert "&lt;script&gt;" in _render_emphasis("*<script>*")

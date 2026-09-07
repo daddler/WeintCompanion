@@ -34,6 +34,8 @@ Bedienung, nicht Innenleben.
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass, field
 
 from PySide6.QtCore import Qt
@@ -270,7 +272,7 @@ TOUR_PAGES: tuple[TourPage, ...] = (
         "die sechs Zahlen darunter: ein Strich heißt dort „nicht "
         "geliefert“ und nie „null“.\n\n"
         "Die Lernkurve zeichnet deine aufgezeichneten Pulls über die Zeit "
-        "und bestimmt mit, welcher Bereich im Plan oben steht. Aufzeichnet "
+        "und bestimmt mit, welcher Bereich im Plan oben steht. Aufgezeichnet "
         "wird nur, was fertig ist: mittendrin bewegt sich jede Bewertung "
         "im Sekundentakt.\n\n"
         "Was du im Spiel abhakst, kommt hier an — und umgekehrt. Drei "
@@ -575,14 +577,36 @@ class _DialogPage(QWidget):
         layout.addStretch()
 
 
+#
+# `*kursiv*` - ein Sternenpaar, das keinen Zeilenumbruch überspannt.
+# Unpaarig bleibt es stehen: ein einzelner Stern in einem Satz ist
+# dann eben ein Stern und kein halb geöffnetes Tag.
+#
+
+_ITALIC = re.compile(r"\*([^*\n]+)\*")
+
+
 def _render_emphasis(text: str) -> str:
     """
-    `**fett**` wird fett, Absätze bleiben Absätze.
+    `**fett**` wird fett, `*kursiv*` kursiv, Absätze bleiben Absätze.
 
     Bewusst kein Markdown-Renderer: der Text ist von Hand geschrieben
-    und braucht genau eine Auszeichnung. Alles andere wird vorher
+    und braucht genau zwei Auszeichnungen. Alles andere wird vorher
     maskiert, sonst nähme ein `<` in einem Satz dem Label den Rest der
     Seite weg.
+
+    **Die kursive Form ist nicht Zierat, sondern die zweite Bedeutung.**
+    Fett betont einen Satz; kursiv steht für das, was in der Anwendung
+    genau so heisst - *Log wählen*, *Einstellungen → Module*. Dieselbe
+    Trennung wie drüben im Addon, wo Bernstein ausschliesslich "das
+    kann man anklicken" heisst und Weiss betont: eine Auszeichnung für
+    beides sagt nichts mehr darüber, worauf man zeigen kann.
+
+    Sie hat gefehlt, und das war kein Schönheitsfehler: `_ITALIC` gab
+    es nicht, also standen an fünf Stellen der Tour die **Sternchen
+    selbst** auf dem Bildschirm - "*Einstellungen → Discord*" statt
+    *Einstellungen → Discord*. Der Text war richtig, nur ungerendert,
+    und genau dort, wo er jemandem einen Weg nennen soll.
     """
 
     safe = (
@@ -598,9 +622,17 @@ def _render_emphasis(text: str) -> str:
     # unpaarigen Anzahl wird der Rest fett - aber er wird auch wieder
     # geschlossen. Ein offenes <b> nähme sonst alles darunter mit.
     #
+    # Die kursive Form wird JE ABSCHNITT aufgelöst und nicht auf dem
+    # fertigen Text: sonst könnte ein Sternenpaar über ein <b> hinweg
+    # greifen und die Tags würden sich überkreuzen.
+    #
+
+    def italic(part: str) -> str:
+
+        return _ITALIC.sub(r"<i>\1</i>", part)
 
     rendered = "".join(
-        f"<b>{part}</b>" if index % 2 else part
+        f"<b>{italic(part)}</b>" if index % 2 else italic(part)
         for index, part in enumerate(parts)
     )
 
