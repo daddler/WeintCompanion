@@ -2,6 +2,14 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 3.0.1
+
+Diese Fassung ändert nichts, was du in der App siehst.
+
+### Technisch
+
+Die Projektdokumentation für Claude Code wurde neu strukturiert: `CLAUDE.md` ist jetzt ein kompakter Router, Detailwissen liegt themenbezogen unter `docs/`. `docs/*.md` bleibt der autoritative Ort für alle Cross-Repo-Verträge mit WeintCodex und WeintCodex Bot, ergänzt um vier zuvor fehlende Verträge (WCIMPORT-Protokoll, Charakterzuordnung/WeintAdmin, Academy/Rotationshelfer, Companion-Auth). Keine Codeänderung.
+
 ## 3.0.0
 
 **Die Einführung ist neu — und sie ist diesmal vollständig.**
