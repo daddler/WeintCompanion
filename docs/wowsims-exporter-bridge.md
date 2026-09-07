@@ -1,7 +1,7 @@
 # Die Ausrüstung in den Sim: Vertrag mit dem WowSimsExporter
 
 Diese Datei beschreibt den Weg **ins** Sim — das Gegenstück zu
-`docs/stat-weights-bridge.md`, das den Weg zurück beschreibt.
+`stat-weights-bridge.md`, das den Weg zurück beschreibt.
 
 Beteiligt sind drei Programme, und die Companion ist das mittlere:
 
