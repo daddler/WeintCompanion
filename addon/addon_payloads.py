@@ -43,14 +43,16 @@ from analyzer.academy.progression import (
 from analyzer.models import RaidSnapshot
 
 #
-# Der Import aus gui/ ist Absicht: analysis_gap() ist die eine Stelle,
-# die entscheidet, WARUM eine Auswertung leer ist, und sie enthaelt
-# bewusst kein Qt (siehe Modulkommentar dort). Genau darauf ruht er -
-# ein Qt-Import in analysis_gap.py wuerde den Test-Job der CI
-# lahmlegen, der nur pytest installiert und sonst nichts.
+# Die Importe aus gui/ sind Absicht: analysis_gap() ist die eine
+# Stelle, die entscheidet, WARUM eine Auswertung leer ist, und
+# encounter_meta() die eine, die sagt, WELCHER Kampf das war. Beide
+# enthalten bewusst kein Qt (siehe Modulkommentar dort). Genau darauf
+# ruhen sie - ein Qt-Import in einem der beiden wuerde den Test-Job
+# der CI lahmlegen, der nur pytest installiert und sonst nichts.
 #
 
 from gui.widgets.tv.analysis_gap import analysis_gap, rating_gap_text
+from gui.widgets.tv.encounter_meta import encounter_meta
 
 
 #
@@ -432,6 +434,26 @@ def build_academy_state(
         "encounter": profile.encounter_name,
         "pull": profile.sample_size,
         "gap": _gap(snapshot),
+
+        #
+        # Welcher Kampf das war, in einem fertigen Satz - Boss,
+        # Schwierigkeit, Pull, Ausgang, Durchschnittsnote.
+        #
+        # Das Addon setzte ihn bis WeintCodex 2.10.0.0 selbst aus
+        # `encounter` und `pull` zusammen und kannte dabei zwei Dinge
+        # nicht, die für eine Bewertung nicht nebensächlich sind:
+        # derselbe Boss heroisch und normal sind zwei verschiedene
+        # Ansprüche, und ein Wipe bei 80 % erklärt eine schwache
+        # Cooldown-Wertung von selbst. Beides liegt hier im Snapshot
+        # und kam dort nie an.
+        #
+        # Formuliert wird er einmal (`encounter_meta`) und an beiden
+        # Enden derselbe: eine zweite Fassung im Addon liefe irgendwann
+        # anders aus, und dann widersprächen sich Spiel und Desktop
+        # über denselben Kampf. Additiv - ein älteres Addon ignoriert
+        # den Schlüssel und setzt seinen Satz weiter selbst zusammen.
+        #
+        "encounterText": encounter_meta(snapshot, profile),
 
         #
         # Derselbe Sachverhalt in Worten - und zwar in den Worten der

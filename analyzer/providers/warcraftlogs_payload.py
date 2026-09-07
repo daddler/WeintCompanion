@@ -163,6 +163,30 @@ def _format_report_date(iso_timestamp: str) -> str:
     return published.astimezone().strftime("%d.%m.%Y %H:%M")
 
 
+def _format_report_time(iso_timestamp: str) -> str:
+    """
+    Nur die Uhrzeit desselben Zeitstempels - fuer die Pull-Liste, wo
+    das Datum bereits ueber der Liste am Bericht steht und zwanzig Mal
+    zu wiederholen waere.
+
+    Leerer String bei fehlendem oder unlesbarem Wert. Das ist hier
+    tragend und keine Vorsicht: "00:00" waere von einer echten Uhrzeit
+    nicht zu unterscheiden, und ein Pull um Mitternacht ist an einem
+    Raidabend nicht einmal abwegig.
+    """
+
+    if not iso_timestamp:
+        return ""
+
+    try:
+        moment = datetime.fromisoformat(iso_timestamp.replace("Z", "+00:00"))
+
+    except ValueError:
+        return ""
+
+    return moment.astimezone().strftime("%H:%M")
+
+
 def _number(value, default: float = 0.0) -> float:
     """
     Zahlenwert aus der Antwort. JSON kann hier eine Zahl, eine
@@ -1451,20 +1475,79 @@ class FightSummary:
 
     duration: float = 0.0
 
+    #
+    # Uhrzeit des Pulls als ISO-Zeitstempel (UTC), leer wenn der Bot
+    # sie nicht kennt. Sie kommt erst seit der Bot-Runde zu 3.0.0 mit -
+    # ein fehlender Wert heisst deshalb "keine Angabe" und nie
+    # "Mitternacht", weshalb `time_label` dann leer bleibt statt
+    # "00:00" zu behaupten.
+    #
+
+    start: str = ""
+
+    #
+    # Raidgroesse (10/25), 0 wenn unbekannt. In einem gemischten
+    # Bericht die einzige Auskunft darueber, welcher der beiden Raids
+    # dieser Pull war.
+    #
+
+    size: int = 0
+
     pull_number: int = 0
+
+    @property
+    def time_label(self) -> str:
+        """
+        Die Uhrzeit des Pulls, in der Zeitzone dieses Rechners.
+        """
+
+        return _format_report_time(self.start)
+
+    @property
+    def clock(self) -> str:
+        """
+        Kampfdauer als mm:ss.
+        """
+
+        total = max(0, int(self.duration))
+
+        return f"{total // 60:02d}:{total % 60:02d}"
+
+    @property
+    def outcome_label(self) -> str:
+        """
+        Ausgang des Pulls in einem Wort bzw. dem Restanteil des Bosses.
+        """
+
+        return "Kill" if self.kill else f"{self.boss_percentage:.0f} %"
+
+    @property
+    def difficulty_label(self) -> str:
+        """
+        Schwierigkeit, ersatzweise die Raidgroesse.
+
+        Der Name der Schwierigkeit traegt die Groesse in MoP bereits
+        ("25 Heroisch"), er ist also die vollstaendigere Auskunft und
+        kommt zuerst. Kennt der Bot sie nicht - eine unbekannte
+        Schwierigkeits-ID, ein aelterer Bot -, bleibt `size` als das,
+        was sich noch sagen laesst; "25er" ist weniger als "25
+        Heroisch", aber mehr als nichts, und vor allem nichts
+        Erfundenes.
+        """
+
+        if self.difficulty:
+            return self.difficulty
+
+        return f"{self.size}er" if self.size else ""
 
     @property
     def label(self) -> str:
 
-        total = max(0, int(self.duration))
-
-        clock = f"{total // 60:02d}:{total % 60:02d}"
-
-        outcome = "Kill" if self.kill else f"{self.boss_percentage:.0f} %"
-
         pull = f"Pull {self.pull_number} · " if self.pull_number else ""
 
-        return f"{pull}{self.encounter_name} · {outcome} · {clock}"
+        return (
+            f"{pull}{self.encounter_name} · {self.outcome_label} · {self.clock}"
+        )
 
 
 def build_report_list(payload: dict) -> tuple[ReportSummary, ...]:
@@ -1549,6 +1632,8 @@ def build_fight_list(payload: dict) -> tuple[FightSummary, ...]:
                 kill=_flag(row.get("kill")),
                 boss_percentage=_percent(row.get("boss_percentage")),
                 duration=_number(row.get("duration")),
+                start=_text(row.get("start")),
+                size=_count(row.get("size")),
                 pull_number=_count(row.get("pull_number")),
             )
         )

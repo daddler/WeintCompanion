@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QComboBox,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QStackedWidget,
@@ -68,8 +69,15 @@ from gui.widgets.hero_banner import HeroButton
 from gui.widgets.section_card import SectionCard
 from gui.widgets.segmented_control import SegmentedControl
 from gui.widgets.toggle_switch import ToggleSwitch
-from gui.widgets.tv.analysis_gap import rating_gap_text
+from gui.widgets.tv.analysis_gap import (
+    ACTION_ARCHIVE,
+    academy_empty_action,
+    academy_empty_text,
+    next_lesson_placeholder,
+    rating_gap_text,
+)
 from gui.widgets.tv.archive_picker import ArchivePicker
+from gui.widgets.tv.encounter_meta import encounter_meta
 from gui.widgets.tv.entry_list import EntryData, EntryList
 from gui.widgets.tv.meter_bar import MeterBar
 from gui.widgets.tv.metric_tile import MetricTile
@@ -237,7 +245,9 @@ class AcademyPage(QWidget):
         # gui/widgets/tv/archive_picker.py.
         #
 
-        root.addWidget(ArchivePicker(self.service))
+        self.archive_picker = ArchivePicker(self.service)
+
+        root.addWidget(self.archive_picker)
 
         #
         # Wiedergabe-Steuerung, schmale Fassung: hier soll man einen
@@ -358,6 +368,55 @@ class AcademyPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         layout.setSpacing(16)
+
+        #
+        # --------------------------------------------------
+        # Leerzustand
+        # --------------------------------------------------
+        #
+        # Ohne ausgewerteten Kampf stand hier ein Name "-", sechs
+        # Kacheln "noch keine Daten", drei Kennzahlen "-" und "0 von 0
+        # Lektionen" - ein Formular ohne Inhalt, das keine der beiden
+        # Fragen beantwortet, die man davor hat: was fehlt, und was
+        # kann ich tun. Diese Karte beantwortet beide, und der Knopf
+        # daneben führt genau dorthin. Sie verschwindet, sobald ein
+        # Kampf da ist.
+        #
+
+        self.empty_card = Card(accent=True)
+
+        self.empty_card.addWidget(
+            eyebrow_label("NOCH KEINE AUSWERTUNG", Colors.PRIMARY_HOVER)
+        )
+
+        self.empty_text = QLabel("")
+
+        self.empty_text.setWordWrap(True)
+
+        self.empty_text.setStyleSheet(
+            f"font-size:13px;color:{Colors.TEXT_SECONDARY};"
+            "background:transparent;border:none;"
+        )
+
+        self.empty_card.addWidget(self.empty_text)
+
+        empty_row = QHBoxLayout()
+
+        empty_row.addStretch()
+
+        self.empty_button = HeroButton("Log wählen …")
+
+        self.empty_button.clicked.connect(
+            self.archive_picker.open_browser
+        )
+
+        empty_row.addWidget(self.empty_button)
+
+        self.empty_card.addLayout(empty_row)
+
+        self.empty_card.setVisible(False)
+
+        layout.addWidget(self.empty_card)
 
         #
         # Charakterkarte
@@ -528,27 +587,45 @@ class AcademyPage(QWidget):
         #
         # Kennzahlen der Tiefenauswertung
         #
-        # Die drei Zahlen, auf denen die neuen Bewertungen beruhen -
-        # sichtbar neben den Sternen, damit eine Bewertung nicht als
-        # Urteil ohne Beleg dasteht.
+        # Die Zahlen, auf denen die Bewertungen beruhen - sichtbar
+        # neben den Sternen, damit eine Bewertung nicht als Urteil
+        # ohne Beleg dasteht.
+        #
+        # Sechs statt drei, und die drei neuen sind nicht Zierat: sie
+        # stehen für Zahlen, die im Snapshot längst lagen und auf
+        # dieser Seite nirgends auftauchten, obwohl die Bewertung
+        # daneben aus ihnen entsteht. Wer bei "Mechaniken 2 Sterne"
+        # wissen will, woran das liegt, findet die verpasste
+        # Unterbrechung sonst nur im Fliesstext der Kachel.
+        #
+        # Ein Raster und keine Zeile: sechs Kacheln nebeneinander sind
+        # bei 960 px Fensterbreite je 140 px breit, und "3 von 5
+        # genutzt" bricht darin um.
         #
 
-        tiles = QHBoxLayout()
+        self.tile_grid = QGridLayout()
 
-        tiles.setSpacing(14)
+        self.tile_grid.setSpacing(14)
 
         self.tile_avoidable = MetricTile("VERMEIDBAR", "-")
         self.tile_activity = MetricTile("AKTIVZEIT", "-")
         self.tile_cooldowns = MetricTile("COOLDOWNS", "-")
+        self.tile_interrupts = MetricTile("UNTERBRECHUNGEN", "-")
+        self.tile_deaths = MetricTile("TODE", "-")
+        self.tile_supplies = MetricTile("VORBEREITUNG", "-")
 
-        for tile in (
+        self._tiles = (
             self.tile_avoidable,
             self.tile_activity,
             self.tile_cooldowns,
-        ):
-            tiles.addWidget(tile, 1)
+            self.tile_interrupts,
+            self.tile_deaths,
+            self.tile_supplies,
+        )
 
-        layout.addLayout(tiles)
+        self._layout_tiles(3)
+
+        layout.addLayout(self.tile_grid)
 
         #
         # Fortschritt
@@ -860,6 +937,44 @@ class AcademyPage(QWidget):
         else:
             self.rating_grid.set_columns(6)
 
+        #
+        # Die Kennzahlen folgen derselben Fensterbreite, nur eine
+        # Stufe gröber: sie tragen Zahlen und keine Sternereihen und
+        # vertragen deshalb mehr nebeneinander.
+        #
+
+        self._layout_tiles(2 if state.single_column else 3)
+
+    def _layout_tiles(self, columns: int):
+        """
+        Die Kennzahlkacheln neu anordnen.
+
+        Die Kacheln werden dabei **umgehängt und nicht neu gebaut** -
+        WoW gibt Frames nie frei, Qt zwar schon, aber ein Neubau je
+        Fenstergrösse verlöre die Werte darin und liesse die Seite bei
+        jedem Ziehen am Rand flackern.
+        """
+
+        if getattr(self, "_tile_columns", None) == columns:
+            return
+
+        self._tile_columns = columns
+
+        for tile in self._tiles:
+            self.tile_grid.removeWidget(tile)
+
+        for position, tile in enumerate(self._tiles):
+
+            self.tile_grid.addWidget(
+                tile,
+                position // columns,
+                position % columns,
+            )
+
+        for column in range(max(columns, self.tile_grid.columnCount())):
+
+            self.tile_grid.setColumnStretch(column, 1 if column < columns else 0)
+
     # --------------------------------------------------
 
     def refresh(self):
@@ -910,7 +1025,7 @@ class AcademyPage(QWidget):
             character=self.academy.player_name(),
         )
 
-        self._apply_overview()
+        self._apply_overview(snapshot)
 
         self._apply_history()
 
@@ -1055,15 +1170,13 @@ class AcademyPage(QWidget):
 
         self.rating_notice.setVisible(bool(reason))
 
-    def _apply_metric_tiles(self):
+    def _apply_metric_tiles(self, snapshot: RaidSnapshot):
         """
-        Die drei Zahlen hinter den neuen Bewertungen.
+        Die Zahlen hinter den Bewertungen.
 
         Sie stehen bewusst neben den Sternen: eine Bewertung ohne den
         Wert, auf dem sie beruht, ist ein Urteil ohne Beleg.
         """
-
-        snapshot = self.service.current()
 
         name = self._profile.name
 
@@ -1117,9 +1230,147 @@ class AcademyPage(QWidget):
             else "genutzt von möglich"
         )
 
-    def _apply_overview(self):
+        self._apply_support_tiles(snapshot, name)
+
+    def _apply_support_tiles(self, snapshot: RaidSnapshot, name: str):
+        """
+        Die drei Kennzahlen, die bis 2.8.0 nirgends standen, obwohl sie
+        im Snapshot lagen und die Bewertung daneben aus ihnen entsteht.
+
+        **Ein Strich heisst hier immer "nicht geliefert" und nie
+        "null".** Das ist der Unterschied, an dem sonst eine Datenlücke
+        wie ein Befund aussieht: "0 Unterbrechungen" ist ein Vorwurf,
+        "-" ist eine Auskunft über die Quelle. Deshalb wird für jede
+        Kachel zuerst gefragt, ob die Quelle diese Art Ereignis
+        überhaupt geliefert hat, und erst dann gezählt.
+        """
+
+        #
+        # Unterbrechungen und Entzauberungen teilen sich eine Kachel:
+        # beides ist Hilfsarbeit für den Raid, beides zählt in
+        # dieselbe Bewertung, und zwei Kacheln nebeneinander mit
+        # jeweils einstelligen Zahlen wären zwei halbe Auskünfte.
+        #
+
+        interrupts = [
+            event
+            for event in snapshot.interrupts
+            if event.actor_name == name
+        ]
+
+        dispels = [
+            event
+            for event in snapshot.dispels
+            if event.actor_name == name
+        ]
+
+        knows_support = bool(snapshot.interrupts or snapshot.dispels)
+
+        self.tile_interrupts.setValue(
+            str(len(interrupts)) if knows_support else "-"
+        )
+
+        #
+        # Die Entzauberungen stehen als zweite Zahl in der Unterzeile
+        # und nicht in einer eigenen Kachel: es ist dieselbe Sorte
+        # Arbeit für den Raid, sie zählt in dieselbe Bewertung, und
+        # zwei Kacheln mit je einer einstelligen Zahl wären zwei halbe
+        # Auskünfte.
+        #
+
+        self.tile_interrupts.setCaption(
+            f"{len(dispels)} entzaubert"
+            if knows_support
+            else "keine Angaben"
+        )
+
+        #
+        # Tode: der Snapshot führt sie immer, auch als leere Liste -
+        # "0" ist hier also eine echte Aussage und keine Lücke.
+        # Ausserhalb eines Kampfes gilt sie allerdings nicht, dort
+        # steht noch gar nichts fest.
+        #
+
+        deaths = [
+            death
+            for death in snapshot.deaths
+            if death.actor_name == name
+        ]
+
+        rezzed = [
+            event
+            for event in snapshot.resurrections
+            if event.target == name
+        ]
+
+        self.tile_deaths.setValue(
+            str(len(deaths)) if snapshot.has_data else "-"
+        )
+
+        if not snapshot.has_data:
+            caption = "keine Angaben"
+
+        elif not deaths:
+            caption = "überlebt"
+
+        elif rezzed:
+            caption = f"{len(rezzed)}× wiederbelebt"
+
+        else:
+            caption = deaths[-1].cause or "gestorben"
+
+        self.tile_deaths.setCaption(caption)
+
+        #
+        # Vorbereitung: Fläschchen und Bufffood. Die fehlende Liste ist
+        # der Punkt - sie beantwortet als einzige Zahl dieser Seite
+        # eine Frage, die man VOR dem Pull hätte beantworten können.
+        #
+
+        supplies = snapshot.consumables
+
+        if not supplies:
+
+            self.tile_supplies.setValue("-")
+
+            self.tile_supplies.setCaption("keine Angaben")
+
+            return
+
+        missing = [
+            entry.label
+            for entry in supplies
+            if name in entry.missing
+        ]
+
+        self.tile_supplies.setValue(
+            "vollständig" if not missing else f"{len(missing)} fehlt"
+            if len(missing) == 1
+            else f"{len(missing)} fehlen"
+        )
+
+        self.tile_supplies.setCaption(
+            ", ".join(missing)
+            if missing
+            else ", ".join(entry.label for entry in supplies)
+        )
+
+    def _apply_overview(self, snapshot: RaidSnapshot):
+        """
+        Der Snapshot wird **gereicht und nicht neu geholt**.
+
+        `_apply_snapshot()` baut Profil und Plan aus genau diesem
+        Stand; `self.service.current()` daneben zu fragen ist eine
+        zweite Quelle für dieselbe Auskunft, und in einer Wiedergabe
+        sind die beiden nachweislich verschieden - die Sterne
+        beschrieben dann die abgespielte Sekunde und die Kennzahlen
+        darunter den zuletzt veröffentlichten Stand. Dieselbe Regel,
+        aus der es überhaupt nur einen Snapshot gibt.
+        """
 
         profile = self._profile
+
+        self._apply_empty_state(snapshot)
 
         self.profile_name.setText(profile.name)
 
@@ -1141,16 +1392,17 @@ class AcademyPage(QWidget):
 
             self.profile_title.setText(profile.title)
 
-        if profile.sample_size:
+        #
+        # Was für ein Kampf war das? Bis 2.8.0 stand hier "Horridon ·
+        # Pull 12 · Ø 3,7/5" - und damit weder die Schwierigkeit noch
+        # der Ausgang, obwohl beides im Snapshot liegt. Für eine
+        # Bewertung ist das nicht nebensächlich: derselbe Boss
+        # heroisch und normal sind zwei verschiedene Ansprüche, und
+        # ein Wipe bei 80 % erklärt eine schwache Cooldown-Wertung von
+        # selbst.
+        #
 
-            self.profile_meta.setText(
-                f"{profile.encounter_name} · Pull {profile.sample_size} · "
-                f"Ø {profile.average_stars:.1f}/{MAX_STARS}"
-            )
-
-        else:
-
-            self.profile_meta.setText("")
+        self.profile_meta.setText(encounter_meta(snapshot, profile))
 
         self.profile_note.setText(profile.note)
 
@@ -1163,9 +1415,9 @@ class AcademyPage(QWidget):
 
         self.rating_grid.apply(profile)
 
-        self._apply_rating_notice(self.service.current())
+        self._apply_rating_notice(snapshot)
 
-        self._apply_metric_tiles()
+        self._apply_metric_tiles(snapshot)
 
         #
         # Nächste Lektion
@@ -1175,11 +1427,25 @@ class AcademyPage(QWidget):
 
         if lesson is None:
 
-            self.next_title.setText("Alle Lektionen erledigt")
+            #
+            # Zwei Fälle, zwei Sätze, und sie sind das Gegenteil
+            # voneinander: ohne Kampfdaten ist NICHTS erledigt, es ist
+            # nur nichts berechnet. Bis 2.8.0 stand "Alle Lektionen
+            # erledigt" auch dann da - keine Ungenauigkeit, sondern
+            # eine falsche Aussage über den Lernstand, ausgerechnet
+            # auf der Karte, die den nächsten Schritt nennen soll.
+            #
+
+            self.next_title.setText(
+                next_lesson_placeholder(snapshot.has_data)
+            )
 
             self.next_summary.setText(
                 "Der aktuelle Lernpfad ist abgeschlossen - neue "
                 "Lektionen entstehen mit der nächsten Auswertung."
+                if snapshot.has_data
+                else "Sobald ein Pull ausgewertet ist, entsteht hier "
+                "automatisch ein Lernpfad für diesen Charakter."
             )
 
             self.open_plan_button.setEnabled(False)
@@ -1206,11 +1472,48 @@ class AcademyPage(QWidget):
             else 0.0
         )
 
+        #
+        # "0 von 0 Lektionen erledigt" ist eine Zahl, die nichts sagt,
+        # und von einem Fehler nicht zu unterscheiden. Ohne Lektionen
+        # steht deshalb da, dass es noch keine gibt.
+        #
+
         self.progress_label.setText(
             f"{done} von {total} Lektionen erledigt"
+            if total
+            else "Noch keine Lektionen für diesen Charakter"
         )
 
         self.reset_button.setEnabled(done > 0)
+
+    # --------------------------------------------------
+
+    def _apply_empty_state(self, snapshot: RaidSnapshot):
+        """
+        Die Karte über der Seite: was fehlt, und was dagegen hilft.
+
+        Formuliert wird beides in `gui/widgets/tv/analysis_gap.py` -
+        derselben Stelle, an der auch WeintTV seine Lücken erklärt,
+        damit die beiden Seiten denselben Sachverhalt nicht
+        verschieden benennen.
+
+        Der Knopf steht nur da, wo er etwas ausrichtet. Läuft ein Raid
+        und bloss gerade kein Pull, ist Warten das Richtige, und ein
+        Knopf daneben legte eine Handlung nahe, die niemand braucht.
+        """
+
+        text = academy_empty_text(snapshot)
+
+        self.empty_card.setVisible(bool(text))
+
+        if not text:
+            return
+
+        self.empty_text.setText(text)
+
+        self.empty_button.setVisible(
+            academy_empty_action(snapshot) == ACTION_ARCHIVE
+        )
 
     # --------------------------------------------------
 

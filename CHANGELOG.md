@@ -2,6 +2,74 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 3.0.0
+
+**Einen vergangenen Kampf findet man jetzt, statt ihn zu suchen.**
+Das Archiv waren zwei Ausklapplisten nebeneinander: zwanzig gleich
+aussehende Berichte in der einen, an einem Raidabend leicht sechzig
+Pulls in der anderen, alle in der Form „Pull 14 · Garrosh · 42 % ·
+06:31" und ohne jede Ordnung ausser der des Abends. Wer den einen
+Versuch wiederfinden wollte, über den in der Gilde gesprochen wurde,
+hat gescrollt und geraten.
+
+*Log wählen* öffnet stattdessen ein Fenster mit zwei Spalten: links
+die Raidabende mit Wochentag und Datum, rechts die Pulls des gewählten
+Abends, nach Boss gebündelt. Dazu ein Suchfeld über Boss, Tag,
+Uhrzeit und Berichtscode, ein Schalter für *Nur Kills* — und an jedem
+Pull die Uhrzeit, an der man ihn wiedererkennt.
+
+Über jedem Boss steht, wie viele Versuche es waren und wie es
+ausging. Gab es keinen Kill, ist der **beste Versuch** markiert.
+
+**Und die Zeile darüber sagt, was geladen ist.**
+Bisher zeigte sie die Auswahl. Nach einem fehlgeschlagenen Abruf stand
+dort weiter der Pull, den man gar nicht vor sich hatte.
+
+**Die Academy sagt, wenn sie nichts zu sagen hat.**
+Ohne ausgewerteten Kampf stand dort ein Name „-", sechs leere
+Bewertungen, drei Striche und — auf der Karte, die den nächsten
+Schritt nennen soll — der Satz „Alle Lektionen erledigt". Erledigt war
+nichts, es war nur nichts da. Jetzt steht oben, was fehlt, und
+daneben der Knopf, der ins Archiv führt.
+
+**Sechs Kennzahlen statt drei.**
+Neu sind Unterbrechungen und Entzauberungen, Tode mit ihrer Ursache,
+und ob Fläschchen und Bufffood dabei waren. Alle drei lagen längst in
+der Auswertung und standen nirgends — obwohl die Bewertung daneben
+aus ihnen entsteht.
+
+Ein Strich heisst dort weiterhin „nicht geliefert" und nie „null".
+
+**Die Kopfzeile nennt Schwierigkeit und Ausgang.**
+Derselbe Boss heroisch und normal sind zwei verschiedene Ansprüche,
+und ein Wipe bei 80 % erklärt eine schwache Cooldown-Wertung von
+selbst. Bisher stand dort nur der Bossname. Im Spiel steht derselbe
+Satz — er braucht WeintCodex 3.0.0.0.
+
+### Neu
+- Archivbrowser über *Log wählen*: Raidabende links, Pulls nach Boss rechts, Suche, *Nur Kills*, markierter bester Versuch
+- Die Quellenzeile nennt den geladenen Pull mit Abend, Boss, Ausgang und Uhrzeit
+- Academy: Kennzahlen für Unterbrechungen, Tode und Vorbereitung
+- Academy: die Kopfzeile nennt Schwierigkeit und Ausgang des Pulls
+
+### Behoben
+- Die Academy behauptete ohne Kampfdaten „Alle Lektionen erledigt"
+- „0 von 0 Lektionen erledigt" stand da, wo es noch keine Lektionen gibt
+- Die Kennzahlen unter den Sternen lasen den zuletzt veröffentlichten Stand statt den gezeigten. In einer Wiedergabe beschrieben Sterne und Zahlen darunter damit zwei verschiedene Sekunden
+
+### Technisch
+- `core/archive_index.py` ist die reine Hälfte des Browsers (Gruppieren, Suchen, bester Versuch, Beschriftungen) — kein Qt, kein `httpx`, aus demselben Grund wie `roster_target()`: *welche Zeilen dastehen* ist die Stelle, an der etwas falsch sein kann. `tests/test_archive_index.py` prüft sie ohne Fenster
+- Die Pulls werden **in der Reihenfolge des Abends** gruppiert und nicht alphabetisch: ein Bericht erzählt einen Abend, und wer den letzten Boss sucht, scrollt nach unten
+- `best_try()`: ein Kill schlägt jeden Wipe, unter Wipes gewinnt der niedrigste Bossanteil, bei gleichem Anteil der längere Kampf. Leere Liste ergibt `None` und keinen Platzhalter
+- Ein Bericht ohne lesbares Datum landet unter „Ohne Datum" am Ende statt unter einem geratenen Tag — dieselbe Linie wie `stars == 0`
+- Die Zeilen des Browsers geben ihren Klick als **Signal an eine gebundene Methode** heraus. Ein im Feld gemerkter Rückruf, der das Fenster über seinen Abschluss festhält, legt einen Kreis an, den der Sammler in beliebiger Reihenfolge auflöst — räumt er das Fenster vor seinen Kindern ab, ist das C++-Objekt weg, während Qt noch darauf zugreift: SIGSEGV **ohne Python-Rückverfolgung**, dieselbe Klasse Fehler wie das an `hideEvent` weitergereichte `QCloseEvent` im Overlay-Fenster. `tests/test_archive_dialog.py` baut das Fenster mehrfach und lässt dazwischen sammeln
+- Beide Spalten vergleichen erst eine Signatur, bevor sie neu bauen: `archiveChanged` kommt während eines Ladevorgangs mehrfach, und ein unbedingtes Neubauen setzte die Bildlaufposition zurück, während jemand darin liest — dieselbe Falle wie beim `ArchivePicker` und der WeakAura-Liste
+- Das Fenster schliesst erst, wenn **der hier angeklickte** Pull da ist (`_awaiting`). Beim Öffnen ist meist noch der Pull von vorhin gewählt und längst geladen; „fertig geladen" allein ist kein Anlass zuzumachen. Ein Fehler schliesst gar nicht, sonst verschwände die Meldung in dem Moment, in dem man sie lesen soll
+- `academy_empty_text()`/`academy_empty_action()`/`next_lesson_placeholder()` liegen in `gui/widgets/tv/analysis_gap.py` — derselben Stelle, an der auch WeintTV seine Lücken erklärt, damit die beiden Seiten denselben Sachverhalt nicht verschieden benennen. Der Knopf steht nur im Fall „kein Raid erkannt": läuft ein Raid und bloss gerade kein Pull, ist Warten das Richtige
+- `_apply_overview()` und `_apply_metric_tiles()` bekommen den Snapshot **gereicht** statt `service.current()` daneben zu fragen. Das war eine zweite Quelle für dieselbe Auskunft, und in einer Wiedergabe sind die beiden nachweislich verschieden
+- `gui/widgets/tv/encounter_meta.py` formuliert den Satz über den Kampf, Qt-frei wie `analysis_gap.py`, und `addon/addon_payloads.py` schickt ihn als `encounterText` weiter — das Addon baute ihn bis 3.0.0.0 selbst zusammen
+- `FightSummary` trägt `start` und `size`; der Bot liefert beides seit derselben Runde. `start` ist die **Uhrzeit** und nicht der Versatz im Bericht: WarcraftLogs zählt `fight.startTime` ab Beginn der Aufzeichnung, absolut ist allein `report.startTime`. Fehlt die Berichtszeit, bleibt die Uhrzeit leer statt „00:00" zu behaupten — ein Pull um Mitternacht ist an einem Raidabend nicht abwegig
+
 ## 2.8.0
 
 **Die Academy im Spiel weiß jetzt, was sie hier weiß.**

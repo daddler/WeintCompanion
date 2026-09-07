@@ -1,18 +1,29 @@
 """
-Umschalter zwischen Live-Feed und Archiv (vergangene WarcraftLogs-
-Reports), gemeinsam genutzt von WeintTV und der Academy.
+Die Quellenzeile: was wird gerade gezeigt, und wie kommt man an etwas
+anderes.
 
-Das Widget kennt keine eigene Auswertungslogik - es liest
-ausschließlich `RaidDataService.archive_state()` und ruft dessen
-Methoden auf. Genau dieselbe Regel wie beim RaidSnapshot selbst: eine
-Seite rechnet nichts, sie zeigt nur an. Weil beide Seiten hier
-denselben Service ansprechen, sehen sie beim Blick ins Archiv immer
-denselben Report/Pull - keine zwei Ansichten können auseinanderlaufen.
+Geteilt von WeintTV und der Academy. Das Widget kennt keine eigene
+Auswertungslogik - es liest ausschliesslich
+`RaidDataService.archive_state()` und ruft dessen Methoden auf.
+Dieselbe Regel wie beim RaidSnapshot: eine Seite rechnet nichts, sie
+zeigt nur an. Weil beide Seiten denselben Service ansprechen, sehen
+sie beim Blick ins Archiv immer denselben Pull.
 
-Aufbau: Live/Archiv-Umschalter, dahinter zwei Auswahlfelder (Bericht,
-Pull), die nur im Archiv-Modus sichtbar sind, die Schaltfläche zum
-Starten der Wiedergabe und eine kurze Statuszeile für
-Ladezustand/Fehler.
+**Bis 2.8.0 standen hier zwei Ausklapplisten**, und sie waren der
+Grund für "es ist ziemlich kompliziert, archivierte Logs zu finden":
+zwanzig gleich aussehende Berichte in der einen, sechzig ungeordnete
+Pulls in der anderen. Beides ist in den Archivbrowser gewandert
+(gui/dialogs/archive_dialog.py), wo genug Platz für Gruppen, Suche und
+Filter ist. Übrig bleibt hier die Frage, die eine Zeile beantworten
+kann: **was ist gerade geladen** - und ein Knopf, der zum Browser
+führt.
+
+Diese Zeile sagt bewusst, was **geladen** ist, und nicht, was
+ausgewählt wurde. Die alten Ausklapplisten zeigten die Auswahl; nach
+einem fehlgeschlagenen Abruf stand dort weiter der Pull, den man gar
+nicht vor sich hatte. Formuliert wird der Satz in
+`core/archive_index.py`, damit beide Seiten denselben Sachverhalt
+nicht verschieden benennen.
 
 Die Wiedergabe ist ein dritter Modus des Service, aber bewusst kein
 dritter Knopf am Umschalter: man spielt immer einen Pull ab, den man
@@ -22,8 +33,9 @@ deshalb weiter die Ansicht, aus der sie gestartet wurde.
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
+from core import archive_index as index
 from core.raid_data_service import (
     ArchiveState,
     MODE_ARCHIVE,
@@ -31,6 +43,7 @@ from core.raid_data_service import (
     MODE_REPLAY,
 )
 
+from gui.dialogs.archive_dialog import ArchiveDialog
 from gui.theme.colors import Colors
 from gui.theme.restyle import restyle
 from gui.widgets.hero_banner import HeroButton
@@ -62,25 +75,19 @@ class ArchivePicker(QWidget):
 
         layout.addWidget(self.mode_switch)
 
-        self.report_box = QComboBox()
+        #
+        # Der Weg in den Archivbrowser. Er steht auch im Live-Modus da
+        # und ist dort nicht ausgegraut: "einen vergangenen Pull
+        # ansehen" ist eine Absicht, kein Zustand, und ein Knopf, der
+        # erst nach dem Umschalten erscheint, verlangt zu wissen, dass
+        # es ihn gibt (*lock, don't hide*, wie in core/access.lua).
+        #
 
-        self.report_box.setMinimumWidth(200)
+        self.browse_button = HeroButton("Log wählen …", primary=False)
 
-        self.report_box.currentIndexChanged.connect(
-            self._on_report_changed
-        )
+        self.browse_button.clicked.connect(self.open_browser)
 
-        layout.addWidget(self.report_box)
-
-        self.fight_box = QComboBox()
-
-        self.fight_box.setMinimumWidth(220)
-
-        self.fight_box.currentIndexChanged.connect(
-            self._on_fight_changed
-        )
-
-        layout.addWidget(self.fight_box)
+        layout.addWidget(self.browse_button)
 
         #
         # Der Einstieg in die Wiedergabe. Bewusst hier und nicht in
@@ -104,16 +111,6 @@ class ArchivePicker(QWidget):
 
         layout.addWidget(self.status_label, 1)
 
-        #
-        # Womit die Auswahlfelder zuletzt gefüllt wurden. Siehe
-        # _fill_reports/_fill_fights: ohne dieses Gedächtnis leerte
-        # eine laufende Wiedergabe die Felder viermal je Sekunde.
-        #
-
-        self._reports_signature = None
-
-        self._fights_signature = None
-
         service.archiveChanged.connect(
             self._refresh
         )
@@ -128,6 +125,18 @@ class ArchivePicker(QWidget):
     # Nutzeraktionen
     # --------------------------------------------------
 
+    def open_browser(self):
+        """
+        Den Archivbrowser öffnen.
+
+        Er wird je Aufruf neu gebaut und schliesst mit `exec()` an -
+        er ist eine Auswahl, kein Aufenthaltsort, und ein
+        weiterlebendes Fenster hinge dauerhaft an `archiveChanged`,
+        das während einer Wiedergabe viermal je Sekunde kommt.
+        """
+
+        ArchiveDialog(self.service, self).exec()
+
     def _on_mode_changed(self, value: str):
 
         if value == MODE_LIVE:
@@ -138,29 +147,17 @@ class ArchivePicker(QWidget):
 
             self.service.enter_archive_mode()
 
-    def _on_report_changed(self, index: int):
+            #
+            # Der Wechsel auf "Archiv" *ist* die Absicht, einen Pull
+            # zu suchen. Ohne diesen Sprung stünde man vor einer
+            # leeren Seite und müsste den Knopf daneben erst finden.
+            # Nur, wenn noch nichts geladen ist - wer aus der
+            # Wiedergabe zurückkommt, will seinen Pull sehen und
+            # nicht wieder wählen.
+            #
 
-        code = self.report_box.itemData(index)
-
-        if code:
-
-            self.service.select_archive_report(code)
-
-    def _on_fight_changed(self, index: int):
-
-        fight_id = self.fight_box.itemData(index)
-
-        if fight_id is None:
-            return
-
-        state = self.service.archive_state()
-
-        if state.selected_report:
-
-            self.service.select_archive_fight(
-                state.selected_report,
-                fight_id,
-            )
+            if self.service.archive_state().selected_fight is None:
+                self.open_browser()
 
     # --------------------------------------------------
     # Zustand übernehmen
@@ -188,22 +185,7 @@ class ArchivePicker(QWidget):
 
         self.mode_switch.blockSignals(False)
 
-        is_archive = state.mode != MODE_LIVE
-
-        self.report_box.setVisible(is_archive)
-
-        self.fight_box.setVisible(is_archive)
-
-        self.status_label.setVisible(is_archive)
-
         self._update_play_button(state)
-
-        if not is_archive:
-            return
-
-        self._fill_reports(state)
-
-        self._fill_fights(state)
 
         self._update_status(state)
 
@@ -239,136 +221,11 @@ class ArchivePicker(QWidget):
             else "▶  Wiedergabe"
         )
 
-    def _fill_reports(self, state: ArchiveState):
-
-        #
-        # Nur neu füllen, wenn sich am Inhalt wirklich etwas geändert
-        # hat.
-        #
-        # Das ist keine reine Sparmaßnahme. `replayChanged` wird bei
-        # JEDEM Takt der Wiedergabe gesendet (viermal je Sekunde, die
-        # ReplayBar braucht das für Uhr und Schieberegler), und
-        # _refresh() hängt mit daran. Ohne diese Prüfung wurden beide
-        # Auswahlfelder währenddessen viermal je Sekunde geleert und
-        # neu befüllt: ein aufgeklapptes Dropdown klappt dabei sofort
-        # wieder zu, sodass man während einer laufenden Wiedergabe
-        # keinen anderen Pull mehr auswählen konnte. Die Auswahl
-        # blieb zwar erhalten - bedienbar war die Leiste trotzdem
-        # nicht mehr.
-        #
-
-        signature = (
-            state.reports_loading,
-            tuple(
-                (report.code, report.label)
-                for report in state.reports
-            ),
-            state.selected_report,
-        )
-
-        if signature == self._reports_signature:
-            return
-
-        self._reports_signature = signature
-
-        self.report_box.blockSignals(True)
-
-        self.report_box.clear()
-
-        if state.reports_loading and not state.reports:
-
-            self.report_box.addItem("Lädt Berichte ...", "")
-
-            self.report_box.setEnabled(False)
-
-        elif not state.reports:
-
-            self.report_box.addItem("Keine Berichte gefunden", "")
-
-            self.report_box.setEnabled(False)
-
-        else:
-
-            self.report_box.setEnabled(True)
-
-            self.report_box.addItem("Bericht wählen ...", "")
-
-            for report in state.reports:
-
-                self.report_box.addItem(report.label, report.code)
-
-            if state.selected_report:
-
-                index = self.report_box.findData(state.selected_report)
-
-                if index >= 0:
-                    self.report_box.setCurrentIndex(index)
-
-        self.report_box.blockSignals(False)
-
-    def _fill_fights(self, state: ArchiveState):
-
-        #
-        # Dieselbe Prüfung und derselbe Grund wie in _fill_reports.
-        #
-
-        signature = (
-            state.selected_report,
-            state.fights_loading,
-            tuple(
-                (fight.fight_id, fight.label)
-                for fight in state.fights
-            ),
-            state.selected_fight,
-        )
-
-        if signature == self._fights_signature:
-            return
-
-        self._fights_signature = signature
-
-        self.fight_box.blockSignals(True)
-
-        self.fight_box.clear()
-
-        has_report = bool(state.selected_report)
-
-        self.fight_box.setEnabled(has_report and not state.fights_loading)
-
-        if not has_report:
-
-            self.fight_box.addItem("Erst einen Bericht wählen", None)
-
-        elif state.fights_loading and not state.fights:
-
-            self.fight_box.addItem("Lädt Pulls ...", None)
-
-        elif not state.fights:
-
-            self.fight_box.addItem("Keine Pulls gefunden", None)
-
-        else:
-
-            self.fight_box.addItem("Pull wählen ...", None)
-
-            for fight in state.fights:
-
-                self.fight_box.addItem(fight.label, fight.fight_id)
-
-            if state.selected_fight is not None:
-
-                index = self.fight_box.findData(state.selected_fight)
-
-                if index >= 0:
-                    self.fight_box.setCurrentIndex(index)
-
-        self.fight_box.blockSignals(False)
-
     def _update_status(self, state: ArchiveState):
 
         reason = state.fight_error or state.fights_error or state.reports_error
 
-        if reason:
+        if reason and state.mode != MODE_LIVE:
 
             self.status_label.setText(reason)
 
@@ -380,24 +237,23 @@ class ArchivePicker(QWidget):
             return
 
         if state.fight_loading:
+            text = "Pull wird geladen … (bei großen Pulls dauert das etwas)"
+
+        elif state.mode == MODE_LIVE:
 
             #
-            # Mit dem Zusatz, weil dieser eine Schritt wirklich lange
-            # dauern kann: der Bot liest dafür die vollständigen
-            # Ereignisströme des Kampfes. Ohne den Hinweis sieht ein
-            # ehrliches Warten genauso aus wie ein hängender Knopf.
+            # Im Live-Modus sagt die Kopfzeile der Seite ohnehin,
+            # welche Quelle läuft; hier stünde es ein zweites Mal.
             #
 
-            text = "Lädt Pull ... (bei großen Pulls dauert das etwas)"
-
-        elif state.fights_loading:
-            text = "Lädt Pulls ..."
-
-        elif state.reports_loading:
-            text = "Lädt Berichte ..."
+            text = ""
 
         else:
-            text = ""
+
+            text = index.selection_text(state) or (
+                "Kein Pull gewählt \u2014 \u201eLog w\u00e4hlen \u2026\u201c "
+                "\u00f6ffnet das Archiv."
+            )
 
         self.status_label.setText(text)
 

@@ -181,11 +181,12 @@ def rating_gap_text(snapshot: RaidSnapshot) -> str:
     """
     Für die Bewertungskarte der Academy.
 
-    Leerer Text heißt: nichts zu erklären. In der Vorbereitungsphase
-    und ohne Raid steht auf jeder Zeile bereits "noch keine
-    Auswertung" - ein zweiter Satz darunter wäre nur Wiederholung.
-    Wenn dagegen ein Kampf ausgewertet wird und die Bereiche trotzdem
-    unbewertet bleiben, ist das erklärungsbedürftig.
+    Leerer Text heißt: nichts zu erklären. Ohne Raid und in der
+    Vorbereitungsphase erklärt der Leerzustand über der Seite den Fall
+    bereits (siehe `academy_empty_text`), und ein zweiter Satz
+    darunter wäre dieselbe Auskunft zweimal. Wenn dagegen ein Kampf
+    ausgewertet wird und die Bereiche trotzdem unbewertet bleiben, ist
+    das erklärungsbedürftig.
     """
 
     if snapshot.has_analysis:
@@ -201,3 +202,94 @@ def rating_gap_text(snapshot: RaidSnapshot) -> str:
         "dahin unbewertet - null Sterne heißen hier ausdrücklich "
         "„keine Daten“, nicht „schlecht“."
     )
+
+
+#
+# --------------------------------------------------
+# Der Leerzustand der Academy
+# --------------------------------------------------
+#
+# Ohne ausgewerteten Kampf stand auf der Academy-Seite: ein Name "-",
+# sechs Kacheln "noch keine Daten", drei Kennzahlen "-", "0 von 0
+# Lektionen erledigt" - und in der Karte der nächsten Lektion der Satz
+# "Alle Lektionen erledigt". Der letzte war schlicht falsch: erledigt
+# war nichts, es war nur nichts da.
+#
+# Und keine dieser Stellen sagte, was fehlt. Wer die Seite zum ersten
+# Mal öffnet, sieht ein Formular ohne Inhalt und schliesst daraus, das
+# Ding sei kaputt oder er müsse irgendwo etwas eintragen. Dabei ist die
+# Antwort in zwei von drei Fällen ein einziger Klick: einen
+# archivierten Pull wählen.
+#
+# `academy_empty_text` ist dieser Satz, und `academy_empty_action`
+# sagt, welcher Knopf danebengehört. Beides hier und nicht in der
+# Seite, aus demselben Grund wie der Rest dieser Datei: die
+# Formulierung ist die Stelle, an der etwas falsch sein kann, und ein
+# Fenster braucht man dafür nicht.
+#
+
+
+#
+# Was der Knopf neben dem Satz tun soll. `ACTION_NONE` heisst: es gibt
+# nichts zu drücken, warten ist die richtige Handlung.
+#
+
+ACTION_NONE = ""
+
+ACTION_ARCHIVE = "archive"
+
+
+def academy_empty_text(snapshot: RaidSnapshot) -> str:
+    """
+    Warum die Academy gerade nichts zu zeigen hat.
+
+    Leerer Text heißt: es gibt einen ausgewerteten Kampf, die Seite
+    zeigt echte Zahlen, und dieser Hinweis gehört weg.
+    """
+
+    if snapshot.has_data:
+        return ""
+
+    return (
+        "Für diesen Charakter liegt gerade kein ausgewerteter Kampf "
+        "vor. Die Academy bewertet immer einen bestimmten Pull - "
+        "Sterne, Trainingsplan und Kennzahlen unten beziehen sich "
+        "darauf. Wähle einen vergangenen Pull aus dem Archiv, oder "
+        "warte auf den nächsten Kampf im Live-Feed."
+    )
+
+
+def academy_empty_action(snapshot: RaidSnapshot) -> str:
+    """
+    Welcher Weg aus dem Leerzustand führt.
+
+    Nur im Fall "kein Raid erkannt" gibt es einen: dann ist das Archiv
+    die Antwort. Läuft ein Raid und bloss gerade kein Pull, ist Warten
+    das Richtige, und ein Knopf daneben würde eine Handlung
+    nahelegen, die niemand braucht.
+    """
+
+    if snapshot.has_data:
+        return ACTION_NONE
+
+    if analysis_gap(snapshot) == NO_RAID:
+        return ACTION_ARCHIVE
+
+    return ACTION_NONE
+
+
+def next_lesson_placeholder(has_data: bool) -> str:
+    """
+    Was in der Karte "nächste Lektion" steht, wenn keine da ist.
+
+    Zwei Fälle, zwei Sätze - und sie sind das Gegenteil voneinander:
+    ohne Kampfdaten ist **nichts** erledigt, es ist nur nichts
+    berechnet. "Alle Lektionen erledigt" stand dort bis 2.8.0 auch
+    dann, und das ist keine Ungenauigkeit, sondern eine falsche
+    Aussage über den Lernstand.
+    """
+
+    if has_data:
+        return "Alle Lektionen erledigt"
+
+    return "Noch kein Trainingsplan"

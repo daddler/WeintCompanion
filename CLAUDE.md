@@ -105,6 +105,48 @@ Three rules the Academy lives by, each of which reverses an earlier mistake:
 - **`stars = 0` means "no data", not "bad".** Without that distinction a gap in the data source outranks every real weakness and hijacks the whole training plan. `PlayerProfile.rated`/`weakest` skip zero-star ratings, and `_combine()` drops parts that have no data instead of averaging them down.
 - **Lesson results and the manual checkbox are never merged.** `LessonResult` is evidence from the log, `completed` is the player's own claim. Auto-ticking would assert something a single pull can't support; auto-unticking would destroy the player's own record.
 
+**An empty Academy has to say so, and a strich is not a zero.** With no
+evaluated fight the page used to show a name "-", six blank ratings,
+three dashes, "0 von 0 Lektionen erledigt" — and on the card that names
+the next step, the sentence "Alle Lektionen erledigt". That last one was
+not imprecise but plainly false: nothing was finished, there was simply
+nothing there. `academy_empty_text()`, `academy_empty_action()` and
+`next_lesson_placeholder()` live in `gui/widgets/tv/analysis_gap.py`,
+the same place WeintTV explains its own gaps, so the two pages cannot
+describe one situation differently. The button next to the sentence
+appears **only** for "no raid recognised": with a raid running and just
+no pull in progress, waiting is the right move and a button would
+suggest an action nobody needs.
+
+The six metric tiles under the stars follow the same line: **a dash
+means "not delivered" and never "zero"**. "0 Unterbrechungen" is an
+accusation, "-" is a statement about the source — so each tile first
+asks whether the source delivered that kind of event at all. Three of
+them (interrupts/dispels, deaths with their cause, flask and food) were
+added in 3.0.0 out of data that had been in the snapshot all along and
+appeared nowhere, although the rating beside them is computed from it.
+
+**`_apply_overview()` and `_apply_metric_tiles()` take the snapshot as
+an argument** rather than asking `service.current()` beside it.
+`_apply_snapshot()` builds profile and plan from exactly that state; a
+second source for the same answer is provably different during a replay,
+where the stars then described the played second and the numbers under
+them the last published state. Same rule that gives the app one snapshot
+in the first place.
+
+**`gui/widgets/tv/encounter_meta.py` says which fight is being rated** —
+boss, difficulty, pull, outcome, average. Difficulty and outcome are not
+decoration: the same boss heroic and normal are two different standards,
+and a wipe at 80 % explains a weak cooldown rating by itself. It is
+Qt-free like `analysis_gap.py` and for the same reason, and
+`addon/addon_payloads.py` ships the finished sentence as
+`encounterText`, because the addon assembled its own from `encounter`
+and `pull` until 3.0.0.0 — a second formulation that eventually drifts.
+Its `outcome_text()` has **three** answers, not two: while the fight is
+running the outcome is *open*, and reading it off the live boss bar
+would be a claim about a fight still in progress — four different ones
+per second in a replay.
+
 **A single pull cannot answer "am I getting better?"** The Academy rated exactly the fight on screen and nothing else: a `PlayerProfile` is built from one snapshot and is gone when the next one arrives, `RaidDataService.history()` keeps completed pulls only for the running session and without stars, and nothing anywhere kept a rating past the day — `gui/widgets/academy/history_card.py` said so in its own empty state, which is the honest version of a missing feature. Since 2.3.5 it is filled: `analyzer/academy/progression.py` is the pure half (what a recorded pull is, which pulls count, and what a series of them says), `core/academy_history.py` the store (`academy_history.json` under `Paths.config()` — measurements that cannot be recomputed once a WarcraftLogs report ages out are user data, not cache). Six rules, each of them the `stars == 0` line in another guise:
 
 - **Only finished pulls, and only from `MIN_PULL_SECONDS`.** `qualifies()` requires `in_combat == False`, which covers all three paths at once (the live source keeps serving the finished fight, an archived fight is over by definition, and a replay sets the flag only in its last frame). Mid-fight every rating moves by the second, so a point taken from the middle would describe a pull that never happened — and in a replay it would produce one per frame.
@@ -148,6 +190,68 @@ Both WeintTV and the Academy can also show a single, long-finished WarcraftLogs 
 `RaidDataService` grows a `MODE_LIVE`/`MODE_ARCHIVE` mode plus an `ArchiveState` (reports/fights lists, loading/error flags per step, current selection), exposed via `archive_state()` and mutated through `enter_archive_mode()` → `select_archive_report()` → `select_archive_fight()` → `show_live()`, each step notifying `gui/widgets/tv/archive_picker.py` (shared by both pages) through the `archiveChanged` signal. Each step's HTTP call runs in its own short-lived thread (same pattern as `WarcraftLogsProvider`'s fetch thread) so a slow bot response never freezes the UI; a stale in-flight result (user already picked something else by the time it lands) is detected and dropped. Picking a fight publishes a normal `RaidSnapshot` via `_publish(snapshot, track=False)` — same function the live poll uses, `track=False` just means it doesn't pollute the session's `PullSummary` history, since it isn't a pull that's actually happening now. While pinned to an archived fight, the live poll thread keeps running in the background (harmless — it's either pure computation or reads from an existing cache) but its results are discarded rather than published, so switching back to Live is instant instead of waiting for the next poll tick.
 
 `core/warcraftlogs_archive_client.py` is the HTTP half for three additional bot endpoints (report list, fight list per report, one fight by ID) — same auth/error shape as the live client. **Trash is not a pull**: WarcraftLogs keeps it in the same `fights` list and marks it with `encounterID == 0`, so `build_fight_list()` skips `encounter_id <= 0` — a trash pack has no boss percentage, no meaningful pull number and no tactic to rate against, but there are dozens of them between the handful of fights worth opening. The bot filters too; this side filters anyway because the list comes from a server that is not updated together with the app. The single-fight endpoint deliberately returns the *exact same JSON shape* as the live endpoint's `"ok"` response, so `snapshot_from_payload()` handles both live and archived fights unchanged (just with `live=False` for the latter). Full contract for all three in `docs/warcraftlogs-bridge.md`; **none of the three bot endpoints exist yet either** — same "reports gracefully as unavailable, mock/live stays usable" story as the live endpoint.
+
+#### Finding an archived pull: the browser, not two dropdowns
+
+Through 2.8.0 the archive was two combo boxes in a row — twenty
+identical-looking reports in the first, sixty pulls in the second, all
+shaped "Pull 14 · Garrosh · 42 % · 06:31" and in no order but the
+evening's. Reported as "it is quite complicated to find archived logs",
+and that is the right description: the data was all there and it found
+nothing. `gui/dialogs/archive_dialog.py` replaces it — evenings on the
+left, that evening's pulls grouped by boss on the right, a search field,
+a *Nur Kills* switch, and the time of day on every pull.
+
+`core/archive_index.py` is the pure half (grouping, search, best try,
+labels) — no Qt, no `httpx`, same reason as `roster_target()` and
+`build_profile_payload()`: *which rows are shown and how they are
+labelled* is where something can be wrong, and you don't need a window
+for that. Six rules that are not taste:
+
+- **Pulls are grouped in the order of the evening, never alphabetically.**
+  A report tells the story of one night; whoever looks for the last boss
+  scrolls down, while alphabetical order means searching everywhere.
+- **`best_try()`**: a kill beats every wipe, among wipes the lowest boss
+  share wins, at an equal share the longer fight (more happened in it).
+  An empty list answers `None` rather than a placeholder — and a lone
+  wipe is not marked at all, since "best try" without competition is not
+  a distinction. Next to a kill it is not marked either: there the kill
+  is the answer.
+- **A report without a readable date lands under "Ohne Datum" at the
+  end**, not under a guessed day — same line as `stars == 0`. Likewise a
+  pull whose time the bot doesn't know shows no time rather than
+  "00:00"; a pull at midnight is not far-fetched on a raid night.
+- **The rows hand their click out as a Signal to a bound method.** A
+  callback kept in a field that holds the window through its closure
+  builds a cycle the collector resolves in arbitrary order — clear the
+  window before its children and the C++ object is gone while Qt is
+  still reaching into it: SIGSEGV with **no Python traceback**, the same
+  class of bug as the `QCloseEvent` handed to `hideEvent` in the overlay
+  window, and the same fix as in `SegmentedControl`.
+  `tests/test_archive_dialog.py` builds the window repeatedly and
+  collects in between.
+- **Both columns compare a signature before rebuilding.**
+  `archiveChanged` arrives several times during one load, and an
+  unconditional rebuild resets the scroll position while somebody is
+  reading it — the same trap as the `ArchivePicker` and the WeakAura
+  list.
+- **The window closes only for the pull clicked *in it*** (`_awaiting`).
+  On opening, the pull from before is usually still selected and long
+  since loaded, so "finished loading" alone is no reason to close
+  anything. An error closes nothing at all, or the message would vanish
+  in the moment it is meant to be read. And it does not close on the
+  click either: one archived pull costs the bot minutes, and a window
+  that shuts on click leaves the user in front of a page that
+  inexplicably fails to change.
+
+`ArchivePicker` is what remains in the page: the mode switch, the button
+into the browser, and one line saying **what is loaded** — deliberately
+not what is selected. The old combo boxes showed the selection, so after
+a failed fetch they still named the pull the user did not have in front
+of them. The sentence is formulated in `archive_index.selection_text()`
+so both pages name the same fact identically. The browse button stays
+available in live mode (*lock, don't hide*): "look at a past pull" is an
+intention, not a state.
 
 ### Replay: playing a finished pull back second by second
 

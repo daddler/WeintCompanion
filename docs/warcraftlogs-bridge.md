@@ -967,6 +967,8 @@ GET /companion/warcraftlogs/reports/{code}/fights
       "kill": false,
       "boss_percentage": 42.5,
       "duration": 187.4,
+      "start": "2026-09-05T19:47:03Z",
+      "size": 25,
       "pull_number": 7
     }
   ]
@@ -977,8 +979,26 @@ Ein `404` bedeutet "dieser Report-Code existiert nicht" und wird von
 der Companion-App entsprechend angezeigt. `id` ist das einzige
 Pflichtfeld (Einträge ohne nutzbare ID werden verworfen); `name`,
 `kill`, `boss_percentage`, `duration` und `pull_number` bilden
-zusammen die Zeilenbeschriftung im Dropdown (z. B.
+zusammen die Zeilenbeschriftung in der Auswahl (z. B.
 "Pull 7 · Horridon · 42 % · 03:07").
+
+**`start` ist die Uhrzeit des Pulls, nicht sein Versatz im Bericht.**
+WarcraftLogs zählt `fight.startTime` ab Beginn der Aufzeichnung;
+absolut ist allein `report.startTime`, und erst beide zusammen ergeben
+einen Zeitpunkt. Gebraucht wird er, weil ein Raidabend zwanzig Pulls
+auf denselben Boss hat: "Pull 14" macht keinen davon wiedererkennbar,
+"21:47" schon. Kennt der Bot die Berichtszeit nicht, sendet er `null`
+statt eines Versatzes — der sähe aus wie eine Uhrzeit und wäre von
+einer echten nicht zu unterscheiden.
+
+`size` ist die Raidgröße des Kampfes (10 oder 25). Sie steht in
+derselben Antwort von WarcraftLogs und beantwortet in einem gemischten
+Bericht die Frage, welcher der beiden Raids dieser Pull war.
+
+Beide Felder sind **additiv**: ein älterer Bot sendet sie nicht, und
+die App behandelt ihr Fehlen als "keine Angabe" statt als Befund —
+dieselbe Regel wie bei `lineup` im WCIMPORT-Format und bei
+`days[].me` im Terminplan.
 
 **Nur Bosskämpfe.** WarcraftLogs führt Trash in derselben
 `fights`-Liste und unterscheidet es über `encounterID == 0`. Der Bot
