@@ -38,7 +38,7 @@ import re
 
 from dataclasses import dataclass, field
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -639,6 +639,82 @@ def _render_emphasis(text: str) -> str:
     return rendered.replace("\n\n", "<br><br>").replace("\n", "<br>")
 
 
+class _PageStack(QStackedWidget):
+    """
+    Ein Stapel, der so hoch ist wie die Seite, die gerade dran ist -
+    nicht wie die längste.
+
+    `QStackedWidget` meldet von sich aus das Maximum über alle Seiten,
+    damit beim Umblättern nichts springt. In einem `QScrollArea` ist
+    genau das falsch: der Rundgang hat **eine** lange Seite (die
+    Einstellungen, 662 px) und sechzehn kurze, und mit dem Maximum trug
+    jede von ihnen eine Bildlaufleiste - 170 px weit, ins Leere.
+
+    Das ist keine Kosmetik. Eine Leiste, die auf allen Seiten steht,
+    sagt auf keiner mehr etwas: ausgerechnet dort, wo die Seite
+    wirklich weitergeht, sieht sie aus wie überall sonst, und wer nicht
+    scrollt, verpasst die halbe Seite. Dieselbe Regel, nach der auch
+    das Changelog-Popup des Addons eine Leiste ohne Bildlauf
+    ausblendet.
+
+    **Die Höhe wird gesetzt, nicht gemeldet.** Weder eine
+    überschriebene `sizeHint()` noch `QSizePolicy.Ignored` an den
+    verdeckten Seiten hilft: das darunterliegende `QStackedLayout`
+    bildet sein Maximum über alle Seiten und setzt daraus die Grösse
+    des Stapels - beides wird davon schlicht überstimmt (nachgemessen,
+    die Leiste blieb auf allen 17 Seiten stehen). Also wird die Höhe
+    beim Blättern festgesetzt.
+
+    Und **mindestens** so hoch wie das Sichtfeld: eine kurze Seite soll
+    oben stehen und nicht in einem zu kleinen Kasten schweben.
+
+    Eine Leisten-Richtlinie (`ScrollBarAlwaysOff`) wäre der falsche
+    Weg - sie machte die eine Seite unerreichbar, statt die sechzehn
+    falschen Leisten loszuwerden.
+    """
+
+    def __init__(self, parent=None):
+
+        super().__init__(parent)
+
+        self.currentChanged.connect(self._fit_to_page)
+
+    def set_viewport_height(self, height: int):
+        """
+        Das Sichtfeld, unter das der Stapel nicht schrumpfen soll.
+        Wird vom Fenster gesetzt, weil nur es das Bildlauffeld kennt.
+        """
+
+        self._viewport_height = max(0, int(height))
+
+        self._fit_to_page()
+
+    def _fit_to_page(self, *_args):
+
+        page = self.currentWidget()
+
+        if page is None:
+            return
+
+        #
+        # Das Layout der Seite erst rechnen lassen: die Texte brechen
+        # um, und ein Grössenhinweis von vor dem Umbruch beschreibt
+        # eine andere Seite.
+        #
+
+        layout = page.layout()
+
+        if layout is not None:
+            layout.activate()
+
+        self.setFixedHeight(
+            max(
+                getattr(self, "_viewport_height", 0),
+                page.sizeHint().height(),
+            )
+        )
+
+
 class WhatsNewDialog(QDialog):
     """
     Das Fenster selbst. Mit nur einer Seite blendet sich die
@@ -689,7 +765,7 @@ class WhatsNewDialog(QDialog):
         root.setContentsMargins(32, 28, 32, 22)
         root.setSpacing(tokens.SPACE[2])
 
-        self.stack = QStackedWidget()
+        self.stack = _PageStack()
 
         for page in pages:
             self.stack.addWidget(_DialogPage(page))
@@ -709,6 +785,15 @@ class WhatsNewDialog(QDialog):
         self._scroll = scroll
 
         root.addWidget(scroll, 1)
+
+        #
+        # Der Stapel richtet seine Höhe nach der gezeigten Seite und
+        # braucht dafür das Sichtfeld - siehe _PageStack. Das Fenster
+        # hat eine feste Grösse, also genügt es, das einmal nach dem
+        # Aufbau zu setzen.
+        #
+
+        self._scroll.viewport().installEventFilter(self)
 
         #
         # Fortschritt. Bei zwanzig Seiten sagen Punkte allein nicht mehr,
@@ -874,6 +959,18 @@ class WhatsNewDialog(QDialog):
 
         if bar is not None:
             bar.setValue(0)
+
+    def eventFilter(self, watched, event):
+        """
+        Die Höhe des Sichtfelds steht erst fest, wenn Qt das Fenster
+        ausgelegt hat - im Konstruktor ist sie noch der Vorgabewert.
+        Ein Grössenereignis ist der einzige verlässliche Anlass.
+        """
+
+        if watched is self._scroll.viewport() and event.type() == QEvent.Resize:
+            self.stack.set_viewport_height(event.size().height())
+
+        return super().eventFilter(watched, event)
 
     def _go_back(self):
 

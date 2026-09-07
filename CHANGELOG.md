@@ -117,6 +117,7 @@ Satz — er braucht WeintCodex 3.0.0.0.
 - *Einstellungen → Allgemein*: aus „Willkommens-Tour“ wird *Einführung*, und der Text sagt, was darin steht
 
 ### Behoben
+- In der Einführung stand auf jeder Seite eine Bildlaufleiste, obwohl nur eine Seite wirklich weitergeht — und im Was-ist-neu-Fenster scrollten kurze Einträge tausende Pixel ins Leere
 - In der Einführung standen an fünf Stellen Sternchen im Text, statt die Stelle hervorzuheben, die sie meinen — ausgerechnet dort, wo ein Weg genannt wird
 - Eine fehlgeschlagene Addon-Installation wurde als „Addon erfolgreich aktualisiert" ins Protokoll geschrieben
 - „Zugriff verweigert" beim Aktualisieren nennt jetzt die Ursache und den nächsten Schritt statt der Meldung des Betriebssystems
@@ -127,6 +128,7 @@ Satz — er braucht WeintCodex 3.0.0.0.
 - Die Kennzahlen unter den Sternen lasen den zuletzt veröffentlichten Stand statt den gezeigten. In einer Wiedergabe beschrieben Sterne und Zahlen darunter damit zwei verschiedene Sekunden
 
 ### Technisch
+- `_PageStack` gibt dem Bildlauffeld die Höhe der **gezeigten** Seite statt der längsten. `QStackedWidget` meldet von sich aus das Maximum über alle Seiten; die Höhe wird deshalb beim Blättern gesetzt und nicht gemeldet — weder eine überschriebene `sizeHint()` noch `QSizePolicy.Ignored` an den verdeckten Seiten kommt gegen das `QStackedLayout` an (nachgemessen: die Leiste blieb auf allen 17 Seiten stehen). Mindestens so hoch wie das Sichtfeld, dessen Höhe über einen Ereignisfilter kommt, weil sie im Konstruktor noch der Vorgabewert ist
 - `_render_emphasis()` kennt zwei Auszeichnungen statt einer: `**fett**` betont einen Satz, `*kursiv*` nennt etwas, das in der Anwendung genau so heisst — dieselbe Trennung wie drüben im Addon, wo Bernstein ausschliesslich „das kann man anklicken" heisst. Die kursive Form gab es im Renderer nicht, also standen die Sternchen selbst auf dem Bildschirm; aufgelöst wird sie **je Abschnitt** und nicht auf dem fertigen Text, sonst könnte ein Sternenpaar über ein `<b>` hinweggreifen. `***` wird nicht geraten, sondern gemieden: es ist als `**`+`*` oder `*`+`**` zu lesen, und diese Mehrdeutigkeit löst kein Markdown-Renderer zufriedenstellend
 - `gui/dialogs/whats_new_dialog.py`: `TOUR_PAGES` ist eine Folge von `TourPage` (Symbolname, Kapitel, Titel, Text, optionaler Knopf) statt eines 3-Tupels mit fertigem Pfad — die Seite färbt ihr Symbol selbst über `tinted_pixmap()` im Akzent, und `_DialogPage` liest den Akzent beim Bauen, was hier zulässig ist: der Dialog ist modal und kann einen Wechsel nicht erleben. Die Farben kommen aus `gui/theme/tokens.py` statt aus dem eingefrorenen Übergangsmodul `gui/theme/colors.py`, woher der bernsteinfarbene Punkt stammte
 - `TOUR_EDITION` (3) steht als `onboarding_tour_edition` **neben** `onboarding_seen_version`: nicht jede Version schreibt die Tour um, und die meisten sollen weiterhin nur das kurze Popup zeigen. Ein unbrauchbarer Wert zählt als „nie gesehen“ — die Tour noch einmal zu zeigen ist der harmlosere der beiden Irrtümer. Vermerkt wird beim **Zeigen**, nicht beim Durchklicken bis zur letzten Seite

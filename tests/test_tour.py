@@ -454,3 +454,123 @@ def test_markup_never_beats_escaping():
 
     assert "<script>" not in _render_emphasis("*<script>*")
     assert "&lt;script&gt;" in _render_emphasis("*<script>*")
+
+
+# --------------------------------------------------
+# Der Bildlauf
+# --------------------------------------------------
+
+
+def _dialog(pages):
+
+    from PySide6.QtWidgets import QApplication
+
+    from core.config import Config
+    from gui.theme.stylesheet import build_stylesheet
+    from gui.theme.theme_manager import init_theme
+    from gui.dialogs.whats_new_dialog import WhatsNewDialog
+
+    app = QApplication.instance() or QApplication([])
+
+    config = Config()
+
+    app.setStyleSheet(build_stylesheet(init_theme(config)))
+
+    dialog = WhatsNewDialog(list(pages))
+
+    dialog.show()
+
+    app.processEvents()
+
+    return app, dialog
+
+
+def _pages_with_a_scrollbar(app, dialog):
+
+    bar = dialog._scroll.verticalScrollBar()
+
+    found = []
+
+    for index in range(dialog.stack.count()):
+
+        dialog.stack.setCurrentIndex(index)
+
+        app.processEvents()
+
+        if bar.isVisible():
+            found.append(index)
+
+    return found
+
+
+def test_only_a_page_that_really_continues_gets_a_scrollbar():
+    """
+    `QStackedWidget` meldet die Höhe seiner **längsten** Seite, damit
+    beim Umblättern nichts springt. In einem Bildlauffeld ist das
+    falsch: der Rundgang hat eine lange Seite und sechzehn kurze, und
+    mit dem Maximum trug jede von ihnen eine Leiste - 170 px weit, ins
+    Leere.
+
+    Eine Leiste, die überall steht, sagt nirgends etwas: auf der einen
+    Seite, die wirklich weitergeht, sieht sie aus wie überall sonst,
+    und wer nicht scrollt, verpasst dort die halbe Seite.
+    """
+
+    pytest.importorskip("PySide6")
+
+    from gui.dialogs.whats_new_dialog import TOUR_PAGES
+
+    app, dialog = _dialog(TOUR_PAGES)
+
+    scrolling = _pages_with_a_scrollbar(app, dialog)
+
+    tall = [
+        index
+        for index, page in enumerate(TOUR_PAGES)
+        if dialog.stack.widget(index).sizeHint().height()
+        > dialog._scroll.viewport().height()
+    ]
+
+    assert scrolling == tall, [TOUR_PAGES[i].title for i in scrolling]
+
+
+def test_a_single_page_never_scrolls_into_nothing():
+
+    pytest.importorskip("PySide6")
+
+    from gui.dialogs.whats_new_dialog import TourPage
+
+    app, dialog = _dialog([TourPage("companion", "Kapitel", "Titel", "kurz")])
+
+    assert _pages_with_a_scrollbar(app, dialog) == []
+
+
+def test_each_changelog_entry_gets_its_own_height():
+    """
+    Im Changelog-Modus wiegt derselbe Fehler schwerer: ein langer
+    Abschnitt neben kurzen liess die kurzen tausende Pixel ins Leere
+    scrollen.
+    """
+
+    pytest.importorskip("PySide6")
+
+    from gui.dialogs.whats_new_dialog import TourPage
+
+    pages = [
+        TourPage("companion", "K", "kurz", "eine Zeile"),
+        TourPage("companion", "K", "lang", "\n\n".join(["Ein Absatz."] * 60)),
+    ]
+
+    app, dialog = _dialog(pages)
+
+    heights = []
+
+    for index in range(dialog.stack.count()):
+
+        dialog.stack.setCurrentIndex(index)
+
+        app.processEvents()
+
+        heights.append(dialog.stack.height())
+
+    assert heights[0] < heights[1]
