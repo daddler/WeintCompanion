@@ -96,6 +96,15 @@ from core.wowsims_export import (
     parse_export,
 )
 from core.wowsims_link import build_link
+from core.target_gear import (
+    SLOT_NAMES,
+    TargetSet,
+    build_transfer as build_target_transfer,
+    changed_slots,
+    compare,
+    foreign_slots,
+    parse_target,
+)
 from core import qelive
 from gui.pages._page import Page
 from gui.theme import tokens
@@ -109,6 +118,17 @@ from gui.widgets.wrapped_label import enable_wrap
 
 
 BASE_PAGE = "https://www.wowsims.com/mop/"
+
+
+def _all_gems(entry):
+    """
+    Alle Steine eines abgelegten Zielzustands, der Reihe nach.
+
+    Die Nullen bleiben drin und werden vom Aufrufer gezählt: eine 0 ist
+    ein Sockel ohne Angabe, kein Stein.
+    """
+
+    return [gem for item in entry.items for gem in item.gems]
 
 
 def _spec_items():
@@ -141,6 +161,10 @@ class SimPage(Page):
 
         self.sync = getattr(manager, "stat_weights_sync", None)
 
+        self.target_store = getattr(manager, "target_gear", None)
+
+        self.target_sync = getattr(manager, "target_gear_sync", None)
+
         #
         # Was zuletzt eingelesen wurde: die skalierte Gewichtung, noch
         # nicht abgelegt. Erst der Knopf darunter macht sie zu einem
@@ -151,6 +175,16 @@ class SimPage(Page):
         self._parsed = None
 
         self._weights: dict[str, int] = {}
+
+        #
+        # Und was an ZIELAUSRUESTUNG zuletzt eingelesen wurde: welche
+        # Steine und welche Umschmiedung der Sim nach seinem
+        # Optimierungslauf vorsieht. Wie die Gewichtung noch nicht
+        # abgelegt - erst der Knopf darunter macht sie zu einem
+        # Eintrag.
+        #
+
+        self._target = None
 
         #
         # Was der WowSimsExporter zuletzt in seine SavedVariables
@@ -170,6 +204,8 @@ class SimPage(Page):
         self._build_paste_card()
 
         self._build_delivery_card()
+
+        self._build_target_card()
 
         self.body.addStretch(1)
 
@@ -564,6 +600,157 @@ class SimPage(Page):
 
         self.addWidget(card)
 
+    def _build_target_card(self):
+        """
+        Schritt 4: die **Zielausrüstung** aus demselben Sim.
+
+        WARUM DAS EINE EIGENE KARTE IST UND KEIN ZUSATZ ZU SCHRITT 3.
+        Die Gewichtung und der Zielzustand sind zwei verschiedene
+        Auskünfte: eine Gewichtung gilt für jede Ausrüstung, ein
+        Zielzustand für genau die, mit der gesimmt wurde. Sie kommen
+        auch aus zwei verschiedenen Knöpfen im Sim (*Stat Weights*
+        gegen *Export → Link/JSON*), und sie wirken im Spiel an
+        verschiedenen Stellen. Unter derselben Überschrift wäre nicht
+        zu sehen, welche von beiden gerade fehlt.
+
+        **Das Eingabefeld bleibt aber dasselbe** (Schritt 2): dort
+        gehört hinein, was aus dem Sim kommt, und welche der beiden
+        Sorten es ist, erkennt `_read()`. Zwei Felder nebeneinander
+        wären die Frage, in welches man einfügt - und die Antwort
+        darauf steht dem Nutzer nirgends zur Verfügung.
+        """
+
+        card = Card()
+
+        self._step(card, "4", "Zielausrüstung übernehmen")
+
+        self._hint(
+            card,
+            "Wenn du im Sim die Umschmiedungen und Steine optimiert hast, "
+            "kopiere dort das Ergebnis (Export → Link oder JSON) und füge "
+            "es oben in dasselbe Feld ein. WeintCodex empfiehlt dann genau "
+            "diese Steine und Umschmiedungen, statt sie selbst noch einmal "
+            "auszurechnen.",
+        )
+
+        self.target_result = QLabel("")
+
+        self.target_result.setFont(font("small"))
+
+        enable_wrap(self.target_result)
+
+        restyle(
+            self.target_result,
+            f"color:{tokens.WHITE};background:transparent;",
+        )
+
+        card.root.addWidget(self.target_result)
+
+        #
+        # Der Satz, der die eine Frage beantwortet, die dieses Format
+        # selbst nicht beantwortet: ist das wirklich ein
+        # Optimierungsergebnis, oder der Ausgangszustand? Siehe
+        # `_target_notes()`.
+        #
+
+        self.target_notes = QLabel("")
+
+        self.target_notes.setFont(font("small"))
+
+        enable_wrap(self.target_notes)
+
+        restyle(
+            self.target_notes,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+        card.root.addWidget(self.target_notes)
+
+        self.target_problem = QLabel("")
+
+        self.target_problem.setFont(font("small"))
+
+        enable_wrap(self.target_problem)
+
+        restyle(
+            self.target_problem,
+            f"color:{tokens.STATE_TEXT['warn']};background:transparent;",
+        )
+
+        card.root.addWidget(self.target_problem)
+
+        self.target_apply = HeroButton(
+            "Zielausrüstung für diese Spezialisierung übernehmen"
+        )
+
+        self.target_apply.clicked.connect(self._apply_target)
+
+        self.target_apply.setEnabled(False)
+
+        card.root.addWidget(self.target_apply, 0, Qt.AlignLeft)
+
+        self.target_stored = QLabel("")
+
+        self.target_stored.setFont(font("body"))
+
+        enable_wrap(self.target_stored)
+
+        restyle(
+            self.target_stored,
+            f"color:{tokens.WHITE};background:transparent;",
+        )
+
+        card.root.addWidget(self.target_stored)
+
+        self.target_transfer = QLineEdit()
+
+        self.target_transfer.setReadOnly(True)
+
+        self.target_transfer.setFont(font("mono"))
+
+        self.target_transfer.setFixedHeight(36)
+
+        card.root.addWidget(self.target_transfer)
+
+        buttons = QHBoxLayout()
+
+        buttons.setContentsMargins(0, 0, 0, 0)
+
+        buttons.setSpacing(tokens.SPACE[2])
+
+        self.target_copy = HeroButton("String kopieren")
+
+        self.target_copy.clicked.connect(self._copy_target_transfer)
+
+        buttons.addWidget(self.target_copy)
+
+        self.target_remove = HeroButton(
+            "Zielausrüstung entfernen", primary=False
+        )
+
+        self.target_remove.clicked.connect(self._remove_target)
+
+        buttons.addWidget(self.target_remove)
+
+        buttons.addStretch(1)
+
+        card.root.addLayout(buttons)
+
+        self.target_copy_state = QLabel("")
+
+        self.target_copy_state.setFont(font("small"))
+
+        enable_wrap(self.target_copy_state)
+
+        restyle(
+            self.target_copy_state,
+            f"color:{tokens.TEXT['faint']};background:transparent;",
+        )
+
+        card.root.addWidget(self.target_copy_state)
+
+        self.addWidget(card)
+
     # --------------------------------------------------
     # Zustand
     # --------------------------------------------------
@@ -669,6 +856,8 @@ class SimPage(Page):
         self._draw_gear()
 
         self._draw_stored()
+
+        self._draw_target()
 
     def _follow_reported_spec(self):
         """
@@ -921,6 +1110,8 @@ class SimPage(Page):
 
         self._draw_stored()
 
+        self._draw_target()
+
     def _on_spec_changed(self):
 
         self._draw_source()
@@ -935,6 +1126,8 @@ class SimPage(Page):
         self._draw_gear()
 
         self._draw_stored()
+
+        self._draw_target()
 
     # --------------------------------------------------
     # Schritt 1: was der Sim bekommt
@@ -1127,6 +1320,16 @@ class SimPage(Page):
 
         self._weights = {}
 
+        self._target = None
+
+        self.target_result.setText("")
+
+        self.target_notes.setText("")
+
+        self.target_problem.setText("")
+
+        self.target_apply.setEnabled(False)
+
         self.result.setText("")
 
         self.notes.setText("")
@@ -1138,6 +1341,22 @@ class SimPage(Page):
     def _read(self):
 
         text = self.input.toPlainText()
+
+        #
+        # ZUERST DIE ZIELAUSRUESTUNG. Beide Sorten Text kommen aus
+        # demselben Sim und in dasselbe Feld; unterschieden werden sie
+        # an ihrer Gestalt, nicht daran, in welches Feld jemand
+        # eingefügt hat (siehe `_build_target_card()`).
+        #
+        # `parse_target()` ist dabei die STRENGERE von beiden: sie
+        # erkennt nur eine Adresse, einen Base64-Rumpf oder JSON. Eine
+        # getippte Gewichtung ("Hit 1.77") ist keins davon und fällt
+        # deshalb sicher an `parse()` durch - andersherum wäre es
+        # nicht so.
+        #
+
+        if self._read_target(text):
+            return
 
         parsed = parse(text)
 
@@ -1327,6 +1546,305 @@ class SimPage(Page):
             )
 
         return lines
+
+    # --------------------------------------------------
+    # Die Zielausrüstung
+    # --------------------------------------------------
+
+    def _read_target(self, text: str) -> bool:
+        """
+        Den eingefügten Text als Sim-**Ergebnis** lesen.
+
+        Gibt `True` zurück, wenn er eins war - dann hat `_read()` hier
+        nichts mehr zu tun. `False` heisst "das war keine
+        Zielausrüstung" und ist ausdrücklich kein Fehler: derselbe
+        Knopf liest auch Gewichtungen.
+        """
+
+        target = parse_target(text)
+
+        if target is None or not target.known:
+            return False
+
+        self._target = None
+
+        self.target_result.setText("")
+
+        self.target_notes.setText("")
+
+        self.target_apply.setEnabled(False)
+
+        if not target.usable:
+
+            #
+            # Erkannt, aber unbrauchbar - das ist etwas anderes als
+            # "nicht erkannt", und es führt zu einem anderen nächsten
+            # Schritt: im Sim erst optimieren, dann exportieren.
+            #
+
+            self.target_problem.setText(
+                "Erkannt als "
+                + target.source_label
+                + ", aber darin steht weder ein Sockelstein noch eine "
+                "Umschmiedung. "
+                + (" ".join(target.problems) if target.problems else "")
+            )
+
+            return True
+
+        self._target = target
+
+        self.target_problem.setText(
+            " ".join(target.problems) if target.problems else ""
+        )
+
+        self.target_result.setText(
+            "{}: {} Ausrüstungsteile, {} Sockelsteine, "
+            "{} Umschmiedungen.".format(
+                target.source_label,
+                target.item_count,
+                target.gem_count,
+                target.reforge_count,
+            )
+        )
+
+        self.target_notes.setText(" ".join(self._target_notes(target)))
+
+        self.target_apply.setEnabled(True)
+
+        return True
+
+    def _target_notes(self, target) -> list[str]:
+        """
+        Was neben den Zahlen noch zu sagen ist - und alles davon wird
+        gesagt.
+
+        DIE WICHTIGSTE ZEILE IST DIE ERSTE, und sie beantwortet eine
+        Frage, die das Format selbst nicht beantwortet: **ist das
+        wirklich ein Optimierungsergebnis?** Der Sim schreibt heraus,
+        was in seiner Oberfläche gerade eingestellt ist. Wer
+        importiert und sofort exportiert, bekommt seinen
+        Ausgangszustand zurück - und der sähe hier aus wie eine
+        Optimierung.
+
+        Nachsehen lässt sich das an genau einer Stelle: neben dem, was
+        der WowSimsExporter als **angelegt** meldet. Unterscheidet sich
+        nichts, sind zwei Erklärungen möglich, und die Seite nennt
+        beide, statt sich für eine zu entscheiden. Eine Zielausrüstung,
+        die in Wahrheit der Iststand ist, brächte im Spiel jede
+        Empfehlung zum Schweigen ("alles schon richtig") - und das wäre
+        von einer wirklich fertigen Ausrüstung nicht zu unterscheiden.
+        Dieselbe Linie wie `stars == 0`.
+        """
+
+        lines: list[str] = []
+
+        if self._export is None:
+
+            lines.append(
+                "Ob darin wirklich das Ergebnis eines Optimierungslaufs "
+                "steht, lässt sich hier nicht prüfen — dafür müsste der "
+                "WowSimsExporter deine angelegte Ausrüstung gemeldet "
+                "haben."
+            )
+
+        else:
+
+            diffs = compare(target, self._export.items)
+
+            geaendert = changed_slots(diffs)
+
+            fremd = foreign_slots(diffs)
+
+            if geaendert:
+
+                namen = ", ".join(diff.slot_name for diff in geaendert[:6])
+
+                lines.append(
+                    "Gegenüber deiner angelegten Ausrüstung ändert sich "
+                    f"etwas an {len(geaendert)} Teilen ({namen}"
+                    + (", …" if len(geaendert) > 6 else "")
+                    + ")."
+                )
+
+            else:
+
+                lines.append(
+                    "Achtung: das ist Stück für Stück dasselbe, was du "
+                    "gerade trägst. Entweder ist bereits alles optimal — "
+                    "oder im Sim lief noch kein Optimierungslauf, und du "
+                    "hast deinen Ausgangszustand wieder exportiert."
+                )
+
+            if fremd:
+
+                lines.append(
+                    f"{len(fremd)} Teile kennt deine gemeldete Ausrüstung "
+                    "nicht (oder es steckt dort inzwischen etwas anderes) "
+                    "— für die gilt das Ziel im Spiel nicht."
+                )
+
+        if not target.spec_key:
+
+            lines.append(
+                "Die Ausgabe nennt keine Spezialisierung — übernommen "
+                "wird sie für die oben gewählte."
+            )
+
+        elif target.spec_key != self.selected_spec():
+
+            lines.append(
+                "Die Ausgabe gehört zu "
+                + spec_label(target.spec_key)
+                + " — übernommen wird sie trotzdem für die oben gewählte "
+                "Spezialisierung."
+            )
+
+        return lines
+
+    def _apply_target(self):
+
+        if self._target is None or self.target_store is None:
+            return
+
+        key = self.selected_spec()
+
+        if not key:
+            return
+
+        sheet = self.selected_character()
+
+        entry = self.target_store.put(
+            TargetSet(
+                gear=self._target,
+                spec_key=key,
+                character=str(sheet.get("name", "")) or self._target.character,
+                realm=str(sheet.get("realm", "")) or self._target.realm,
+                created=int(time.time()),
+            )
+        )
+
+        #
+        # Sofort zustellen statt auf den Sync-Takt zu warten - dieselbe
+        # Überlegung wie beim Übernehmen einer Gewichtung.
+        #
+
+        if self.target_sync is not None:
+            self.target_sync.publish_now()
+
+        self._clear_input()
+
+        self.refresh()
+
+        logger = getattr(self.manager, "logger", None)
+
+        if logger is not None:
+
+            logger.success(
+                f"Zielausrüstung für {spec_label(entry.spec_key)} "
+                f"übernommen ({len(entry.items)} Teile)."
+            )
+
+    def _remove_target(self):
+
+        if self.target_store is None:
+            return
+
+        if not self.target_store.remove(self.selected_spec()):
+            return
+
+        if self.target_sync is not None:
+            self.target_sync.publish_now()
+
+        self.target_copy_state.setText("")
+
+        self.refresh()
+
+    def _copy_target_transfer(self):
+
+        text = self.target_transfer.text()
+
+        if not text:
+            return
+
+        clipboard = QGuiApplication.clipboard()
+
+        if clipboard is None:
+
+            self.target_copy_state.setText(
+                "Kopieren geht auf diesem System nicht."
+            )
+
+            return
+
+        clipboard.setText(text)
+
+        self.target_copy_state.setText(
+            "Kopiert. Im Spiel unter Import einfügen — wirkt sofort, ohne "
+            "/reload."
+        )
+
+    def target_gear_store_entry(self):
+        """
+        Der abgelegte Zielzustand der gewählten Spezialisierung.
+
+        Eine Zeile, damit die Seite und ihr Testlauf dieselbe Frage auf
+        demselben Weg stellen - zwei Zugriffe auf denselben Speicher
+        liefen irgendwann auseinander.
+        """
+
+        if self.target_store is None:
+            return None
+
+        return self.target_store.get(self.selected_spec())
+
+    def _draw_target(self):
+        """
+        Was abgelegt ist - und der Weg ins Spiel.
+
+        Wie bei der Gewichtung zwei Wege, und beide stehen da: über die
+        Addon-Brücke (nach dem nächsten `/reload`) oder als String ohne
+        Neuladen.
+        """
+
+        entry = self.target_gear_store_entry()
+
+        if entry is None:
+
+            self.target_stored.setText(
+                "Für diese Spezialisierung ist noch keine Zielausrüstung "
+                "abgelegt — im Spiel rechnet WeintCodex Sockel und "
+                "Umschmiedungen dann wie bisher selbst aus."
+            )
+
+            self.target_transfer.setText("")
+
+            self.target_copy.setEnabled(False)
+
+            self.target_remove.setEnabled(False)
+
+            return
+
+        steine = sum(1 for gem in _all_gems(entry) if gem)
+
+        self.target_stored.setText(
+            "Abgelegt: {} Teile, {} Sockelsteine, {} Umschmiedungen "
+            "(vom {}). Im Spiel folgen Sockel- und Umschmiede-Empfehlung "
+            "ab dem nächsten /reload genau diesen Angaben.".format(
+                len(entry.items),
+                steine,
+                sum(1 for item in entry.items if item.reforging),
+                time.strftime("%d.%m.%Y", time.localtime(entry.created))
+                if entry.created
+                else "unbekannt",
+            )
+        )
+
+        self.target_transfer.setText(build_target_transfer(entry))
+
+        self.target_copy.setEnabled(True)
+
+        self.target_remove.setEnabled(True)
 
     def _apply(self):
 

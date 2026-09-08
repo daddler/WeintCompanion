@@ -446,6 +446,290 @@ def encode_fragment(items) -> bytes:
     return base64.b64encode(zlib.compress(encode_settings(items), 9))
 
 
+#
+# --------------------------------------------------
+# Und derselbe Weg zurueck
+# --------------------------------------------------
+#
+# Der Sim gibt seine Einstellungen in genau der Form heraus, in der
+# diese Datei sie schreibt: als Adresse mit einem gepackten Protobuf
+# hinter dem `#`, oder als JSON. Beides ist nach einem Optimierungslauf
+# die **Zielausruestung** - welche Steine und welche Umschmiedung der
+# Sim fuer jeden Platz vorsieht.
+#
+# Bis hierher konnte die Companion nur hinein und nicht heraus, und
+# deshalb musste WeintCodex jede Steinentscheidung selbst noch einmal
+# treffen, obwohl sie im Sim laengst gefallen war. Der Rueckweg steht
+# hier und nicht in einer eigenen Datei, weil er dieselben
+# Feldnummern liest, die oben geschrieben werden: zwei Dateien mit
+# denselben Konstanten sind genau die Doppelpflege, an der diese
+# Grenze scheitern wuerde.
+#
+# GELESEN WIRD STRENG. Ein Protobuf traegt keine Feldnamen; ein
+# unbekanntes Feld wird uebersprungen (so verlangt es das Format), ein
+# BESCHAEDIGTER Rahmen dagegen fuehrt zu None statt zu einer halben
+# Ausruestung. Eine Ausruestung, der drei Plaetze fehlen, sieht aus
+# wie eine, die drei Plaetze frei hat.
+#
+
+
+class DecodeError(ValueError):
+    """Der Rahmen war keiner - siehe `read_varint`/`iter_fields`."""
+
+
+def read_varint(data: bytes, pos: int) -> tuple[int, int]:
+    """
+    Eine Varint-Zahl ab `pos`; gibt Wert und die neue Stelle zurueck.
+
+    Zehn Gruppen sind das Maximum fuer 64 Bit - was darueber
+    hinauslaeuft, ist kein Varint, sondern Zufall.
+    """
+
+    value = 0
+    shift = 0
+
+    while True:
+
+        if pos >= len(data):
+            raise DecodeError("Varint reicht ueber das Ende hinaus.")
+
+        chunk = data[pos]
+
+        pos += 1
+
+        value |= (chunk & 0x7F) << shift
+
+        if not chunk & 0x80:
+            break
+
+        shift += 7
+
+        if shift > 63:
+            raise DecodeError("Varint ist zu lang.")
+
+    return value, pos
+
+
+def iter_fields(data: bytes):
+    """
+    Die Felder einer Nachricht als `(Nummer, Drahtformat, Wert)`.
+
+    `Wert` ist eine Zahl (Varint) oder ein `bytes` (laengenbegrenzt).
+    Die beiden festen Breiten (32/64 Bit) kommen in den Nachrichten
+    dieser Datei nicht vor, werden aber uebersprungen statt den Lauf
+    abzubrechen - sie koennten in einem Feld stehen, das uns nicht
+    interessiert.
+    """
+
+    pos = 0
+
+    while pos < len(data):
+
+        tag, pos = read_varint(data, pos)
+
+        number, wire = tag >> 3, tag & 0x07
+
+        if number == 0:
+            raise DecodeError("Feldnummer 0 gibt es nicht.")
+
+        if wire == 0:
+            value, pos = read_varint(data, pos)
+            yield number, wire, value
+
+        elif wire == 2:
+
+            length, pos = read_varint(data, pos)
+
+            if pos + length > len(data):
+                raise DecodeError("Feldlaenge reicht ueber das Ende hinaus.")
+
+            yield number, wire, data[pos:pos + length]
+
+            pos += length
+
+        elif wire == 5:
+            pos += 4
+
+        elif wire == 1:
+            pos += 8
+
+        else:
+            raise DecodeError(f"Unbekanntes Drahtformat {wire}.")
+
+        if pos > len(data):
+            raise DecodeError("Nachricht endet mitten in einem Feld.")
+
+
+def _signed32(value: int) -> int:
+    """
+    Protobuf schreibt ein negatives `int32` als Zweierkomplement ueber
+    64 Bit (siehe `encode_varint`). Zurueck also genauso.
+    """
+
+    if value >= 1 << 63:
+        value -= 1 << 64
+
+    return value
+
+
+def decode_item(blob: bytes) -> SimItem:
+    """
+    Ein `ItemSpec`. Ein leerer Rumpf ist ein **leerer Platz** und kein
+    Fehler - genau dafuer schreibt `field_bytes` ihn auch mit.
+    """
+
+    item_id = enchant = reforging = random_suffix = 0
+    step = tinker = 0
+
+    gems: list[int] = []
+
+    for number, wire, value in iter_fields(blob):
+
+        if number == ITEM_ID and wire == 0:
+            item_id = value
+
+        elif number == ITEM_ENCHANT and wire == 0:
+            enchant = value
+
+        elif number == ITEM_GEMS:
+
+            if wire == 2:
+
+                pos = 0
+
+                while pos < len(value):
+                    gem, pos = read_varint(value, pos)
+                    gems.append(gem)
+
+            elif wire == 0:
+
+                #
+                # Die ungepackte Schreibweise. proto3 packt von sich
+                # aus, aber ein Erzeuger darf beides - und ein Stein,
+                # der dabei verlorenginge, verschoebe alle dahinter.
+                #
+
+                gems.append(value)
+
+        elif number == ITEM_REFORGING and wire == 0:
+            reforging = value
+
+        elif number == ITEM_RANDOM_SUFFIX and wire == 0:
+            random_suffix = value
+
+        elif number == ITEM_UPGRADE_STEP and wire == 0:
+            step = _signed32(value)
+
+        elif number == ITEM_TINKER and wire == 0:
+            tinker = value
+
+    return SimItem(
+        item_id=item_id,
+        enchant=enchant,
+        gems=tuple(gems),
+        reforging=reforging,
+        random_suffix=random_suffix,
+        upgrade_step=step if -1 <= step <= MAX_UPGRADE_STEP else 0,
+        tinker=tinker,
+    )
+
+
+def decode_equipment(blob: bytes) -> tuple[SimItem, ...]:
+    """
+    Die Ausruestungsliste eines `EquipmentSpec` - **in ihrer
+    Reihenfolge**, leere Plaetze eingeschlossen. Die Position ist der
+    Platz; sie zu verdichten hiesse, die Zweitwaffe in die Waffenhand
+    zu schieben.
+    """
+
+    return tuple(
+        decode_item(value)
+        for number, wire, value in iter_fields(blob)
+        if number == EQUIPMENT_ITEMS and wire == 2
+    )
+
+
+def decode_settings(blob: bytes) -> tuple[SimItem, ...]:
+    """
+    Die Ausruestung aus einer `IndividualSimSettings`.
+
+    Fehlt der Spielerblock oder die Ausruestung darin, kommt eine leere
+    Liste zurueck - das ist etwas anderes als ein kaputter Rahmen, der
+    `DecodeError` wirft.
+    """
+
+    for number, wire, value in iter_fields(blob):
+
+        if number != SETTINGS_PLAYER or wire != 2:
+            continue
+
+        for inner, inner_wire, inner_value in iter_fields(value):
+
+            if inner == PLAYER_EQUIPMENT and inner_wire == 2:
+                return decode_equipment(inner_value)
+
+    return ()
+
+
+def decode_fragment(fragment: str) -> tuple[SimItem, ...]:
+    """
+    Der Teil hinter dem `#` einer Sim-Adresse.
+
+    Base64, darin Deflate im zlib-Rahmen, darin die Nachricht - genau
+    umgekehrt zu `encode_fragment()`. Der Sim schreibt das Base64 ohne
+    Fuellzeichen, deshalb werden sie hier ergaenzt.
+    """
+
+    text = "".join((fragment or "").split())
+
+    if not text:
+        return ()
+
+    text = text.replace("-", "+").replace("_", "/")
+
+    text += "=" * (-len(text) % 4)
+
+    try:
+        packed = base64.b64decode(text, validate=False)
+
+    except Exception as exc:
+        raise DecodeError(f"Kein Base64: {exc}") from exc
+
+    try:
+        raw = zlib.decompress(packed)
+
+    except zlib.error:
+
+        #
+        # Rohes Deflate ohne zlib-Rahmen. `pako.deflateRaw` kommt im
+        # Sim ebenfalls vor; ein Rahmen, den wir nicht kennen, ist
+        # kein Grund, eine lesbare Nachricht wegzuwerfen.
+        #
+
+        try:
+            raw = zlib.decompressobj(-zlib.MAX_WBITS).decompress(packed)
+
+        except zlib.error as exc:
+            raise DecodeError(f"Nicht entpackbar: {exc}") from exc
+
+    return decode_settings(raw)
+
+
+def fragment_of(url: str) -> str:
+    """
+    Der Teil hinter dem `#` einer Adresse - oder "", wenn keiner da
+    ist. Ein blosser Rumpf (jemand hat nur den Teil hinter dem `#`
+    kopiert) gilt als er selbst.
+    """
+
+    text = (url or "").strip()
+
+    if "#" in text:
+        return text.split("#", 1)[1].strip()
+
+    return "" if text.startswith(("http://", "https://")) else text
+
+
 def build_link(url: str, items) -> str:
     """
     Die vollständige Adresse: Seite der Spezialisierung, `?i=g` für

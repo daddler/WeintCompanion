@@ -91,6 +91,7 @@ Linux/Windows/AppImage build commands.
 | Live-Brücke (`companion_live.lua`, überlebt `/reload`) | `docs/live-bridge.md` |
 | Raid-Termin, Countdown, Zusagen | `docs/raid-schedule-bridge.md` |
 | Sim-Gewichte (wowsims/QE Live → Addon) | `docs/stat-weights-bridge.md` |
+| Zielausrüstung (wowsims-Optimierungsergebnis → Addon) | `docs/target-gear-bridge.md` |
 | WarcraftLogs Live/Archiv/Timeline | `docs/warcraftlogs-bridge.md` |
 | WeakAura-Bibliothek (Addon ↔ Companion ↔ Bot) | `docs/weakaura-bridge.md` |
 | Ausrüstung → wowsims-Exporter | `docs/wowsims-exporter-bridge.md` |

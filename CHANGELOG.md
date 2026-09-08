@@ -2,6 +2,58 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 3.1.0
+
+**Dein Sim-Ergebnis geht jetzt vollständig ins Spiel — nicht nur die Gewichtung.**
+Bisher hat die App aus einem Sim-Lauf die Wertegewichte übernommen, und
+WeintCodex hat daraus im Spiel noch einmal selbst ausgerechnet, welcher
+Stein in welchen Sockel gehört. Zwei Rechnungen für dieselbe Frage — und
+die zweite lag manchmal daneben.
+
+Auf *Charakter → Simmen* gibt es dafür einen vierten Schritt. Wenn du im
+Sim fertig optimiert hast, kopierst du dort *Export → Link* (oder *JSON*)
+und fügst es in **dasselbe** Feld ein wie bisher die Gewichtung — die App
+erkennt selbst, welche der beiden Sorten es ist. Danach schlägt
+WeintCodex im Spiel genau die Steine und Umschmiedungen vor, die im Sim
+stehen.
+
+**Und sie sagt dir, ob wirklich optimiert wurde.** Ein Sim-Export
+enthält immer das, was gerade eingestellt ist — wer importiert und
+sofort wieder exportiert, bekommt seinen Ausgangszustand zurück. Die
+Seite stellt das Ergebnis deshalb neben deine angelegte Ausrüstung und
+schreibt hin, an wie vielen Teilen sich etwas ändert. Ändert sich
+nichts, steht das auch da.
+
+Ins Spiel kommt es auf denselben zwei Wegen wie die Gewichtung: über die
+Addon-Brücke nach dem nächsten `/reload`, oder sofort über den
+Import-String.
+
+Verzauberungen bleiben, wie sie waren.
+
+**Sonderraids erscheinen wieder in der Raidübersicht.**
+Ein im Discord erstellter Sonderraid tauchte auf der Übersicht nicht
+auf: das Datum, das der Raidlead eintippt, wurde beim Termin-Abruf in
+einem anderen Format gelesen, als der Bot es ablegt — für jeden über die
+Maske erstellten Sonderraid also gar nicht. Normale Raids waren davon
+nie betroffen.
+
+Läuft ein Sonderraid neben dem Wochentermin, steht der nähere von beiden
+oben und der andere als „Außerdem offen" darunter. Und ein
+**vergangener** Sonderraid drängt sich nicht mehr vor einen laufenden
+Raid — das sah bisher aus, als gäbe es gar keinen Termin.
+
+### Technisch
+
+Neu: `core/target_gear.py` (drei Gestalten eines Sim-Ergebnisses auf eine
+Struktur, Vergleich Ziel gegen Ist), `core/target_gear_store.py`,
+`core/target_gear_sync.py`, ein Protobuf-**Decoder** in
+`core/wowsims_link.py` (dieselben Feldnummern wie der Encoder, keine
+zweite Datei). `SimItem` bleibt die einzige Struktur für einen
+Ausrüstungsplatz. Vertrag: `docs/target-gear-bridge.md`.
+Bot-seitig: `services/raid_dates.py` als die eine Lesart des
+Sonderraid-Datums (bisher drei), und `pick_next_schedule()` sortiert
+bevorstehende Termine vor vergangene.
+
 ## 3.0.1
 
 Diese Fassung ändert nichts, was du in der App siehst.

@@ -278,10 +278,21 @@ das sie nicht kennt.
   inneren Eintrag nicht, und die Companion entfernt es dort
   ausdrücklich: läse sie es, bestimmte die Antwort die
   Rekursionstiefe.
-- Sortiert wird nach dem frühesten Termin. Ein Raid, dessen Datum
-  nicht lesbar ist (Sonderraid mit unbrauchbarer Angabe), steht **am
-  Ende statt gar nicht da** — es gibt ihn, nur sein Termin ist
-  unbekannt.
+- Sortiert wird nach dem frühesten **noch bevorstehenden** Termin, in
+  drei Gruppen: erst die kommenden (der nächste zuerst), dann die
+  vergangenen (der jüngste zuerst), zuletzt die ohne lesbaren Termin.
+  Ein Raid, dessen Datum nicht lesbar ist (Sonderraid mit unbrauchbarer
+  Angabe), steht **am Ende statt gar nicht da** — es gibt ihn, nur sein
+  Termin ist unbekannt.
+- **Ein vergangener Raid drängt sich nicht vor einen laufenden.** Für
+  Standardraids stimmte die reine Sortierung nach dem frühesten Termin
+  immer, denn deren Termine liegen per Konstruktion in der Zukunft. Ein
+  Sonderraid trägt dagegen ein festes Datum, und ein vergangenes ist
+  das früheste von allen: ein Sonderraid von letzter Woche stand damit
+  im Hauptteil der Antwort, während der laufende Standardraid nach
+  `others` rutschte. In der Companion sieht das aus wie **gar kein
+  Termin** — ihre Übersicht zeigt nur bevorstehende Tage, und der
+  Hauptteil hatte keinen mehr.
 - Die Grenze des Vertrags bleibt: auch `others` trägt Titel, Größe,
   Termine und Zahlen — **keine Namen, keine Discord-Nutzer-IDs**.
 
@@ -364,6 +375,18 @@ wird er entfernt (`drop_orphaned_raid()`).
   Datum liefert `days: []`, statt den heutigen Tag zu setzen. Eine
   erfundene Uhrzeit ist in der Anzeige von einer echten nicht zu
   unterscheiden — dieselbe Linie wie `stars == 0` im Analyzer.
+- **Und „lesbar" heißt: von `services/raid_dates.py` gelesen.** Der
+  Raidlead tippt sein Datum in die Maske des Bots, und die beschriftet
+  das Feld mit „Datum (z. B. 17.06.2026)"; abgelegt wird genau diese
+  Zeichenkette. Bis Companion 3.0.2 las `build_schedule_payload()`
+  dasselbe Feld mit `%Y-%m-%d` — für **jeden** über die Maske
+  erstellten Sonderraid schlug das fehl, `days` blieb leer, und die
+  Übersicht sagte für einen Raid, den es gab, „Sobald im Discord ein
+  Termin steht, erscheint er hier". Es gibt seither genau eine Lesart,
+  und alle drei Leser im Bot benutzen sie (Termin-Endpunkt,
+  Anmeldeschluss/Erinnerung, WCIMPORT-Export). Erkannt werden
+  `DD.MM.YYYY` (die Maske) und `YYYY-MM-DD` (ältere Datensätze,
+  Testläufe); alles andere ist **unlesbar** und nicht etwa heute.
 - **Zugesagt ist `active`.** „Vielleicht" und „Ersatzbank" stehen
   daneben, nicht mittendrin.
 - **Die Raidtage stehen an zwei Stellen im Bot**

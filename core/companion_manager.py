@@ -35,6 +35,8 @@ from core.academy_history import day_from_iso
 from core.character_store import CharacterStore
 from core.stat_weights_store import StatWeightsStore
 from core.stat_weights_sync import StatWeightsSync
+from core.target_gear_store import TargetGearStore
+from core.target_gear_sync import TargetGearSync
 from core.weakaura_store import WeakAuraStore
 from core.weakaura_sync import WeakAuraSync
 from core.weakaura_guild_sync import WeakAuraGuildSync
@@ -270,6 +272,23 @@ class CompanionManager(QObject):
             self,
             self.addon_inbox,
             self.stat_weights,
+        )
+
+        #
+        # Und die ZIELAUSRUESTUNG aus demselben Sim: welche Steine und
+        # welche Umschmiedung er nach seinem Optimierungslauf fuer
+        # jeden Platz vorsieht. Eigener Speicher und eigener Kanal
+        # neben den Gewichten, weil es zwei verschiedene Auskuenfte
+        # sind: eine Gewichtung gilt fuer jede Ausruestung, ein
+        # Zielzustand fuer genau die, mit der gesimmt wurde.
+        #
+
+        self.target_gear = TargetGearStore(self)
+
+        self.target_gear_sync = TargetGearSync(
+            self,
+            self.addon_inbox,
+            self.target_gear,
         )
 
         #
@@ -610,6 +629,22 @@ class CompanionManager(QObject):
             )
 
         #
+        # Die Zielausruestung, genauso: eigener try/except, damit ein
+        # Fehler hier weder die Gewichte noch die Auswertung
+        # mitreisst.
+        #
+
+        try:
+
+            self.target_gear_sync.process()
+
+        except Exception as exc:
+
+            self.logger.error(
+                f"Zustellung der Zielausrüstung fehlgeschlagen: {exc}"
+            )
+
+        #
         # Wieder eigener try/except: eine fehlerhafte Auswertung darf
         # weder den Material-Sync noch den Roster-Abruf mitreissen.
         #
@@ -714,6 +749,7 @@ class CompanionManager(QObject):
                 "addon_analysis_sync",
                 "weakaura_sync",
                 "stat_weights_sync",
+                "target_gear_sync",
             ):
 
                 sync = getattr(self, attribute, None)
