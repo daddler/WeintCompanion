@@ -1,82 +1,85 @@
 """
-Simmen: das Ergebnis von wowsims in WeintCodex bringen.
+Simmen: ein Sim-Lauf, ein Ergebnis, ein Weg ins Spiel.
 
-Gesimmt wird auf [wowsims.com/mop]. Was dort herauskommt, sind
-**Wertegewichte** - und die sind die Schnittstelle: das Addon rechnet
-ohnehin mit Gewichten, an drei Stellen (Sockel, Verzauberungen,
-Umschmieden). Bisher war der Weg dazwischen von Hand zu gehen, und man
-musste ihn kennen: Seite der eigenen Spezialisierung heraussuchen,
-Ergebnis kopieren, im Spiel die richtige Unterseite finden und dort in
-ein Eingabefeld einfügen, das man erst suchen muss.
+WAS DER NUTZER DENKT, UND WAS DAS SYSTEM VERLANGTE.
+
+Er denkt: *„Ich simme meinen Charakter und will danach die Empfehlungen
+im WeintCodex haben."* Das System verlangte bis 3.2.0, die interne
+Trennung mitzudenken. Aus einem Sim-Lauf kommen technisch **zwei**
+Auskünfte — die Wertegewichtung (*Stat Weights*) und der Zielzustand
+(*Export → Link/JSON*) —, und die Seite hat sie auch als zwei geführt:
+zwei Befundkarten, zwei Übernehmen-Knöpfe, zwei Entfernen-Knöpfe, zwei
+Runden durch dasselbe Eingabefeld. Wer die zweite Runde vergaß, bekam im
+Spiel eine Empfehlung, der man nicht ansieht, dass ihr die Hälfte fehlt.
+
+**Die Trennung bleibt, sie hört nur auf, die Sorge des Nutzers zu
+sein.** Intern gibt es weiter zwei Speicher, zwei Kanäle und zwei
+Übertragungsstrings — die Gründe dafür stehen in
+`../../docs/stat-weights-bridge.md` und
+`../../docs/target-gear-bridge.md` und haben sich nicht geändert. Was
+sich geändert hat, ist die Klammer darum: `core/sim_run.py` führt beide
+als **einen Lauf**, und diese Seite zeigt genau diesen Lauf.
+
+VIER SCHRITTE, UND JEDER HAT GENAU EINE HAUPTHANDLUNG.
+
+1. **Charakter vorbereiten** — wer wird gesimmt, welche Spezialisierung,
+   und sieht die Companion die angelegte Ausrüstung? Der Schritt hat
+   keinen Knopf: er ist die Antwort auf „ist mein Charakter richtig
+   erkannt".
+2. **Sim öffnen und rechnen lassen** — ein Hauptknopf, daneben nur die
+   beiden Auswege (*Nur die Seite*, *Export kopieren*). Der Satz, der in
+   den Sim schickt, steht hier und nicht in einer eigenen Karte: eine
+   Karte ohne Bedienelement wäre eine Überschrift mit Text, und gelesen
+   wird er ohnehin genau in dem Moment, in dem der Knopf gedrückt wird.
+3. **Sim-Ergebnis einfügen** — **ein** Feld, **ein** Befund, **ein**
+   Knopf. Was eingefügt wird, erkennt die Seite an seiner Gestalt; was
+   noch fehlt, sagt sie. Beide Sorten sammeln sich im selben Lauf, statt
+   sich gegenseitig zu ersetzen.
+4. **Ins Spiel übertragen** — ein Vorgang, zwei Wege dorthin, und die
+   Seite entscheidet, welcher gerade gilt.
+
+WAS DIE SEITE BEANTWORTEN MUSS, UND ZWAR IMMER:
+
+* Was habe ich gerade zu tun?         → die Schrittüberschrift
+* Ist mein Charakter richtig erkannt? → Schritt 1
+* Ist mein Sim-Ergebnis vollständig?  → `parts_line()`
+* Wurde wirklich etwas optimiert?     → `change_line()`
+* Was wird ins Spiel übertragen?      → Schritt 4
+* Muss ich noch etwas tun?            → `next_step()`
+
+Die sechs Sätze stehen in `core/sim_run.py` und nicht hier: sie sind die
+Antwort auf eine Rechnung, und der Testlauf muss sie ohne Qt prüfen
+können — dieselbe Aufteilung wie bei `gap_text()`/`age_text()`.
 
 **Die Companion simmt nicht selbst, und das ist eine Entscheidung.**
-Ein brauchbarer Sim wäre eine eigene Spielsimulation; einer, der nur
-so aussieht, wäre schlimmer als keiner, weil seine Zahlen aussehen wie
+Ein brauchbarer Sim wäre eine eigene Spielsimulation; einer, der nur so
+aussieht, wäre schlimmer als keiner, weil seine Zahlen aussehen wie
 echte. Dieselbe Linie wie im Addon (dort gibt es aus demselben Grund
-keinen Sim) und wie beim Rotationshelfer, der den Tankspecs lieber
-keine Prioritätenliste gibt als eine erfundene. Diese Seite übernimmt
-den **Weg**, nicht die Rechnung.
+keinen Sim) und wie beim Rotationshelfer, der den Tankspecs lieber keine
+Prioritätenliste gibt als eine erfundene. Diese Seite übernimmt den
+**Weg**, nicht die Rechnung.
 
-Drei Schritte, in dieser Reihenfolge, und die Seite nummeriert sie:
-
-1. Sim öffnen - auf der Seite der gewählten Spezialisierung, nicht auf
-   der Startseite. Ein Knopf, der den Handgriff verlangt, den er
-   abnehmen sollte, nimmt nichts ab.
-   Zwei Handgriffe, nicht einer: **erst das Zahnrad neben *Suggest
-   Reforges* und dort *Include gems* anhaken**, dann rechnen lassen.
-   Ohne den Haken optimiert der Sim nur die Umschmiedungen und lässt
-   die Sockelsteine, wie sie stecken - das Ergebnis sieht danach
-   vollständig aus und ist es nicht.
-2. Ergebnis einfügen - die Zeichenkette aus *Stat Weights* oder das
-   Ergebnis aus *Export → Link/JSON*. Beide gehören in dasselbe Feld;
-   welche Sorte es ist, erkennt die Seite. **Gelesen wird beim
-   Einfügen**, der Knopf *Einlesen* ist nur noch da, um einen Fehler
-   zu erfragen: nebenher gelesen wird still, weil eine rote Zeile nach
-   jedem getippten Zeichen nur dazu erzieht, rote Zeilen zu übersehen.
-3. Zielausrüstung übernehmen - dieselbe Karte, zweite Runde durch
-   dasselbe Feld: was *Export → Link/JSON* im Sim ausgibt, gehört
-   ebenfalls oben hinein.
-4. Ins Spiel bringen - **auf zwei Wegen**, und beide stehen da (der
-   Text liegt nach dem Übernehmen schon in der Zwischenablage):
-
-   * Die Companion stellt beides über die Addon-Brücke zu; im Spiel
-     steht es nach dem nächsten `/reload` bereit.
-   * Oder der Text aus **einer** Zeile je Umschlag, der sich ohne
-     Neuladen unter *Import* einfügen lässt.
-
-   Der zweite Weg ist nicht nur bequemer: WoW liest seine
-   SavedVariables zur Laufzeit nicht erneut, und wer gerade im Raid
-   steht, lädt nicht neu.
-
-**Der Ausgang steht am Ende, und er ist einer.** Bis 3.1.1 kam „Ins
-Spiel bringen" *vor* der Zielausrüstung - eine Treppe, die man als
-Schleife läuft: einlesen, rüberbringen, zurück in den Sim, einlesen,
-nochmal rüberbringen. Zwei Strings, zweimal einfügen im Spiel, und der
-zweite blieb regelmäßig liegen. Dass er fehlt, sieht man einer
-Empfehlung im Spiel nicht an.
-
-**Was ankommt, ist ein Vorschlag und keine Einstellung.** Im Spiel
-füllt er die Felder auf *Priorisierung* und wird erst auf Klick
-wirksam - dieselbe Regel, die dort für einen von Hand eingefügten Text
-schon gilt. Eine Gewichtung, die sich nach einem Login von selbst
-geändert hat, wäre von einem Fehler nicht zu unterscheiden. Die Seite
-sagt das an beiden Wegen.
+**Was ankommt, ist ein Vorschlag und keine Einstellung.** Im Spiel füllt
+die Gewichtung die Felder auf *Priorisierung* und wird erst auf Klick
+wirksam. Eine Gewichtung, die sich nach einem Login von selbst geändert
+hat, wäre von einem Fehler nicht zu unterscheiden.
 
 Und dieselbe Zurückhaltung an zwei weiteren Stellen:
 
 * **Die Grenzen aus dem Sim werden genannt, nicht übernommen.** 7,5 %
   Treffer und 15 % Waffenkunde gelten für jeden gleich; sie sind eine
-  Aussage über das Spiel und stehen im Spec-Profil des Addons. Weicht
-  der Sim ab, ist das eine Datenfrage für einen Menschen.
+  Aussage über das Spiel und stehen im Spec-Profil des Addons.
 * **Eine Ausgabe für eine andere Klasse wird gemeldet, nicht
-  abgewiesen.** Vielleicht simmt jemand für seinen Zweitcharakter -
-  aber wissen soll er es.
+  abgewiesen.** Vielleicht simmt jemand für seinen Zweitcharakter —
+  aber wissen soll er es, und der Knopf sagt dann *Trotzdem
+  übernehmen*.
 
 `refresh()` zeichnet ausschliesslich und fasst das Eingabefeld **nie**
 an: die Seite wird bei jeder `state_changed` neu gezeichnet, und ein
 halb eingefügter Text unter den Fingern des Nutzers wegzuräumen ist
 dieselbe Falle wie beim Adressfeld in Einstellungen → Discord.
 """
+
 
 from __future__ import annotations
 
@@ -87,7 +90,6 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPlainTextEdit,
     QVBoxLayout,
 )
@@ -116,15 +118,12 @@ from core.wowsims_export import (
 )
 from core.wowsims_link import build_link
 from core.target_gear import (
-    SLOT_NAMES,
     TargetSet,
     build_transfer as build_target_transfer,
-    changed_slots,
-    compare,
-    foreign_slots,
     parse_target,
 )
 from core import qelive
+from core import sim_run
 from gui.pages._page import Page
 from gui.theme import tokens
 from gui.theme.fonts import font
@@ -204,6 +203,23 @@ SIM_STEPS = (
 )
 
 
+#
+# Was in Schritt 3 zurückzuholen ist, in der Sprache des Nutzers. Der
+# Satz nennt beide Knöpfe des Sims, weil sie dort verschieden heissen
+# und nebeneinander liegen - und er sagt ausdrücklich, dass beides in
+# dasselbe Feld gehört. Genau diese Frage („in welches Feld gehört
+# was") hat die Seite bis 3.2.0 dadurch beantwortet, dass sie zwei
+# Felder anbot, deren Unterschied nirgends stand.
+#
+
+PASTE_HINT = (
+    "Beides aus dem Sim gehört hier hinein, nacheinander in dasselbe "
+    "Feld: die Ausgabe unter Stat Weights und das Ergebnis unter "
+    "Export → Link oder JSON. Welche Sorte es ist, erkennt die "
+    "Companion selbst."
+)
+
+
 def _all_gems(entry):
     """
     Alle Steine eines abgelegten Zielzustands, der Reihe nach.
@@ -250,25 +266,30 @@ class SimPage(Page):
         self.target_sync = getattr(manager, "target_gear_sync", None)
 
         #
-        # Was zuletzt eingelesen wurde: die skalierte Gewichtung, noch
-        # nicht abgelegt. Erst der Knopf darunter macht sie zu einem
-        # Eintrag - was von aussen kommt, sieht man sich an, bevor es
-        # gilt.
+        # DER OFFENE SIM-LAUF (seit 3.3.0).
+        #
+        # Bis 3.2.0 standen hier zwei voneinander unabhängige Merker
+        # (`_parsed`/`_weights` und `_target`), und das war genau die
+        # Trennung, die der Nutzer mitdenken musste: das zweite Einfügen
+        # hat den ersten Befund nicht ergänzt, sondern daneben gestellt.
+        #
+        # Jetzt sammelt sich beides in **einem** Lauf. Er entsteht aus
+        # der gemeldeten Ausrüstung (siehe `_ensure_run()`), trägt seine
+        # Kennung mit ins Spiel und beantwortet dort die Frage, die
+        # vorher niemand stellen konnte: gehören diese Gewichtung und
+        # dieser Zielzustand zusammen?
+        #
+
+        self._run = None
+
+        #
+        # Der letzte Lesevorgang, nur für die Sätze über die Gewichtung
+        # (Grenzen, Nullgewichte, unbekannte Werte). Er gehört nicht in
+        # den Lauf: das sind Auskünfte über den *Text*, nicht über den
+        # Vorgang.
         #
 
         self._parsed = None
-
-        self._weights: dict[str, int] = {}
-
-        #
-        # Und was an ZIELAUSRUESTUNG zuletzt eingelesen wurde: welche
-        # Steine und welche Umschmiedung der Sim nach seinem
-        # Optimierungslauf vorsieht. Wie die Gewichtung noch nicht
-        # abgelegt - erst der Knopf darunter macht sie zu einem
-        # Eintrag.
-        #
-
-        self._target = None
 
         #
         # Was der WowSimsExporter zuletzt in seine SavedVariables
@@ -283,21 +304,11 @@ class SimPage(Page):
 
         self._follow_export = False
 
-        self._build_source_card()
+        self._build_character_card()
+
+        self._build_open_card()
 
         self._build_paste_card()
-
-        #
-        # ERST BEIDES EINLESEN, DANN BEIDES RUEBERBRINGEN (seit 3.2.0).
-        #
-        # Bis 3.1.1 stand "Ins Spiel bringen" vor der Zielausrüstung, und
-        # das war eine Treppe, die man als Schleife läuft: Gewichtung
-        # einlesen, rüberbringen, zurück in den Sim, Ergebnis einlesen,
-        # nochmal rüberbringen. Zwei Strings, zweimal einfügen im Spiel.
-        # Der Ausgang gehört ans Ende, und er ist einer.
-        #
-
-        self._build_target_card()
 
         self._build_delivery_card()
 
@@ -357,20 +368,21 @@ class SimPage(Page):
 
     # --------------------------------------------------
 
-    def _build_source_card(self):
+    def _build_character_card(self):
+        """
+        Schritt 1: wer wird gesimmt, und sieht die Companion ihn?
+
+        DIESE KARTE HAT KEINEN KNOPF, UND DAS IST DER PUNKT. Sie
+        beantwortet zwei Fragen, bevor irgendetwas passiert - „ist mein
+        Charakter richtig erkannt" und „ist das noch mein aktueller
+        Stand". Beide Antworten kamen bis 3.2.0 zwischen den Knöpfen
+        von Schritt 2 heraus, und dort liest sie niemand: wer einen
+        Knopf sieht, drückt ihn.
+        """
 
         card = Card()
 
-        self._step(card, "1", "Charakter simmen")
-
-        #
-        # Der Satz wechselt mit der Spezialisierung: für Heiler geht
-        # der Weg über QE Live, und dort gibt es weder eine Adresse,
-        # die die Ausrüstung mitbringt, noch etwas, das zurückkommt.
-        # Siehe `_draw_source()`.
-        #
-
-        self.source_hint = self._hint(card, SIM_STEPS)
+        self._step(card, "1", "Charakter vorbereiten")
 
         row = QHBoxLayout()
 
@@ -431,6 +443,44 @@ class SimPage(Page):
             tokens.TEXT["faint"],
         )
 
+        #
+        # Was der Sim bekommt, und wenn nichts, warum nicht. Welcher
+        # Satz das ist, entscheidet `gap_text()`.
+        #
+
+        self.gear_state = self._hint(card, "")
+
+        self.gear_note = self._hint(card, "", tokens.TEXT["faint"])
+
+        self.addWidget(card)
+
+    def _build_open_card(self):
+        """
+        Schritt 2: den Sim öffnen und dort rechnen lassen.
+
+        WARUM „IM SIM RECHNEN LASSEN" KEINE EIGENE KARTE IST. Eine Karte
+        ohne Bedienelement wäre eine Überschrift mit einem Absatz
+        darunter - und gelesen wird dieser Absatz ohnehin genau in dem
+        Moment, in dem der Knopf gedrückt wird. Er steht deshalb direkt
+        darüber. Inhaltlich ist er der wichtigste Satz der ganzen Seite:
+        ohne *Include gems* hinter dem Zahnrad kommt ein Ergebnis
+        zurück, das vollständig aussieht und an den Steinen nichts
+        gerechnet hat.
+        """
+
+        card = Card()
+
+        self._step(card, "2", "Sim öffnen und rechnen lassen")
+
+        #
+        # Der Satz wechselt mit der Spezialisierung: für Heiler geht
+        # der Weg über QE Live, und dort gibt es weder eine Adresse,
+        # die die Ausrüstung mitbringt, noch etwas, das zurückkommt.
+        # Siehe `_draw_source()`.
+        #
+
+        self.source_hint = self._hint(card, SIM_STEPS)
+
         buttons = QHBoxLayout()
 
         buttons.setContentsMargins(0, 0, 0, 0)
@@ -463,21 +513,10 @@ class SimPage(Page):
         card.root.addLayout(buttons)
 
         #
-        # Was die Adresse mitbringt und was nicht. Der Satz steht hier
-        # und nicht in der Doku: die Adresse liefert nur die
-        # Ausrüstung, und wer das nicht weiss, sucht nach seinen
-        # Glyphen und hält ihr Fehlen für einen Fehler.
-        #
-
-        self.gear_state = self._hint(card, "")
-
-        self.gear_note = self._hint(card, "", tokens.TEXT["faint"])
-
-        #
         # Die Rückmeldung des Kopierens hat eine eigene Zeile, weil
-        # `_draw_gear()` bei jeder `state_changed` über die obige
-        # schreibt - das "Kopiert." wäre nach Sekunden weg, und wer
-        # kurz wegsieht, hält den Knopf für kaputt.
+        # `_draw_gear()` bei jeder `state_changed` über die Zeile in
+        # Schritt 1 schreibt - das "Kopiert." wäre nach Sekunden weg,
+        # und wer kurz wegsieht, hält den Knopf für kaputt.
         #
 
         self.gear_copy_state = self._hint(card, "", tokens.TEXT["faint"])
@@ -498,10 +537,30 @@ class SimPage(Page):
         self.addWidget(card)
 
     def _build_paste_card(self):
+        """
+        Schritt 3: das Ergebnis zurückbringen - **ein** Feld, **ein**
+        Befund, **ein** Knopf.
+
+        WARUM ES NICHT MEHR ZWEI KARTEN SIND. Gewichtung und
+        Zielzustand sind zwei Auskünfte, und die Trennung stimmt
+        technisch weiter - zwei Speicher, zwei Kanäle, zwei Strings.
+        Nur beantwortet sie eine Frage, die der Nutzer nicht hat. Er
+        hat einmal gesimmt; was dabei herauskam, ist für ihn *das
+        Ergebnis*. Zwei Karten mit je einem Übernehmen-Knopf haben aus
+        einem Vorgang zwei gemacht, und der zweite blieb regelmäßig
+        liegen — was einer Empfehlung im Spiel nicht anzusehen ist.
+
+        Beide Sorten **sammeln** sich jetzt im selben Lauf: das zweite
+        Einfügen ergänzt den ersten Befund, statt ihn zu ersetzen. Was
+        noch fehlt, sagt `parts_line()`; was als Nächstes zu tun ist,
+        `next_step()`.
+        """
 
         card = Card()
 
-        self._step(card, "2", "Ergebnis einfügen")
+        self._step(card, "3", "Sim-Ergebnis einfügen")
+
+        self._hint(card, PASTE_HINT)
 
         #
         # Für Heiler bleibt diese Karte stehen und bekommt einen Satz:
@@ -522,8 +581,8 @@ class SimPage(Page):
         self.input.setFont(font("mono"))
 
         self.input.setPlaceholderText(
-            "Die Ausgabe des Sims hier ganz hinein — dieselbe, die auch "
-            "ReforgeLite liest. Ein Wertname und eine Zahl je Zeile geht "
+            "Die Ausgabe des Sims hier ganz hinein — Stat Weights oder "
+            "Export → Link/JSON. Ein Wertname und eine Zahl je Zeile geht "
             "genauso."
         )
 
@@ -560,7 +619,7 @@ class SimPage(Page):
 
         buttons.setSpacing(tokens.SPACE[2])
 
-        self.read_button = HeroButton("Einlesen")
+        self.read_button = HeroButton("Einlesen", primary=False)
 
         self.read_button.clicked.connect(self._read)
 
@@ -577,15 +636,22 @@ class SimPage(Page):
         card.root.addLayout(buttons)
 
         #
-        # Drei getrennte Zeilen, und das ist Absicht: ein Befund, ein
-        # Hinweis und ein Fehler raten zu Verschiedenem. Ein Hinweis,
-        # der wie ein Fehler aussieht, wird entweder fälschlich ernst
+        # DER BEFUND, IN VIER ZEILEN MIT VIER AUFGABEN.
+        #
+        #   result   was ist das hier (ein Satz, die Überschrift)
+        #   parts    was liegt vor, was fehlt (die Häkchenzeile)
+        #   notes    wurde wirklich optimiert (Zahlen, nachzählbar)
+        #   hint     was jetzt zu tun ist (und nichts, wenn nichts)
+        #   problem  was schiefging (nur auf Klick, siehe `quiet`)
+        #
+        # Getrennt, weil sie zu Verschiedenem raten. Ein Hinweis, der
+        # wie ein Fehler aussieht, wird entweder fälschlich ernst
         # genommen oder lehrt, Fehler zu übersehen.
         #
 
         self.result = QLabel("")
 
-        self.result.setFont(font("small"))
+        self.result.setFont(font("body"))
 
         enable_wrap(self.result)
 
@@ -595,6 +661,19 @@ class SimPage(Page):
         )
 
         card.root.addWidget(self.result)
+
+        self.parts = QLabel("")
+
+        self.parts.setFont(font("mono"))
+
+        enable_wrap(self.parts)
+
+        restyle(
+            self.parts,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+        card.root.addWidget(self.parts)
 
         self.notes = QLabel("")
 
@@ -609,6 +688,39 @@ class SimPage(Page):
 
         card.root.addWidget(self.notes)
 
+        self.hint = QLabel("")
+
+        self.hint.setFont(font("small"))
+
+        enable_wrap(self.hint)
+
+        restyle(
+            self.hint,
+            f"color:{tokens.STATE_TEXT['warn']};background:transparent;",
+        )
+
+        card.root.addWidget(self.hint)
+
+        #
+        # Die Feinheiten über die Gewichtung (Nullgewichte, Grenzen,
+        # unbekannte Werte) stehen weiterhin vollständig da - jede von
+        # ihnen ist ein stilles Verschwinden, wenn sie fehlt. Sie
+        # stehen nur leiser: der Ablauf liest sich sonst nicht mehr.
+        #
+
+        self.details = QLabel("")
+
+        self.details.setFont(font("small"))
+
+        enable_wrap(self.details)
+
+        restyle(
+            self.details,
+            f"color:{tokens.TEXT['faint']};background:transparent;",
+        )
+
+        card.root.addWidget(self.details)
+
         self.problem = QLabel("")
 
         self.problem.setFont(font("small"))
@@ -622,7 +734,7 @@ class SimPage(Page):
 
         card.root.addWidget(self.problem)
 
-        self.apply_button = HeroButton("Übernehmen und String kopieren")
+        self.apply_button = HeroButton("Sim-Ergebnis übernehmen")
 
         self.apply_button.clicked.connect(self._apply)
 
@@ -633,10 +745,19 @@ class SimPage(Page):
         self.addWidget(card)
 
     def _build_delivery_card(self):
+        """
+        Schritt 4: **ein** Vorgang namens „ins Spiel übertragen".
+
+        Intern sind es zwei Wege, und beide werden gebraucht: die
+        Addon-Brücke (zugestellt, wirkt beim nächsten `/reload`) und der
+        String für das Importfeld (wirkt sofort, auch mitten in einer
+        Gruppe). Der Nutzer muss zwischen ihnen nicht wählen - die
+        Companion tut beides und sagt, was daraus folgt.
+        """
 
         card = Card()
 
-        self._step(card, "4", "Ins Spiel bringen")
+        self._step(card, "4", "Ins Spiel übertragen")
 
         self.stored = QLabel("")
 
@@ -665,24 +786,23 @@ class SimPage(Page):
         card.root.addWidget(self.stored_weights)
 
         #
-        # Die zweite Auskunft aus demselben Sim-Lauf steht direkt
-        # darunter - beide Zeilen beantworten dieselbe Frage ("was
-        # liegt bereit?"), und getrennt beantwortet sie niemand
-        # zusammen.
+        # Aus welchem Lauf das Abgelegte stammt. Es muss niemandem
+        # auffallen; es muss dastehen, wenn jemand fragt, warum eine
+        # Empfehlung im Spiel so aussieht, wie sie aussieht.
         #
 
-        self.target_stored = QLabel("")
+        self.run_line = QLabel("")
 
-        self.target_stored.setFont(font("body"))
+        self.run_line.setFont(font("small"))
 
-        enable_wrap(self.target_stored)
+        enable_wrap(self.run_line)
 
         restyle(
-            self.target_stored,
-            f"color:{tokens.WHITE};background:transparent;",
+            self.run_line,
+            f"color:{tokens.TEXT['faint']};background:transparent;",
         )
 
-        card.root.addWidget(self.target_stored)
+        card.root.addWidget(self.run_line)
 
         self.delivery_hint = self._hint(card, "")
 
@@ -696,6 +816,10 @@ class SimPage(Page):
         # Erfolgsmeldung, in der die Zielausrüstung fehlt. Deshalb
         # kommt bei einem zu alten Addon gar nicht erst beides ins
         # Feld (siehe `_delivery_lines()`), und hier steht, warum.
+        #
+        # Dieselbe Warnzeile trägt seit 3.3.0 den zweiten Fall, den man
+        # einer Empfehlung im Spiel nicht ansieht: eine Gewichtung und
+        # ein Zielzustand aus **zwei verschiedenen Läufen**.
         #
 
         self.delivery_warn = QLabel("")
@@ -733,25 +857,28 @@ class SimPage(Page):
 
         buttons.setSpacing(tokens.SPACE[2])
 
-        self.copy_button = HeroButton("Alles kopieren")
+        self.copy_button = HeroButton("Ins Spiel übertragen")
 
         self.copy_button.clicked.connect(self._copy_transfer)
 
         buttons.addWidget(self.copy_button)
 
-        self.remove_button = HeroButton("Gewichtung entfernen", primary=False)
+        #
+        # EIN VERWERFEN STATT ZWEIER (seit 3.3.0). „Gewichtung
+        # entfernen" und „Zielausrüstung entfernen" waren zwei Knöpfe
+        # für eine Absicht - wer das Ergebnis loswerden will, will es
+        # ganz loswerden, und die halbe Löschung hinterlässt genau die
+        # Mischung aus zwei Läufen, vor der die Warnzeile darüber warnt.
+        #
+
+        self.remove_button = HeroButton(
+            "Sim-Ergebnis verwerfen",
+            primary=False,
+        )
 
         self.remove_button.clicked.connect(self._remove)
 
         buttons.addWidget(self.remove_button)
-
-        self.target_remove = HeroButton(
-            "Zielausrüstung entfernen", primary=False
-        )
-
-        self.target_remove.clicked.connect(self._remove_target)
-
-        buttons.addWidget(self.target_remove)
 
         buttons.addStretch(1)
 
@@ -769,108 +896,6 @@ class SimPage(Page):
         )
 
         card.root.addWidget(self.copy_state)
-
-        self.addWidget(card)
-
-    def _build_target_card(self):
-        """
-        Schritt 3: die **Zielausrüstung** aus demselben Sim.
-
-        WARUM DAS EINE EIGENE KARTE IST UND KEINE ZEILE IN SCHRITT 2.
-        Die Gewichtung und der Zielzustand sind zwei verschiedene
-        Auskünfte: eine Gewichtung gilt für jede Ausrüstung, ein
-        Zielzustand für genau die, mit der gesimmt wurde. Sie kommen
-        auch aus zwei verschiedenen Knöpfen im Sim (*Stat Weights*
-        gegen *Export → Link/JSON*), und sie wirken im Spiel an
-        verschiedenen Stellen. Unter derselben Überschrift wäre nicht
-        zu sehen, welche von beiden gerade fehlt.
-
-        **Der Ausgang ist trotzdem einer** (Schritt 4). Zwei Auskünfte
-        heißt zwei Befunde, nicht zwei Wege ins Spiel - deshalb trägt
-        diese Karte seit 3.2.0 kein eigenes String-Feld mehr.
-
-        **Das Eingabefeld bleibt aber dasselbe** (Schritt 2): dort
-        gehört hinein, was aus dem Sim kommt, und welche der beiden
-        Sorten es ist, erkennt `_read()`. Zwei Felder nebeneinander
-        wären die Frage, in welches man einfügt - und die Antwort
-        darauf steht dem Nutzer nirgends zur Verfügung.
-        """
-
-        card = Card()
-
-        self._step(card, "3", "Zielausrüstung übernehmen")
-
-        self._hint(
-            card,
-            "Wenn im Sim Suggest Reforges gelaufen ist — mit Include gems "
-            "hinter dem Zahnrad, sonst sind die Sockelsteine nicht dabei —, "
-            "kopiere dort das Ergebnis (Export → Link oder JSON) und füge "
-            "es oben in dasselbe Feld ein. WeintCodex empfiehlt dann genau "
-            "diese Steine und Umschmiedungen, statt sie selbst noch einmal "
-            "auszurechnen.",
-        )
-
-        self.target_result = QLabel("")
-
-        self.target_result.setFont(font("small"))
-
-        enable_wrap(self.target_result)
-
-        restyle(
-            self.target_result,
-            f"color:{tokens.WHITE};background:transparent;",
-        )
-
-        card.root.addWidget(self.target_result)
-
-        #
-        # Der Satz, der die eine Frage beantwortet, die dieses Format
-        # selbst nicht beantwortet: ist das wirklich ein
-        # Optimierungsergebnis, oder der Ausgangszustand? Siehe
-        # `_target_notes()`.
-        #
-
-        self.target_notes = QLabel("")
-
-        self.target_notes.setFont(font("small"))
-
-        enable_wrap(self.target_notes)
-
-        restyle(
-            self.target_notes,
-            f"color:{tokens.TEXT['muted']};background:transparent;",
-        )
-
-        card.root.addWidget(self.target_notes)
-
-        self.target_problem = QLabel("")
-
-        self.target_problem.setFont(font("small"))
-
-        enable_wrap(self.target_problem)
-
-        restyle(
-            self.target_problem,
-            f"color:{tokens.STATE_TEXT['warn']};background:transparent;",
-        )
-
-        card.root.addWidget(self.target_problem)
-
-        self.target_apply = HeroButton(
-            "Zielausrüstung übernehmen und String kopieren"
-        )
-
-        self.target_apply.clicked.connect(self._apply_target)
-
-        self.target_apply.setEnabled(False)
-
-        card.root.addWidget(self.target_apply, 0, Qt.AlignLeft)
-
-        #
-        # WAS ABGELEGT IST, STEHT IN SCHRITT 4 - zusammen mit der
-        # Gewichtung und dem einen String, der beides trägt. Diese Karte
-        # liest nur ein.
-        #
 
         self.addWidget(card)
 
@@ -916,6 +941,8 @@ class SimPage(Page):
 
             self._follow_export = False
 
+            self._rebuild_run()
+
             return
 
         newest = self._lookup.newest
@@ -934,6 +961,79 @@ class SimPage(Page):
         #
 
         self._follow_export = True
+
+        self._rebuild_run()
+
+    def _export_stamp(self) -> int:
+        """
+        Der Zeitstempel der gemeldeten Ausrüstung - **aus der Uhr des
+        Spiels**, nicht aus der dieses Rechners.
+
+        Daran hängt der Handshake: das Addon merkt sich beim
+        *Bereitstellen* dieselbe Zahl (`time()` im Spiel), und die
+        Kennung des Laufs entsteht daraus. Ohne diesen Bezug wäre ein
+        „genau dieser Lauf" im Spiel eine Behauptung.
+        """
+
+        newest = self._lookup.newest if self._lookup else None
+
+        return int(getattr(newest, "stamp", 0) or 0) if newest else 0
+
+    def _ensure_run(self):
+        """
+        Den offenen Lauf herstellen, falls es keinen gibt.
+
+        Er entsteht **aus der gemeldeten Ausrüstung** - das ist sein
+        Anker und der Grund, warum seine Kennung nach einem Neustart
+        der App dieselbe ist. Ohne gemeldete Ausrüstung entsteht er
+        trotzdem, nur ohne Anker: dann hat er keine Kennung, und die
+        Seite behauptet nichts über Zusammengehörigkeit.
+        """
+
+        if self._run is None:
+            self._rebuild_run()
+
+        return self._run
+
+    def _rebuild_run(self, keep: bool = True):
+        """
+        Den Lauf neu aufsetzen - und mitnehmen, was schon eingelesen
+        wurde.
+
+        `keep` ist der Normalfall und kein Komfort: wer einfügt und
+        danach die Spezialisierung korrigiert, hat den Text nicht
+        zurückgenommen. Ihn wegzuwerfen hiesse, eine Korrektur mit
+        einem Verlust zu bestrafen.
+        """
+
+        alt = self._run
+
+        sheet = self.selected_character() if hasattr(self, "character_select") else {}
+
+        run = sim_run.start_run(
+            self.selected_spec() if hasattr(self, "spec_select") else "",
+            export=self._export,
+            reported_at=self._export_stamp(),
+            character=str(sheet.get("name", "")),
+            realm=str(sheet.get("realm", "")),
+        )
+
+        if keep and alt is not None:
+
+            if alt.weights:
+
+                run = sim_run.with_weights(
+                    run,
+                    alt.weights,
+                    alt.weights_source,
+                    alt.weights_class,
+                    now=alt.weights_at,
+                )
+
+            if alt.target is not None:
+                run = sim_run.with_target(run, alt.target, now=alt.target_at)
+
+        self._run = run
 
     def selected_spec(self) -> str:
 
@@ -978,9 +1078,7 @@ class SimPage(Page):
 
         self._draw_gear()
 
-        self._draw_stored()
-
-        self._draw_target()
+        self._draw_result()
 
         self._draw_delivery()
 
@@ -1151,45 +1249,6 @@ class SimPage(Page):
 
             self.plain_button.setEnabled(True)
 
-    def _draw_stored(self):
-        """
-        Die Gewichtungs-Zeile in Schritt 4 - und die Überschrift der
-        Seite. Das Feld mit dem String gehört ihr nicht mehr: es trägt
-        beide Auskünfte und wird deshalb von `_draw_delivery()`
-        gezeichnet.
-        """
-
-        key = self.selected_spec()
-
-        entry = self.store.get(key) if self.store else None
-
-        if entry is None:
-
-            self.stored.setText(
-                f"Gewichtung: für {spec_label(key)} noch keine übernommen."
-            )
-
-            self.stored_weights.setText("")
-
-            self.remove_button.setEnabled(False)
-
-            self.header.setTitle("Sim-Ergebnis übernehmen.")
-
-            return
-
-        self.stored.setText(
-            f"Gewichtung: {spec_label(entry.spec_key)}"
-            f"{_from_character(entry)} · {_stamp(entry.created)}"
-        )
-
-        self.stored_weights.setText(_weights_text(entry.weights))
-
-        self.remove_button.setEnabled(True)
-
-        self.header.setTitle(
-            f"Gewichtung für {spec_label(entry.spec_key)} liegt bereit."
-        )
-
     # --------------------------------------------------
     # Handlungen
     # --------------------------------------------------
@@ -1203,17 +1262,25 @@ class SimPage(Page):
         if key and spec_of(key):
             self.spec_select.select_value(key)
 
+        self._rebuild_run()
+
         self._draw_source()
 
         self._draw_gear()
 
-        self._draw_stored()
-
-        self._draw_target()
+        self._draw_result()
 
         self._draw_delivery()
 
     def _on_spec_changed(self):
+
+        #
+        # Der Lauf gehört zu genau einer Spezialisierung; wer umstellt,
+        # meint denselben eingefügten Text für eine andere. Deshalb neu
+        # aufgesetzt und der Befund mitgenommen (siehe `_rebuild_run`).
+        #
+
+        self._rebuild_run()
 
         self._draw_source()
 
@@ -1226,14 +1293,12 @@ class SimPage(Page):
 
         self._draw_gear()
 
-        self._draw_stored()
-
-        self._draw_target()
+        self._draw_result()
 
         self._draw_delivery()
 
     # --------------------------------------------------
-    # Schritt 1: was der Sim bekommt
+    # Schritt 1/2: was der Sim bekommt
     # --------------------------------------------------
 
     def _export_class(self) -> str:
@@ -1292,9 +1357,18 @@ class SimPage(Page):
 
             export = self._export
 
+            #
+            # Das Alter kommt aus der Meldung, und wenn keine dasteht,
+            # steht hier nichts über die Zeit. Ein "gemeldet vor 0
+            # Minuten" wäre eine Behauptung über einen Zeitpunkt, den
+            # niemand kennt - dieselbe Regel wie `at == -1`.
+            #
+
+            stamp = self._export_stamp()
+
             self.gear_state.setText(
-                f"{export.full_name} · {export.item_count} Teile · "
-                f"gemeldet {age_text(self._lookup.newest.stamp)}"
+                f"{export.full_name} · {export.item_count} Teile"
+                + (f" · gemeldet {age_text(stamp)}" if stamp else "")
             )
 
             restyle(
@@ -1343,8 +1417,9 @@ class SimPage(Page):
 
             self.gear_note.setText(
                 "Ohne gemeldete Ausrüstung stellst du sie im Sim selbst "
-                "ein — der Weg zurück in Schritt 2 und 3 ändert sich "
-                "dadurch nicht."
+                "ein — der Weg zurück in Schritt 3 ändert sich dadurch "
+                "nicht, nur die Frage nach dem Optimierungslauf bleibt "
+                "dann offen."
             )
 
         restyle(
@@ -1415,6 +1490,10 @@ class SimPage(Page):
             "kommen auch Talente, Glyphen und Berufe mit."
         )
 
+    # --------------------------------------------------
+    # Schritt 3: das Ergebnis lesen
+    # --------------------------------------------------
+
     def _on_input_changed(self):
 
         #
@@ -1445,25 +1524,13 @@ class SimPage(Page):
 
         self._parsed = None
 
-        self._weights = {}
-
-        self._target = None
-
-        self.target_result.setText("")
-
-        self.target_notes.setText("")
-
-        self.target_problem.setText("")
-
-        self.target_apply.setEnabled(False)
-
-        self.result.setText("")
-
-        self.notes.setText("")
+        self._rebuild_run(keep=False)
 
         self.problem.setText("")
 
-        self.apply_button.setEnabled(False)
+        self.details.setText("")
+
+        self._draw_result()
 
     def _clear_input(self):
 
@@ -1479,7 +1546,7 @@ class SimPage(Page):
 
     def _read(self, quiet: bool = False):
         """
-        Den eingefügten Text lesen.
+        Den eingefügten Text lesen - und in den offenen Lauf legen.
 
         `quiet` unterscheidet die beiden Anlässe, und der Unterschied
         ist genau einer: **ob ein Fehler gesagt wird.** Nebenher
@@ -1487,9 +1554,16 @@ class SimPage(Page):
         gerade tippt, hat noch nichts falsch gemacht. Ein Befund
         dagegen ist in beiden Fällen willkommen - er verlangt nichts
         und beantwortet die Frage, ob der Text angekommen ist.
+
+        **Gesammelt statt ersetzt** (seit 3.3.0): eine eingefügte
+        Zielausrüstung löscht die vorher gelesene Gewichtung nicht.
+        Genau das war die zweite Runde durch dasselbe Feld, die den
+        Nutzer zwang, sich die technische Trennung zu merken.
         """
 
         text = self.input.toPlainText()
+
+        self._ensure_run()
 
         if not text.strip():
 
@@ -1507,7 +1581,7 @@ class SimPage(Page):
         # ZUERST DIE ZIELAUSRUESTUNG. Beide Sorten Text kommen aus
         # demselben Sim und in dasselbe Feld; unterschieden werden sie
         # an ihrer Gestalt, nicht daran, in welches Feld jemand
-        # eingefügt hat (siehe `_build_target_card()`).
+        # eingefügt hat.
         #
         # `parse_target()` ist dabei die STRENGERE von beiden: sie
         # erkennt nur eine Adresse, einen Base64-Rumpf oder JSON. Eine
@@ -1519,19 +1593,29 @@ class SimPage(Page):
         if self._read_target(text, quiet=quiet):
             return
 
+        self._read_weights(text, quiet=quiet)
+
+    def _fail(self, message: str, quiet: bool):
+        """
+        Ein Lesefehler - und was er **nicht** anfasst.
+
+        Der Lauf bleibt, wie er ist: wer nach der Gewichtung Unsinn
+        einfügt, hat die Gewichtung nicht zurückgenommen. Bis 3.2.0
+        wurde sie hier mit gelöscht, und das war von aussen ein
+        stilles Verschwinden.
+        """
+
+        self.problem.setText("" if quiet else message)
+
+        self._draw_result()
+
+    def _read_weights(self, text: str, quiet: bool = False):
+
         parsed = parse(text)
 
         if parsed.problem:
 
-            self.result.setText("")
-
-            self.notes.setText("")
-
-            self.problem.setText("" if quiet else parsed.problem)
-
-            self.apply_button.setEnabled(False)
-
-            self._weights = {}
+            self._fail(parsed.problem, quiet)
 
             return
 
@@ -1539,35 +1623,76 @@ class SimPage(Page):
 
         if not weights:
 
-            self.result.setText("")
-
-            self.notes.setText("")
-
-            self.problem.setText(
-                "" if quiet else
+            self._fail(
                 "Darin steht keine brauchbare Gewichtung — alle Werte "
-                "sind null oder negativ."
+                "sind null oder negativ.",
+                quiet,
             )
-
-            self.apply_button.setEnabled(False)
-
-            self._weights = {}
 
             return
 
         self._parsed = parsed
 
-        self._weights = weights
+        self._run = sim_run.with_weights(
+            self._ensure_run(),
+            weights,
+            parsed.source or "sim",
+            parsed.sim_class or "",
+        )
 
         self.problem.setText("")
 
-        self.result.setText(_weights_text(weights))
-
-        self.notes.setText(
+        self.details.setText(
             " ".join(self._note_lines(parsed, negatives, weights)),
         )
 
-        self.apply_button.setEnabled(True)
+        self._draw_result()
+
+    def _read_target(self, text: str, quiet: bool = False) -> bool:
+        """
+        Den eingefügten Text als Sim-**Ergebnis** lesen.
+
+        Gibt `True` zurück, wenn er eins war - dann hat `_read()` hier
+        nichts mehr zu tun. `False` heisst "das war keine
+        Zielausrüstung" und ist ausdrücklich kein Fehler: dasselbe Feld
+        liest auch Gewichtungen.
+        """
+
+        target = parse_target(text)
+
+        if target is None or not target.known:
+            return False
+
+        if not target.usable:
+
+            #
+            # Erkannt, aber unbrauchbar - das ist etwas anderes als
+            # "nicht erkannt", und es führt zu einem anderen nächsten
+            # Schritt: im Sim erst optimieren, dann exportieren.
+            #
+
+            self._fail(
+                "Erkannt als "
+                + target.source_label
+                + ", aber darin steht weder ein Sockelstein noch eine "
+                "Umschmiedung. Im Sim erst optimieren lassen (Zahnrad "
+                "neben Suggest Reforges, Include gems anhaken), dann "
+                "exportieren. "
+                + (" ".join(target.problems) if target.problems else ""),
+                quiet,
+            )
+
+            return True
+
+        self._run = sim_run.with_target(self._ensure_run(), target)
+
+        self.problem.setText(
+            " ".join(target.problems) if target.problems else ""
+        )
+
+        self._draw_result()
+
+        return True
 
     def _note_lines(self, parsed, negatives, weights) -> list[str]:
         """
@@ -1693,183 +1818,189 @@ class SimPage(Page):
                 "Tempo-Schwellen rechnet das Addon selbst aus."
             )
 
-        expected = spec_of(self.selected_spec())
-
-        if (
-            parsed.sim_class
-            and expected
-            and parsed.sim_class != expected.class_token
-        ):
-
-            lines.append(
-                f"Achtung: diese Ausgabe ist für "
-                f"{class_label(parsed.sim_class)} gerechnet, gewählt ist "
-                f"{class_label(expected.class_token)} · {expected.label}."
-            )
-
         return lines
 
     # --------------------------------------------------
-    # Die Zielausrüstung
+    # Schritt 3: der Befund
     # --------------------------------------------------
 
-    def _read_target(self, text: str, quiet: bool = False) -> bool:
+    def _effective_run(self):
         """
-        Den eingefügten Text als Sim-**Ergebnis** lesen.
+        Der offene Lauf **plus dem, was für genau ihn schon abgelegt
+        ist**.
 
-        Gibt `True` zurück, wenn er eins war - dann hat `_read()` hier
-        nichts mehr zu tun. `False` heisst "das war keine
-        Zielausrüstung" und ist ausdrücklich kein Fehler: derselbe
-        Knopf liest auch Gewichtungen.
+        WARUM DAS NOETIG IST. Wer die Gewichtung übernimmt und danach
+        die Zielausrüstung einfügt, hat einen vollständigen Lauf - die
+        erste Hälfte liegt nur schon im Speicher statt im Feld. Ohne
+        diese Zusammenführung stünde dort „Gewichtung fehlt", obwohl
+        sie bereitliegt, und der Satz darunter schickte ihn in den Sim
+        für etwas, das er längst geholt hat.
+
+        **Zusammengeführt wird nur bei gleicher Kennung.** Ein Eintrag
+        aus einem anderen Lauf ist keine Hälfte dieses Laufs - er ist
+        genau die Mischung, vor der Schritt 4 warnt. Und ohne Kennung
+        (ältere Ablage, von Hand getippt) wird nichts behauptet:
+        `belongs()` ist dann falsch, und es bleibt beim Feld.
         """
 
-        target = parse_target(text)
+        run = self._run
 
-        if target is None or not target.known:
-            return False
+        if run is None or not run.run_id:
+            return run
 
-        self._target = None
+        entry = self.weights_store_entry()
 
-        self.target_result.setText("")
+        target = self.target_gear_store_entry()
 
-        self.target_notes.setText("")
+        if not run.have_weights and entry is not None:
 
-        self.target_apply.setEnabled(False)
+            if str(getattr(entry, "run_id", "")) == run.run_id:
+                run = sim_run.with_weights(
+                    run,
+                    dict(entry.weights),
+                    entry.source or "sim",
+                    run.weights_class,
+                    now=entry.created,
+                )
 
-        if not target.usable:
+        if not run.have_target and target is not None:
 
-            #
-            # Erkannt, aber unbrauchbar - das ist etwas anderes als
-            # "nicht erkannt", und es führt zu einem anderen nächsten
-            # Schritt: im Sim erst optimieren, dann exportieren.
-            #
+            if str(getattr(target, "run_id", "")) == run.run_id:
+                run = sim_run.with_target(run, target.gear, now=target.created)
 
-            self.target_problem.setText(
-                "" if quiet else
-                "Erkannt als "
-                + target.source_label
-                + ", aber darin steht weder ein Sockelstein noch eine "
-                "Umschmiedung. Im Sim erst optimieren lassen (Zahnrad "
-                "neben Suggest Reforges, Include gems anhaken), dann "
-                "exportieren. "
-                + (" ".join(target.problems) if target.problems else "")
-            )
+        return run
 
-            return True
+    def _validation(self, run=None):
+        """
+        Der Befund über den offenen Lauf.
 
-        self._target = target
+        `target_expected` ist die eine Stelle, an der der Heiler-Weg
+        hier überhaupt vorkommt: QE Live gibt keinen Zielzustand
+        heraus, und einen zu vermissen wäre eine Aufforderung ins
+        Leere.
+        """
 
-        self.target_problem.setText(
-            " ".join(target.problems) if target.problems else ""
+        return sim_run.validate(
+            self._effective_run() if run is None else run,
+            expected_spec=self.selected_spec(),
+            target_expected=self._healer() is None,
         )
 
-        self.target_result.setText(
-            "{}: {} Ausrüstungsteile, {} Sockelsteine, "
-            "{} Umschmiedungen.".format(
-                target.source_label,
-                target.item_count,
-                target.gem_count,
-                target.reforge_count,
-            )
+    def _draw_result(self):
+        """
+        Die vier Zeilen von Schritt 3 - aus **einer** Rechnung.
+
+        Die Sätze stehen in `core/sim_run.py`; hier stehen sie nur.
+        Zwei Fassungen desselben Satzes liefen ab der ersten Änderung
+        auseinander, und die falsche stünde dann bei dem, der einen
+        Fehler sucht.
+        """
+
+        #
+        # ZWEI FRAGEN, ZWEI LAEUFE. „Steht hier etwas?" beantwortet der
+        # EINGEFUEGTE Lauf - sonst stünde nach jedem Übernehmen ein
+        # Befund über ein leeres Feld. „Ist es vollständig?" beantwortet
+        # der Lauf samt dem, was für ihn schon abgelegt ist.
+        #
+
+        pasted = sim_run.validate(
+            self._run,
+            expected_spec=self.selected_spec(),
+            target_expected=self._healer() is None,
         )
 
-        self.target_notes.setText(" ".join(self._target_notes(target)))
+        run = self._effective_run()
 
-        self.target_apply.setEnabled(True)
+        validation = self._validation(run)
 
-        return True
+        if pasted.state == sim_run.EMPTY:
 
-    def _target_notes(self, target) -> list[str]:
-        """
-        Was neben den Zahlen noch zu sagen ist - und alles davon wird
-        gesagt.
+            self.result.setText("")
 
-        DIE WICHTIGSTE ZEILE IST DIE ERSTE, und sie beantwortet eine
-        Frage, die das Format selbst nicht beantwortet: **ist das
-        wirklich ein Optimierungsergebnis?** Der Sim schreibt heraus,
-        was in seiner Oberfläche gerade eingestellt ist. Wer
-        importiert und sofort exportiert, bekommt seinen
-        Ausgangszustand zurück - und der sähe hier aus wie eine
-        Optimierung.
+            self.parts.setText("")
 
-        Nachsehen lässt sich das an genau einer Stelle: neben dem, was
-        der WowSimsExporter als **angelegt** meldet. Unterscheidet sich
-        nichts, sind zwei Erklärungen möglich, und die Seite nennt
-        beide, statt sich für eine zu entscheiden. Eine Zielausrüstung,
-        die in Wahrheit der Iststand ist, brächte im Spiel jede
-        Empfehlung zum Schweigen ("alles schon richtig") - und das wäre
-        von einer wirklich fertigen Ausrüstung nicht zu unterscheiden.
-        Dieselbe Linie wie `stars == 0`.
-        """
+            self.notes.setText("")
 
-        lines: list[str] = []
+            self.hint.setText("")
 
-        if self._export is None:
+            self.apply_button.setEnabled(False)
 
-            lines.append(
-                "Ob darin wirklich das Ergebnis eines Optimierungslaufs "
-                "steht, lässt sich hier nicht prüfen — dafür müsste der "
-                "WowSimsExporter deine angelegte Ausrüstung gemeldet "
-                "haben."
-            )
+            self.apply_button.setText("Sim-Ergebnis übernehmen")
 
-        else:
+            return
 
-            diffs = compare(target, self._export.items)
+        self.result.setText(sim_run.headline(validation))
 
-            geaendert = changed_slots(diffs)
+        self.parts.setText(sim_run.parts_line(validation))
 
-            fremd = foreign_slots(diffs)
+        zeilen = [
+            sim_run.source_line(run),
+            sim_run.change_line(validation),
+        ]
 
-            if geaendert:
+        klasse = sim_run.class_note(run, self.selected_spec())
 
-                namen = ", ".join(diff.slot_name for diff in geaendert[:6])
+        if klasse:
+            zeilen.append(klasse)
 
-                lines.append(
-                    "Gegenüber deiner angelegten Ausrüstung ändert sich "
-                    f"etwas an {len(geaendert)} Teilen ({namen}"
-                    + (", …" if len(geaendert) > 6 else "")
-                    + ")."
-                )
+        if "other_spec" in validation.notes:
 
-            else:
-
-                lines.append(
-                    "Achtung: das ist Stück für Stück dasselbe, was du "
-                    "gerade trägst. Entweder ist bereits alles optimal — "
-                    "oder im Sim lief noch kein Optimierungslauf, und du "
-                    "hast deinen Ausgangszustand wieder exportiert."
-                )
-
-            if fremd:
-
-                lines.append(
-                    f"{len(fremd)} Teile kennt deine gemeldete Ausrüstung "
-                    "nicht (oder es steckt dort inzwischen etwas anderes) "
-                    "— für die gilt das Ziel im Spiel nicht."
-                )
-
-        if not target.spec_key:
-
-            lines.append(
-                "Die Ausgabe nennt keine Spezialisierung — übernommen "
-                "wird sie für die oben gewählte."
-            )
-
-        elif target.spec_key != self.selected_spec():
-
-            lines.append(
+            zeilen.append(
                 "Die Ausgabe gehört zu "
-                + spec_label(target.spec_key)
-                + " — übernommen wird sie trotzdem für die oben gewählte "
+                + spec_label(run.target.spec_key)
+                + " — übernommen wird sie für die oben gewählte "
                 "Spezialisierung."
             )
 
-        return lines
+        if "foreign" in validation.notes:
 
-    def _apply_target(self):
+            zeilen.append(
+                f"{validation.foreign_slots} Teile kennt deine gemeldete "
+                "Ausrüstung nicht (oder es steckt dort inzwischen etwas "
+                "anderes) — für die gilt das Ziel im Spiel nicht, dort "
+                "rechnet WeintCodex weiter selbst."
+            )
 
-        if self._target is None or self.target_store is None:
+        if run.have_weights:
+            zeilen.append(_weights_text(run.weights))
+
+        self.notes.setText(" ".join(line for line in zeilen if line))
+
+        self.hint.setText(sim_run.next_step(validation))
+
+        #
+        # DER KNOPF SAGT, WORAUF MAN SICH EINLAESST. Bei einer fremden
+        # Klasse heisst er anders, statt gesperrt zu sein: vielleicht
+        # simmt jemand für seinen Zweitcharakter, und ein toter Knopf
+        # beantwortet die Frage nicht, warum er tot ist.
+        #
+
+        self.apply_button.setEnabled(pasted.usable)
+
+        self.apply_button.setText(
+            "Trotzdem übernehmen"
+            if validation.state == sim_run.MISMATCH
+            else "Sim-Ergebnis übernehmen"
+        )
+
+    # --------------------------------------------------
+    # Übernehmen: beide Auskünfte, ein Klick
+    # --------------------------------------------------
+
+    def _apply(self):
+        """
+        Was im Lauf liegt, ablegen und zustellen - **in einem Zug**.
+
+        Bis 3.2.0 waren das zwei Knöpfe in zwei Karten, und wer den
+        zweiten vergaß, bekam im Spiel eine halbe Auskunft, der man das
+        nicht ansieht. Jetzt legt ein Klick ab, was da ist; was fehlt,
+        stand vorher als Satz da und fehlt danach immer noch - aber es
+        blockiert nicht, was schon vorliegt.
+        """
+
+        run = self._run
+
+        if run is None:
             return
 
         key = self.selected_spec()
@@ -1879,31 +2010,79 @@ class SimPage(Page):
 
         sheet = self.selected_character()
 
-        entry = self.target_store.put(
-            TargetSet(
-                gear=self._target,
-                spec_key=key,
-                character=str(sheet.get("name", "")) or self._target.character,
-                realm=str(sheet.get("realm", "")) or self._target.realm,
-                created=int(time.time()),
+        name = str(sheet.get("name", ""))
+
+        realm = str(sheet.get("realm", ""))
+
+        stamp = int(time.time())
+
+        getan: list[str] = []
+
+        if run.have_weights and self.store is not None:
+
+            entry = self.store.put(
+                WeightSet(
+                    spec_key=key,
+                    weights=dict(run.weights),
+                    character=name,
+                    realm=realm,
+                    source=run.weights_source or "sim",
+                    created=stamp,
+                    run_id=run.run_id,
+                    started_at=run.started_at if run.input_gear else 0,
+                )
             )
-        )
 
-        #
-        # Sofort zustellen statt auf den Sync-Takt zu warten - dieselbe
-        # Überlegung wie beim Übernehmen einer Gewichtung.
-        #
+            #
+            # Sofort zustellen statt auf den Sync-Takt zu warten: wer
+            # hier drückt, will gleich `/reload` tippen (dieselbe
+            # Überlegung wie beim "Fertig" der WeakAuras-Seite).
+            #
 
-        if self.target_sync is not None:
-            self.target_sync.publish_now()
+            if self.sync is not None:
+                self.sync.publish_now()
+
+            getan.append(f"Gewichtung für {spec_label(entry.spec_key)}")
+
+        if run.have_target and self.target_store is not None:
+
+            ziel = self.target_store.put(
+                TargetSet(
+                    gear=run.target,
+                    spec_key=key,
+                    character=name or run.target.character,
+                    realm=realm or run.target.realm,
+                    created=stamp,
+                    run_id=run.run_id,
+                    started_at=run.started_at if run.input_gear else 0,
+                )
+            )
+
+            if self.target_sync is not None:
+                self.target_sync.publish_now()
+
+            getan.append(f"Zielausrüstung ({len(ziel.items)} Teile)")
+
+        if not getan:
+            return
 
         self._clear_input()
 
         self.refresh()
 
-        # Dieselbe Überlegung wie beim Übernehmen einer Gewichtung -
-        # und derselbe Weg: kopiert wird, was in Schritt 4 steht, also
-        # beides zusammen.
+        #
+        # UND GLEICH IN DIE ZWISCHENABLAGE (seit 3.1.1).
+        #
+        # *Übernehmen* und *Ins Spiel übertragen* sind zwei Klicks für
+        # eine Absicht: wer übernimmt, will es ins Spiel bringen. Der
+        # Zeitpunkt ist auch der einzige, an dem die Frage "welcher der
+        # beiden Strings ist meiner" gar nicht erst entsteht. Erst nach
+        # `refresh()`, denn das Feld wird dort gefüllt; und über
+        # denselben Weg wie der Knopf in Schritt 4, damit ein System
+        # ohne Zwischenablage denselben Satz bekommt statt eines
+        # stillen Nichts.
+        #
+
         self._copy_transfer()
 
         logger = getattr(self.manager, "logger", None)
@@ -1911,24 +2090,55 @@ class SimPage(Page):
         if logger is not None:
 
             logger.success(
-                f"Zielausrüstung für {spec_label(entry.spec_key)} "
-                f"übernommen ({len(entry.items)} Teile)."
+                "Sim-Ergebnis übernommen: "
+                + " · ".join(getan)
+                + (f" · Lauf {run.run_id}" if run.run_id else "")
             )
 
-    def _remove_target(self):
+    def _remove(self):
+        """
+        Das Sim-Ergebnis dieser Spezialisierung verwerfen - **beides**.
 
-        if self.target_store is None:
+        Zwei Entfernen-Knöpfe waren die Möglichkeit, eine Hälfte
+        stehenzulassen, und genau diese Hälfte ergibt später die
+        Mischung aus zwei Läufen, vor der Schritt 4 warnt. Wer
+        verwerfen will, verwirft den Lauf.
+        """
+
+        key = self.selected_spec()
+
+        weg = False
+
+        if self.store is not None and self.store.remove(key):
+
+            #
+            # Auch das Löschen wird zugestellt: im Spiel verschwindet
+            # der Vorschlag dadurch, dass er in der nächsten Zustellung
+            # fehlt.
+            #
+
+            if self.sync is not None:
+                self.sync.publish_now()
+
+            weg = True
+
+        if self.target_store is not None and self.target_store.remove(key):
+
+            if self.target_sync is not None:
+                self.target_sync.publish_now()
+
+            weg = True
+
+        if not weg:
             return
-
-        if not self.target_store.remove(self.selected_spec()):
-            return
-
-        if self.target_sync is not None:
-            self.target_sync.publish_now()
 
         self.copy_state.setText("")
 
         self.refresh()
+
+    # --------------------------------------------------
+    # Schritt 4: der eine Ausgang
+    # --------------------------------------------------
 
     def target_gear_store_entry(self):
         """
@@ -1944,47 +2154,12 @@ class SimPage(Page):
 
         return self.target_store.get(self.selected_spec())
 
-    def _draw_target(self):
-        """
-        Was abgelegt ist - und der Weg ins Spiel.
+    def weights_store_entry(self):
 
-        Nur noch die Zeile, was abgelegt ist - der Weg ins Spiel steht
-        für beide Auskünfte zusammen in Schritt 4 (`_draw_delivery()`).
-        """
+        if self.store is None:
+            return None
 
-        entry = self.target_gear_store_entry()
-
-        if entry is None:
-
-            self.target_stored.setText(
-                "Zielausrüstung: noch keine abgelegt — im Spiel rechnet "
-                "WeintCodex Sockel und Umschmiedungen dann wie bisher "
-                "selbst aus."
-            )
-
-            self.target_remove.setEnabled(False)
-
-            return
-
-        steine = sum(1 for gem in _all_gems(entry) if gem)
-
-        self.target_stored.setText(
-            "Zielausrüstung: {} Teile, {} Sockelsteine, {} Umschmiedungen "
-            "(vom {}).".format(
-                len(entry.items),
-                steine,
-                sum(1 for item in entry.items if item.reforging),
-                time.strftime("%d.%m.%Y", time.localtime(entry.created))
-                if entry.created
-                else "unbekannt",
-            )
-        )
-
-        self.target_remove.setEnabled(True)
-
-    # --------------------------------------------------
-    # Schritt 4: der eine Ausgang
-    # --------------------------------------------------
+        return self.store.get(self.selected_spec())
 
     def _addon_version(self) -> str:
 
@@ -2014,7 +2189,7 @@ class SimPage(Page):
 
         lines: list[str] = []
 
-        entry = self.store.get(self.selected_spec()) if self.store else None
+        entry = self.weights_store_entry()
 
         if entry is not None:
             lines.append(build_transfer(entry))
@@ -2031,14 +2206,20 @@ class SimPage(Page):
 
     def _draw_delivery(self):
         """
-        Was bereitliegt, und der eine Weg ins Spiel.
+        Was bereitliegt, aus welchem Lauf, und der eine Weg ins Spiel.
 
         **Zwei Wege, und beide stehen da** - wie seit 2.8.0: die
         Companion hat bereits zugestellt (wirkt nach dem nächsten
         `/reload`), und derselbe Inhalt liegt als String bereit (wirkt
-        sofort). Neu ist nur, dass es *ein* String für *beide* Auskünfte
-        ist.
+        sofort). Der Nutzer wählt nicht zwischen ihnen; er liest, was
+        gilt.
         """
+
+        entry = self.weights_store_entry()
+
+        target = self.target_gear_store_entry()
+
+        stored = sim_run.stored_state(entry, target)
 
         lines = self._delivery_lines()
 
@@ -2047,6 +2228,12 @@ class SimPage(Page):
         self.transfer.setEnabled(bool(lines))
 
         self.copy_button.setEnabled(bool(lines))
+
+        self.remove_button.setEnabled(bool(entry or target))
+
+        self._draw_stored(entry, target)
+
+        self._draw_run_line(entry, target)
 
         if not lines:
 
@@ -2060,19 +2247,16 @@ class SimPage(Page):
 
             return
 
-        beides = (
-            self.store is not None
-            and self.store.get(self.selected_spec()) is not None
-            and self.target_gear_store_entry() is not None
-        )
+        beides = entry is not None and target is not None
+
+        #
+        # ZWEI WARNUNGEN, EINE ZEILE - UND DIE ERSTE HAT VORRANG. Ein zu
+        # altes Addon verschluckt die zweite Zeile; das ist der Fall,
+        # der jetzt gerade etwas verliert. Zwei verschiedene Läufe
+        # nebeneinander sind der Fall, der später etwas Falsches sagt.
+        #
 
         if beides and not self._combined_allowed():
-
-            #
-            # Der Grund steht dabei, und der Ausweg auch. Ein blosses
-            # "geht nicht" liesse offen, ob die Zielausrüstung verloren
-            # ist - sie ist es nicht, sie kommt über die Brücke.
-            #
 
             version = self._addon_version()
 
@@ -2087,97 +2271,127 @@ class SimPage(Page):
 
         else:
 
-            self.delivery_warn.setText("")
+            self.delivery_warn.setText(sim_run.mixed_note(stored))
 
         self.delivery_hint.setText(
-            "Zugestellt ist beides schon — im Spiel liegt es nach dem "
+            "Zugestellt ist es schon — im Spiel liegt es nach dem "
             "nächsten /reload bereit (die Gewichtung unter Charakter → "
-            "Priorisierung, auf deinen Klick). Ohne Neuladen: hier "
-            "kopieren und im Spiel unter Import einfügen; das wirkt "
-            "sofort, auch mitten in einer Gruppe."
+            "Priorisierung, auf deinen Klick). Ohne Neuladen: Ins Spiel "
+            "übertragen kopiert den String, und im Spiel unter Import "
+            "eingefügt wirkt er sofort, auch mitten in einer Gruppe."
         )
 
-    def _apply(self):
+    def _draw_stored(self, entry, target):
+        """
+        Was bereitliegt - eine Zeile für den Lauf, eine für die Zahlen.
 
-        if not self._weights or self.store is None:
-            return
+        Die Überschrift der Seite hängt daran: sie ist die kürzeste
+        Antwort auf „bin ich fertig".
+        """
 
         key = self.selected_spec()
 
-        if not key:
+        teile: list[str] = []
+
+        if entry is None:
+
+            teile.append("Gewichtung fehlt")
+
+            self.stored_weights.setText("")
+
+        else:
+
+            teile.append("Gewichtung ✓")
+
+            self.stored_weights.setText(_weights_text(entry.weights))
+
+        if self._healer() is None:
+
+            teile.append(
+                "Optimierte Ausrüstung ✓" if target is not None
+                else "Optimierte Ausrüstung fehlt"
+            )
+
+        if entry is None and target is None:
+
+            self.stored.setText(
+                f"Für {spec_label(key)} liegt noch nichts bereit."
+            )
+
+            self.header.setTitle("Sim-Ergebnis übernehmen.")
+
             return
 
-        sheet = self.selected_character()
+        zahlen = ""
 
-        entry = self.store.put(
-            WeightSet(
-                spec_key=key,
-                weights=dict(self._weights),
-                character=str(sheet.get("name", "")),
-                realm=str(sheet.get("realm", "")),
-                source=(self._parsed.source if self._parsed else "sim"),
-                created=int(time.time()),
+        if target is not None:
+
+            steine = sum(1 for gem in _all_gems(target) if gem)
+
+            #
+            # LEERE PLAETZE SIND KEINE TEILE. Sie überleben die Ablage
+            # ohnehin nicht (`target_gear_store` schreibt nur belegte),
+            # und frisch übernommen stünde hier sonst eine andere Zahl
+            # als nach dem nächsten Start.
+            #
+
+            zahlen = " · {} Teile, {} Sockelsteine, {} Umschmiedungen".format(
+                sum(1 for item in target.items if not item.empty),
+                steine,
+                sum(1 for item in target.items if item.reforging),
             )
+
+        self.stored.setText(
+            "Bereit für WeintCodex: " + " · ".join(teile) + zahlen + "."
         )
 
-        #
-        # Sofort zustellen statt auf den Sync-Takt zu warten: wer hier
-        # drückt, will gleich `/reload` tippen (dieselbe Überlegung wie
-        # beim "Fertig" der WeakAuras-Seite).
-        #
+        self.header.setTitle(
+            f"Sim-Ergebnis für {spec_label(key)} liegt bereit."
+            if (entry is not None and (target is not None or self._healer()))
+            else f"Für {spec_label(key)} fehlt noch ein Teil."
+        )
 
-        if self.sync is not None:
-            self.sync.publish_now()
+    def _draw_run_line(self, entry, target):
+        """
+        Aus welchem Lauf das Abgelegte stammt.
 
-        self._clear_input()
+        Ohne Kennung steht hier **nichts** - jeder Eintrag von vor
+        3.3.0 hat keine, und eine erfundene wäre schlimmer als keine.
+        """
 
-        self.refresh()
+        laeufe = []
 
-        #
-        # UND GLEICH IN DIE ZWISCHENABLAGE (seit 3.1.1).
-        #
-        # *Übernehmen* und *String kopieren* waren zwei Klicks für eine
-        # Absicht: wer übernimmt, will es ins Spiel bringen. Der
-        # Zeitpunkt ist auch der einzige, an dem die Frage "welcher der
-        # beiden Strings ist meiner" gar nicht erst entsteht - der
-        # gerade übernommene liegt bereit. Erst nach `refresh()`, denn
-        # das Feld wird dort gefüllt; und über denselben Weg wie der
-        # Knopf, damit ein System ohne Zwischenablage denselben Satz
-        # bekommt statt eines stillen Nichts.
-        #
+        for eintrag in (entry, target):
 
-        self._copy_transfer()
+            kennung = str(getattr(eintrag, "run_id", "") or "")
 
-        logger = getattr(self.manager, "logger", None)
+            if kennung and kennung not in laeufe:
+                laeufe.append(kennung)
 
-        if logger is not None:
+        if not laeufe:
 
-            logger.success(
-                f"Sim-Gewichtung für {spec_label(entry.spec_key)} "
-                f"übernommen."
-            )
+            self.run_line.setText("")
 
-    def _remove(self):
-
-        if self.store is None:
             return
 
-        if not self.store.remove(self.selected_spec()):
-            return
+        wann = ""
 
-        #
-        # Auch das Löschen wird zugestellt: im Spiel verschwindet der
-        # Vorschlag dadurch, dass er in der nächsten Zustellung fehlt.
-        #
+        for eintrag in (target, entry):
 
-        if self.sync is not None:
-            self.sync.publish_now()
+            if eintrag is not None and getattr(eintrag, "created", 0):
 
-        self.copy_state.setText("")
+                wann = " · übernommen " + time.strftime(
+                    "%d.%m.%Y", time.localtime(eintrag.created)
+                )
 
-        self.refresh()
+                break
+
+        self.run_line.setText("Aus Sim-Lauf " + " und ".join(laeufe) + wann)
 
     def _copy_transfer(self):
+        """
+        Den String in die Zwischenablage - der Weg **ohne** `/reload`.
+        """
 
         text = self.transfer.toPlainText()
 
@@ -2214,7 +2428,8 @@ class SimPage(Page):
         self.copy_state.setText(
             ("Beide Zeilen kopiert" if anzahl > 1 else "Kopiert")
             + ". Im Spiel unter Import einfügen — das wirkt sofort, "
-            "ohne /reload."
+            "ohne /reload. Zugestellt ist es ohnehin: ein /reload holt "
+            "es genauso."
         )
 
 
@@ -2228,19 +2443,6 @@ def _sheet_key(sheet: dict) -> str:
     realm = str(sheet.get("realm", "")).strip()
 
     return f"{name}-{realm}" if realm else name
-
-
-def _from_character(entry) -> str:
-
-    return f" · {entry.character}" if entry.character else ""
-
-
-def _stamp(created: int) -> str:
-
-    if not created:
-        return "ohne Datum"
-
-    return time.strftime("%d.%m.%Y", time.localtime(created))
 
 
 def _percent(value: float) -> str:

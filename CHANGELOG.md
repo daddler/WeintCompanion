@@ -2,6 +2,90 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 3.3.0
+
+**Ein Sim-Lauf statt zwei Importe.** *Simmen* fragt nicht mehr, ob du
+gerade Wertegewichte oder eine Zielausrüstung einfügst. Du simmst
+einmal, du fügst ein, was aus dem Sim kommt — und die Seite sagt, was
+sie erkannt hat und was noch fehlt:
+
+> Gewichtung ✓ · Optimierte Ausrüstung fehlt
+> Noch nicht vollständig — im Sim Export → Link oder JSON kopieren.
+
+Das zweite Einfügen **ergänzt** jetzt das erste, statt es zu ersetzen.
+Danach ein Knopf: *Sim-Ergebnis übernehmen*. Vorher waren es zwei Karten
+mit zwei Übernehmen-Knöpfen, zwei Entfernen-Knöpfen und zwei Runden
+durch dasselbe Feld — und wer die zweite Runde vergaß, bekam im Spiel
+eine Empfehlung, der man nicht ansieht, dass ihr die Hälfte fehlt.
+
+**Vier Schritte, die den Weg abbilden, den man geht:**
+
+1. *Charakter vorbereiten* — wer, welche Spezialisierung, und sieht die
+   Companion deinen aktuellen Stand? Ohne Knopf: das ist eine Antwort,
+   keine Handlung.
+2. *Sim öffnen und rechnen lassen* — ein Hauptknopf, und daneben der
+   Satz, ohne den Schritt 3 leerläuft (Zahnrad neben *Suggest Reforges*,
+   *Include gems* anhaken).
+3. *Sim-Ergebnis einfügen* — ein Feld, ein Befund, ein Knopf.
+4. *Ins Spiel übertragen* — ein Vorgang. Welcher der beiden Wege gerade
+   gilt, entscheidet die Companion, nicht du.
+
+**Und die Seite sagt jetzt, ob wirklich optimiert wurde.** In Zahlen,
+die sich im Spiel nachzählen lassen:
+
+> 15 Ausrüstungsplätze geprüft · 7 Sockeländerungen · 4 Umschmiedungen
+> — es ändert sich etwas an 6 Teilen (Kopf, Brust, Hände, …)
+
+Ändert sich **nichts**, steht das genauso da — mit beiden Erklärungen,
+statt sich für eine zu entscheiden: entweder ist bereits alles optimal,
+oder im Sim lief noch kein Optimierungslauf. Ein Zielzustand, der in
+Wahrheit dein Iststand ist, bringt im Spiel jede Empfehlung zum
+Schweigen, und das ist von einer fertigen Ausrüstung nicht zu
+unterscheiden.
+
+**Neu erkannt wird ausserdem:** eine Ausgabe für eine andere Klasse (der
+Knopf heisst dann *Trotzdem übernehmen* statt gesperrt zu sein — der
+Zweitcharakter ist ein Grund, kein Fehler), und ein Ergebnis, dessen
+Ausrüstung zur Hälfte nicht mehr deine ist.
+
+**Gewichtung und Zielausrüstung tragen jetzt dieselbe Kennung.** Steht
+später einmal eine Gewichtung von gestern neben einer Zielausrüstung von
+heute, sagt die Seite es — im Spiel sieht man diesen Unterschied nicht.
+
+**Dafür braucht es nichts Neues im Spiel.** Ein WeintCodex vor 3.2.0.0
+liest denselben String wie bisher; ihm fehlt nur die Herkunft.
+
+### Technisch
+
+**`core/sim_run.py`** ist die neue Klammer — und ausdrücklich **kein
+neuer Datenvertrag**. `stat_weights.json` und `target_gear.json` bleiben
+getrennt, die Kanäle bleiben getrennt, `WCIMPORT:SW:`/`WCIMPORT:TG:`
+bleiben zwei Umschläge. Was dazukommt, sind zwei angehängte Abschnitte
+(Kennung des Laufs, Zeitstempel der Ausrüstung) und die Rechnung darüber.
+
+**Es gibt keinen dritten Speicher, und das ist die Entscheidung.** Die
+Kennung hängt am Lauf (Charakter, Spec, Ausgangszustand, Zeitstempel des
+Exports) und lässt sich jederzeit aus dem neu gelesenen Export **wieder
+ausrechnen**. Eine `sim_runs.json` daneben hätte nichts gekonnt, was
+diese Rechnung nicht kann — und wäre genau dann veraltet, wenn sie
+gebraucht wird.
+
+**Ein Lauf ohne Ausgangszustand hat keine Kennung.** Eine zu erfinden
+wäre schlimmer als keine: sie hinge an der Uhr dieses Rechners, wäre bei
+jedem Betreten der Seite eine andere, und die Frage „gehören diese
+beiden zusammen" bekäme jedes Mal ein falsches Nein. Dieselbe Regel wie
+`at == -1` und `stars == 0`.
+
+**Der Zeitstempel kommt aus der Uhr des Spiels**, nicht aus der dieses
+Rechners — geschrieben hat ihn der WowSimsExporter. Genau deshalb kann
+WeintCodex 3.2.0.0 ihn gegen sein eigenes *Bereitstellen* halten und
+erkennen, ob das der Lauf ist, auf den es wartet. Kein zweiter Kanal.
+
+`tests/test_sim_run.py` (24 Prüfungen: die sechs Zustände, die
+Kennung, das Sammeln, die Korrelation), dazu neue Abschnitte in
+`tests/test_sim_page_target.py`, `tests/test_target_gear.py` und
+`tests/test_stat_weights.py`.
+
 ## 3.2.0
 
 **Ein Ausgang statt zwei.** *Simmen* hat die Schritte getauscht: erst

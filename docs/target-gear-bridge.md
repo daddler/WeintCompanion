@@ -102,7 +102,10 @@ Nachsehen lässt sich das an genau einer Stelle: neben dem, was der
 WowSimsExporter als **angelegt** meldet (`core/wowsims_export.py`).
 `compare()` tut das je Platz, und die Seite sagt das Ergebnis:
 
-- Unterscheidet sich etwas → „ändert sich etwas an N Teilen (Kopf, …)".
+- Unterscheidet sich etwas → „N Ausrüstungsplätze geprüft · N
+  Sockeländerungen · N Umschmiedungen — es ändert sich etwas an N
+  Teilen (Kopf, …)". `SlotDiff.gem_changes` zählt dabei **Sockel**,
+  nicht Teile; eine 0 im Ziel zählt nicht mit (siehe unten).
 - Unterscheidet sich **nichts** → „Achtung: das ist Stück für Stück
   dasselbe, was du gerade trägst. Entweder ist bereits alles optimal —
   oder im Sim lief noch kein Optimierungslauf."
@@ -207,6 +210,8 @@ Verschachtelte Lua-Tabelle, geschrieben über `core/lua_table.to_lua()`:
 | `character` / `realm` | Wem der Zielzustand gehört. Leer heisst „dem, der ihn angenommen hat" |
 | `source` | Aus welcher Gestalt gelesen (siehe Tabelle oben) |
 | `created` | Unix-Zeitstempel des Einlesens |
+| `run` | Kennung des Sim-Laufs, `""` = keine. Vertrag: `sim-run.md` |
+| `startedAt` | Zeitstempel der Ausrüstung, mit der gesimmt wurde — aus der Uhr des **Spiels**. `0` = nicht feststellbar. Vertrag: `sim-run.md` |
 
 Ein Platz ohne Gegenstand steht **nicht** in der Nachricht.
 
@@ -215,7 +220,14 @@ Ein Platz ohne Gegenstand steht **nicht** in der Nachricht.
 ```
 WCIMPORT:TG:<spec>:<id>:<created>:<character>:<source>:
     <slot>|<itemId>|<gem1>-<gem2>-<gem3>|<reforge>|<enchant>,…
+    :<run>:<startedAt>
 ```
+
+Die beiden letzten Abschnitte sind **angehängt** (Companion 3.3.0,
+Addon 3.2.0.0) und stehen als Einzige nicht in dieser Datei: ihr
+Vertrag ist `sim-run.md`. `TG.ParseTransfer` liest die Felder 1 bis 6
+über feste Positionen, ein älterer String liefert dort `""` und `0` —
+und daraus wird nichts behauptet.
 
 Abschnitte mit `:`, Datensätze mit `,`, Felder mit `|` — dieselbe Form
 wie die übrigen Importe, damit im Addon kein zweiter Parser entsteht.
@@ -327,3 +339,10 @@ Textsorten auseinanderhält.
 Sockelreihenfolge, den Meta-Sockel, die Lücke im Ziel, das veraltete
 Ziel, Ring 1 gegen Ring 2, die vier Umschmiede-Fälle und den
 Übertragungsstring hin und zurück.
+
+## Woher der Zielzustand kommt
+
+Er ist die eine Hälfte eines **Sim-Laufs**; die andere ist die
+Gewichtung (`stat-weights-bridge.md`). Was beide verbindet — die
+Kennung, der Zeitstempel, der Handshake im Spiel und die sechs Zustände
+eines Laufs — steht in `sim-run.md` und ausdrücklich nicht hier.

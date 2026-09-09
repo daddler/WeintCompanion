@@ -176,6 +176,8 @@ class StatWeightsStore:
                 source=entry.source,
                 created=int(time.time()),
                 note=entry.note,
+                run_id=entry.run_id,
+                started_at=entry.started_at,
             )
 
         self._sets[entry.spec_key] = entry
@@ -223,6 +225,8 @@ def _to_json(entry: WeightSet) -> dict:
         "source": entry.source,
         "created": int(entry.created or 0),
         "note": entry.note,
+        "run": entry.run_id,
+        "startedAt": int(entry.started_at or 0),
     }
 
 
@@ -260,4 +264,11 @@ def _from_json(raw) -> WeightSet | None:
         source=str(raw.get("source", "sim")) or "sim",
         created=int(raw.get("created", 0) or 0),
         note=str(raw.get("note", "")),
+        #
+        # Eine Datei von vor 3.3.0 hat kein `run` - das ist kein Fehler
+        # und wird keiner: eine Gewichtung ohne Lauf ist eine gültige
+        # Gewichtung, sie sagt nur nichts über ihre Herkunft.
+        #
+        run_id=str(raw.get("run", "")),
+        started_at=int(raw.get("startedAt", 0) or 0),
     )

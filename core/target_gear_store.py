@@ -154,6 +154,8 @@ class TargetGearStore:
                 character=entry.character,
                 realm=entry.realm,
                 created=int(time.time()),
+                run_id=entry.run_id,
+                started_at=entry.started_at,
             )
 
         self._sets[entry.spec_key] = entry
@@ -195,6 +197,8 @@ def _to_json(entry: TargetSet) -> dict:
         "realm": entry.realm,
         "source": entry.source,
         "created": int(entry.created or 0),
+        "run": entry.run_id,
+        "startedAt": int(entry.started_at or 0),
         "items": [
             {
                 "slot": item.slot,
@@ -276,4 +280,10 @@ def _from_json(raw) -> TargetSet | None:
         character=str(raw.get("character", "")),
         realm=str(raw.get("realm", "")),
         created=int(raw.get("created", 0) or 0),
+        #
+        # Ohne `run` (jede Datei von vor 3.3.0): gültig, nur ohne
+        # Herkunft. Dieselbe Nachsicht wie im Gewichte-Speicher.
+        #
+        run_id=str(raw.get("run", "")),
+        started_at=int(raw.get("startedAt", 0) or 0),
     )

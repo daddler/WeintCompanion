@@ -628,3 +628,119 @@ def test_one_target_per_spec(tmp_path):
 
     assert store.remove("DEATHKNIGHT_BLOOD") is True
     assert store.get("DEATHKNIGHT_BLOOD") is None
+
+
+# --------------------------------------------------
+# Die Kennung des Sim-Laufs (seit 3.3.0)
+# --------------------------------------------------
+
+
+def test_the_run_id_is_appended_and_breaks_no_older_addon():
+    """
+    ABSCHNITT 7 IST ANGEHAENGT, UND DAS IST DIE GANZE VERTRAEGLICHKEIT.
+
+    `TG.ParseTransfer` drüben liest die Felder 1 bis 6 über feste
+    Positionen und ignoriert alles dahinter. Ein älteres WeintCodex
+    bekommt damit genau denselben Zielzustand wie bisher - die Kennung
+    fällt weg, sonst nichts.
+
+    Das ist der Unterschied zu zwei Umschlägen in einer Zeile, wo genau
+    diese Nachsicht die zweite Auskunft still verschluckt hätte: dort
+    fehlte eine ganze Auskunft, hier nur ihre Herkunft.
+    """
+
+    entry = TargetSet(
+        gear=TargetGear(
+            known=True,
+            source="wowsims_json",
+            spec_key="DEATHKNIGHT_BLOOD",
+            items=(TargetItem(slot=1, item_id=86920, gems=(76895, 0, 76639)),),
+        ),
+        spec_key="DEATHKNIGHT_BLOOD",
+        created=1788186037,
+        run_id="SIM-20260909-7F4A",
+        started_at=1788185000,
+    )
+
+    text = build_transfer(entry)
+
+    parts = text[len("WCIMPORT:TG:"):].split(":")
+
+    # Die sechs alten Abschnitte stehen unverändert an ihrem Platz.
+    assert parts[0] == "DEATHKNIGHT_BLOOD"
+    assert parts[2] == "1788186037"
+    assert parts[5].startswith("1|86920|76895-0-76639|")
+
+    # Und die Kennung dahinter, mit ihren Bindestrichen - plus der
+    # Zeitstempel der Ausrüstung, mit der gesimmt wurde. Der stammt aus
+    # der Uhr des SPIELS und ist die Zahl, an der das Addon erkennt, ob
+    # das hier der Lauf ist, auf den es wartet.
+    assert parts[6] == "SIM-20260909-7F4A"
+    assert parts[7] == "1788185000"
+
+
+def test_a_run_id_never_takes_the_string_apart():
+    """
+    Sie ist unsere eigene Zeichenkette - aber sie kommt aus einer Datei,
+    und eine Datei kann alles enthalten. Der Bindestrich bleibt (er
+    trennt nur INNERHALB eines Datensatzes die Steine, nicht zwischen
+    zwei `:`-Abschnitten), alles andere fällt weg.
+    """
+
+    from core.target_gear import clean_run_id
+
+    assert clean_run_id("SIM-20260909-7F4A") == "SIM-20260909-7F4A"
+
+    assert clean_run_id("SIM:2026|09,09") == "SIM20260909"
+
+    assert clean_run_id("") == ""
+
+
+def test_an_entry_without_a_run_id_stays_valid():
+    """
+    Jeder Zielzustand von vor 3.3.0 hat keine Kennung. Das ist kein
+    Fehler und wird keiner - er sagt nur nichts über seine Herkunft.
+    """
+
+    entry = TargetSet(
+        gear=TargetGear(
+            known=True,
+            spec_key="DEATHKNIGHT_BLOOD",
+            items=(TargetItem(slot=1, item_id=86920, gems=(76895,)),),
+        ),
+        spec_key="DEATHKNIGHT_BLOOD",
+    )
+
+    assert entry.run_id == ""
+
+    assert build_transfer(entry).endswith(":0")
+
+    assert payload([entry])["sets"][0]["run"] == ""
+
+    assert payload([entry])["sets"][0]["startedAt"] == 0
+
+
+def test_gem_changes_count_sockets_and_ignore_the_zero():
+    """
+    Die Seite sagt „7 Sockeländerungen", nicht „4 Teile". Eine 0 im Ziel
+    zählt dabei NICHT mit: sie heisst „das Ziel nennt für diesen Sockel
+    keinen Stein" und nicht „nimm den Stein heraus" - sie als Änderung
+    zu zählen wäre eine Empfehlung in die teure Richtung.
+    """
+
+    target = TargetGear(
+        known=True,
+        spec_key="DEATHKNIGHT_BLOOD",
+        items=(TargetItem(slot=1, item_id=86920, gems=(76895, 0, 76639)),),
+    )
+
+    ist = (SimItem(item_id=86920, gems=(76653, 76653, 76639)),)
+
+    diffs = compare(target, ist)
+
+    assert len(diffs) == 1
+
+    # Sockel 1 ist anders, Sockel 2 sagt das Ziel nichts, Sockel 3 gleich.
+    assert diffs[0].gem_changes == 1
+
+    assert diffs[0].gems_differ is True

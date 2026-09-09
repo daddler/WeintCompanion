@@ -1049,6 +1049,30 @@ class WeightSet:
 
     note: str = ""
 
+    #
+    # AUS WELCHEM SIM-LAUF SIE STAMMT (seit 3.3.0).
+    #
+    # Das Gegenstück zu `TargetSet.run_id`: erst beide zusammen machen
+    # aus zwei Auskünften einen Vorgang. Leer ist gültig - jede
+    # Gewichtung, die vor 3.3.0 abgelegt wurde, hat keine, und eine von
+    # Hand getippte hat auch keinen Lauf. Siehe `core/sim_run.py`.
+    #
+
+    run_id: str = ""
+
+    #
+    # DER ZEITSTEMPEL DER AUSRUESTUNG, MIT DER GESIMMT WURDE.
+    #
+    # Er stammt aus der Uhr des **Spiels** (der WowSimsExporter hat ihn
+    # geschrieben) und ist damit die einzige Zahl, die auf beiden Seiten
+    # dieselbe ist. Das Addon merkt sich beim *Bereitstellen* denselben
+    # Wert und kann daran erkennen, ob das Ankommende zu genau dem Lauf
+    # gehört, auf den es wartet — ohne einen zweiten Kanal und ohne eine
+    # Vermutung. 0 heisst „nicht feststellbar", nicht „Sekunde 0".
+    #
+
+    started_at: int = 0
+
     @property
     def id(self) -> str:
         """
@@ -1104,6 +1128,21 @@ def clean_field(value: str) -> str:
     return _UNSAFE.sub(" ", (value or "")).strip()
 
 
+#
+# Die Kennung des Laufs hat ihre eigene Reinigung: sie besteht aus
+# Buchstaben, Ziffern und Bindestrichen, und alles andere darin wäre
+# nicht von uns. `clean_field()` liesse `SIM 20260909 7F4A` durch -
+# eine Kennung mit Leerzeichen, die keiner mehr wiedererkennt.
+#
+
+_RUN_UNSAFE = re.compile(r"[^A-Za-z0-9-]")
+
+
+def clean_run_id(value: str) -> str:
+
+    return _RUN_UNSAFE.sub("", (value or "")).strip("-")[:32]
+
+
 def build_transfer(entry: WeightSet) -> str:
     """
     Der Übertragungsstring für den Import im Spiel.
@@ -1133,6 +1172,14 @@ def build_transfer(entry: WeightSet) -> str:
         clean_field(entry.character),
         clean_field(entry.source or "sim"),
         pairs,
+        #
+        # ABSCHNITT 7, ANGEHAENGT (seit 3.3.0). `SW.ParseTransfer`
+        # drüben liest die Felder 1 bis 6 über feste Positionen - was
+        # dahinter steht, ignoriert es folgenlos. Ein älteres WeintCodex
+        # bekommt dieselbe Gewichtung wie bisher, nur ohne Herkunft.
+        #
+        clean_run_id(entry.run_id),
+        str(int(entry.started_at or 0)),
     ]
 
     return "WCIMPORT:SW:" + ":".join(fields)
@@ -1161,6 +1208,8 @@ def payload(entries) -> dict:
                 "realm": entry.realm,
                 "source": entry.source or "sim",
                 "created": int(entry.created or 0),
+                "run": clean_run_id(entry.run_id),
+                "startedAt": int(entry.started_at or 0),
                 "weights": dict(entry.weights),
             }
             for entry in entries

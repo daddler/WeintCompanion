@@ -708,6 +708,17 @@ class SlotDiff:
 
     enchant_differs: bool = False
 
+    #
+    # WIEVIELE SOCKEL, NICHT NUR OB EINER. Die Seite sagt seit 3.3.0
+    # „7 Sockeländerungen" statt „4 Teile geändert" - eine Zahl, die
+    # sich im Spiel nachzählen lässt, ist der Beleg dafür, dass wirklich
+    # optimiert wurde. `gems_differ` bleibt daneben stehen: es ist die
+    # Frage, die `changed_slots()` stellt, und zwei Namen für dieselbe
+    # Zahl liefen ab der ersten Aenderung auseinander.
+    #
+
+    gem_changes: int = 0
+
     @property
     def slot_name(self) -> str:
 
@@ -779,12 +790,17 @@ def compare(target: TargetGear | None, current) -> tuple[SlotDiff, ...]:
 
             continue
 
+        soll = _gems(item.gems)
+
+        ist_gems = _gems(gegen.gems)
+
         out.append(
             SlotDiff(
                 slot=item.slot,
                 item_id=item.item_id,
                 same_item=True,
-                gems_differ=_gems(item.gems) != _gems(gegen.gems),
+                gems_differ=soll != ist_gems,
+                gem_changes=_gem_changes(soll, ist_gems),
                 reforge_differs=item.reforging != _reforging(gegen.reforging),
                 #
                 # Eine fehlende Verzauberung im Ziel ist keine Aussage:
@@ -813,6 +829,32 @@ def _gems(gems) -> tuple[int, ...]:
         out.pop()
 
     return tuple(out)
+
+
+def _gem_changes(soll, ist) -> int:
+    """
+    Wieviele **Sockel** sich unterscheiden - Position für Position.
+
+    Eine 0 im Ziel zählt nicht mit. Sie heisst „das Ziel nennt für
+    diesen Sockel keinen Stein" und ausdrücklich nicht „nimm deinen
+    Stein heraus"; sie als Änderung zu zählen wäre eine Empfehlung in
+    die teure Richtung (dieselbe Regel wie `TG.GemFor` drüben und wie
+    `headroom == nil`).
+    """
+
+    count = 0
+
+    for index, gem in enumerate(soll):
+
+        if not gem:
+            continue
+
+        vorher = ist[index] if index < len(ist) else 0
+
+        if gem != vorher:
+            count += 1
+
+    return count
 
 
 def changed_slots(diffs) -> tuple[SlotDiff, ...]:
@@ -860,6 +902,34 @@ class TargetSet:
 
     created: int = 0
 
+    #
+    # AUS WELCHEM SIM-LAUF ER STAMMT (seit 3.3.0).
+    #
+    # Er ändert an dieser Struktur nichts weiter: die Zuordnung im Spiel
+    # läuft weiter über Spezialisierung und Gegenstandsnummer, und ein
+    # leeres Feld ist genauso gültig wie vorher (jeder Zielzustand, der
+    # vor 3.3.0 abgelegt wurde, hat keins). Er beantwortet die eine
+    # Frage, die vorher niemand stellen konnte: gehören diese
+    # Zielausrüstung und jene Gewichtung zu **einem** Lauf?
+    #
+    # Siehe `core/sim_run.py`.
+    #
+
+    run_id: str = ""
+
+    #
+    # DER ZEITSTEMPEL DER AUSRUESTUNG, MIT DER GESIMMT WURDE.
+    #
+    # Er stammt aus der Uhr des **Spiels** (der WowSimsExporter hat ihn
+    # geschrieben) und ist damit die einzige Zahl, die auf beiden Seiten
+    # dieselbe ist. Das Addon merkt sich beim *Bereitstellen* denselben
+    # Wert und kann daran erkennen, ob das Ankommende zu genau dem Lauf
+    # gehört, auf den es wartet — ohne einen zweiten Kanal und ohne eine
+    # Vermutung. 0 heisst „nicht feststellbar", nicht „Sekunde 0".
+    #
+
+    started_at: int = 0
+
     @property
     def id(self) -> str:
         return self.gear.id
@@ -886,6 +956,22 @@ _UNSAFE = re.compile(r"[:|,~\r\n\\\"-]")
 def clean_field(value: str) -> str:
 
     return _UNSAFE.sub(" ", (value or "")).strip()
+
+
+#
+# Die Kennung des Laufs geht NICHT durch `clean_field()`: dort fällt der
+# Bindestrich weg, weil er innerhalb eines Datensatzes die Steine
+# trennt. In einem eigenen `:`-Abschnitt kann er das nicht - dort ist er
+# ein gewöhnliches Zeichen, und `SIM-20260909-7F4A` ohne Bindestriche
+# wäre eine andere Kennung als die, die überall sonst steht.
+#
+
+_RUN_UNSAFE = re.compile(r"[^A-Za-z0-9-]")
+
+
+def clean_run_id(value: str) -> str:
+
+    return _RUN_UNSAFE.sub("", (value or "")).strip("-")[:32]
 
 
 def build_transfer(entry: TargetSet) -> str:
@@ -937,6 +1023,19 @@ def build_transfer(entry: TargetSet) -> str:
         clean_field(entry.character),
         clean_field(entry.source or "wowsims"),
         ",".join(rows),
+        #
+        # ABSCHNITT 7 IST ANGEHAENGT UND DARF ES BLEIBEN (seit 3.3.0).
+        #
+        # `TG.ParseTransfer` drüben liest die Felder 1 bis 6 über feste
+        # Positionen; was dahinter steht, ignoriert es. Ein älteres
+        # WeintCodex bekommt damit genau denselben Zielzustand wie
+        # bisher - die Kennung fällt weg, sonst nichts. Das ist der
+        # Unterschied zu zwei Umschlägen in einer Zeile, wo genau diese
+        # Nachsicht die zweite Auskunft still verschluckt hätte: dort
+        # fehlte eine ganze Auskunft, hier nur ihre Herkunft.
+        #
+        clean_run_id(entry.run_id),
+        str(int(entry.started_at or 0)),
     ]
 
     return "WCIMPORT:TG:" + ":".join(fields)
@@ -966,6 +1065,8 @@ def payload(entries) -> dict:
                 "realm": entry.realm,
                 "source": entry.source or "wowsims",
                 "created": int(entry.created or 0),
+                "run": clean_run_id(entry.run_id),
+                "startedAt": int(entry.started_at or 0),
                 "items": [
                     {
                         "slot": item.slot,

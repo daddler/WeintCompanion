@@ -97,6 +97,8 @@ Verschachtelte Lua-Tabelle, geschrieben über `core/lua_table.to_lua()`:
             ["realm"]     = "Everlook",
             ["source"]    = "sim",
             ["created"]   = 1788186037,
+            ["run"]       = "SIM-20260909-7F4A",
+            ["startedAt"] = 1788185000,
         },
         …
     },
@@ -111,6 +113,8 @@ Verschachtelte Lua-Tabelle, geschrieben über `core/lua_table.to_lua()`:
 | `character` / `realm` | Nur zur Anzeige („aus dem Sim vom … für Aldrin") |
 | `source` | `sim` oder `pairs` — woher die Zahlen gelesen wurden |
 | `created` | Unix-Zeitstempel des Einlesens |
+| `run` | Kennung des Sim-Laufs, `""` = keine. Vertrag: `sim-run.md` |
+| `startedAt` | Zeitstempel der Ausrüstung, mit der gesimmt wurde — aus der Uhr des **Spiels**. `0` = nicht feststellbar. Vertrag: `sim-run.md` |
 
 Die zwölf Wertschlüssel: `strength`, `agility`, `intellect`, `stamina`,
 `spirit`, `hit`, `expertise`, `crit`, `haste`, `mastery`, `dodge`,
@@ -119,8 +123,18 @@ Die zwölf Wertschlüssel: `strength`, `agility`, `intellect`, `stamina`,
 ## Zeichenkette `WCIMPORT:SW:` (Companion → Zwischenablage → Spiel)
 
 ```
-WCIMPORT:SW:<spec>:<id>:<created>:<character>:<source>:<stat>|<wert>,<stat>|<wert>,…
+WCIMPORT:SW:<spec>:<id>:<created>:<character>:<source>:<stat>|<wert>,…:<run>:<startedAt>
 ```
+
+Die beiden letzten Abschnitte sind **angehängt** (Companion 3.3.0,
+Addon 3.2.0.0) und stehen als Einzige nicht in dieser Datei: ihr Vertrag
+ist `sim-run.md`. `SW.ParseTransfer` liest die Felder 1 bis 6 über feste
+Positionen, ein älterer String liefert dort `""` und `0` — und daraus
+wird nichts behauptet.
+
+**Die Kennung geht nicht durch `clean_field()`**, sondern durch
+`clean_run_id()`: sie darf ihre Bindestriche behalten, denn zwischen
+zwei `:`-Abschnitten trennen die nichts.
 
 Abschnitte mit `:`, Datensätze mit `,`, Felder mit `|` — dieselbe Form
 wie die fünf übrigen Importe, damit im Addon kein zweiter Parser
@@ -207,3 +221,14 @@ Beide Seiten prüfen ausserdem dieselbe Sim-Ausgabe gegen dieselben
 erwarteten Zahlen (Treffer 100, Stärke 56, Waffenkunde 85). Laufen die
 zwei Leser auseinander, widersprechen sich Spiel und Desktop bei einer
 Frage, die nur eine Antwort hat.
+
+## Woher die Gewichtung kommt
+
+Sie ist die eine Hälfte eines **Sim-Laufs**; die andere ist die
+Zielausrüstung (`target-gear-bridge.md`). Was beide verbindet — die
+Kennung, der Zeitstempel, der Handshake im Spiel und die sechs Zustände
+eines Laufs — steht in `sim-run.md` und ausdrücklich nicht hier.
+
+Der Weg über QE Live ist die Ausnahme: dort gibt es **keinen**
+Zielzustand zu holen, und ein Lauf ist ohne ihn vollständig
+(`validate(target_expected=False)`).

@@ -496,7 +496,14 @@ def test_the_transfer_string_keeps_the_display_order():
         WeightSet(spec_key="MAGE_FIRE", weights={"crit": 80, "intellect": 100}),
     )
 
-    pairs = text.rsplit(":", 1)[1]
+    #
+    # Abschnitt 6 ist die Gewichtung; dahinter steht seit 3.3.0 die
+    # Kennung des Sim-Laufs. Von hinten gezaehlt waere das ab jetzt der
+    # falsche Abschnitt - und genau diese Sorte Zaehlung von hinten hat
+    # das Anhaengen ueberhaupt erst geprueft.
+    #
+
+    pairs = text.split(":")[7]
 
     assert pairs.index("intellect|100") < pairs.index("crit|80")
 
@@ -577,3 +584,42 @@ def test_no_limit_set_says_nothing():
 def test_the_display_order_matches_the_stat_table():
 
     assert set(STAT_ORDER) == set(normalize({key: 1.0 for key in STAT_ORDER})[0])
+
+
+def test_the_run_id_is_the_seventh_section():
+    """
+    Angehängt, damit `SW.ParseTransfer` drüben (Felder 1 bis 6 über
+    feste Positionen) unverändert weiterliest. Eine ältere Addon-Fassung
+    bekommt dieselbe Gewichtung wie bisher, nur ohne Herkunft.
+    """
+
+    text = build_transfer(
+        WeightSet(
+            spec_key="MAGE_FIRE",
+            weights={"intellect": 100},
+            created=1788186037,
+            run_id="SIM-20260909-7F4A",
+            started_at=1788185000,
+        )
+    )
+
+    parts = text[len("WCIMPORT:SW:"):].split(":")
+
+    assert parts[0] == "MAGE_FIRE"
+    assert parts[2] == "1788186037"
+    assert parts[5] == "intellect|100"
+    assert parts[6] == "SIM-20260909-7F4A"
+    assert parts[7] == "1788185000"
+
+
+def test_a_weight_set_without_a_run_id_stays_valid():
+    """
+    Eine von Hand getippte Gewichtung hat keinen Lauf, und jede von vor
+    3.3.0 ebenfalls.
+    """
+
+    entry = WeightSet(spec_key="MAGE_FIRE", weights={"intellect": 100})
+
+    assert entry.run_id == ""
+
+    assert build_transfer(entry).endswith(":0")

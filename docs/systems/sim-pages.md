@@ -1,6 +1,79 @@
 # Simmen: wowsims and QE Live
 
-## Die Zielausrüstung aus dem Sim (`core/target_gear.py`, Schritt 4)
+## Ein Lauf, vier Schritte (seit 3.3.0)
+
+Die Klammer um beide Auskünfte — Kennung, Zeitstempel, Handshake im
+Spiel, die sechs Zustände — steht in `../sim-run.md`. Diese Datei hält
+nur die Companion-lokale Seite.
+
+**Der Nutzer denkt in einem Vorgang.** *„Ich simme meinen Charakter und
+will danach die Empfehlungen im WeintCodex haben."* Technisch sind es
+zwei Auskünfte mit zwei Speichern, zwei Kanälen und zwei
+Übertragungsstrings, und das bleibt so — die Gründe stehen in den
+beiden Verträgen. Was sich geändert hat: die Trennung ist nicht mehr
+die Sorge des Nutzers.
+
+Die Seite bildet den Weg ab, den man geht:
+
+| Schritt | Hauptaktion | Beantwortet |
+|---|---|---|
+| 1 Charakter vorbereiten | *keine* | Ist mein Charakter richtig erkannt? Sieht die Companion meinen Stand? |
+| 2 Sim öffnen und rechnen lassen | *Sim mit meiner Ausrüstung öffnen* | Was habe ich jetzt zu tun? |
+| 3 Sim-Ergebnis einfügen | *Sim-Ergebnis übernehmen* | Ist es vollständig? Wurde wirklich optimiert? |
+| 4 Ins Spiel übertragen | *Ins Spiel übertragen* | Was wird übertragen? Muss ich noch etwas tun? |
+
+Fünf Dinge daran sind nicht Geschmack:
+
+- **Schritt 1 hat keinen Knopf.** Er beantwortet zwei Fragen, bevor
+  irgendetwas passiert. Bis 3.2.0 standen die Antworten zwischen den
+  Knöpfen von Schritt 2, und dort liest sie niemand: wer einen Knopf
+  sieht, drückt ihn.
+- **„Im Sim rechnen lassen" ist keine eigene Karte.** Eine Karte ohne
+  Bedienelement wäre eine Überschrift mit einem Absatz — und gelesen
+  wird dieser Absatz ohnehin genau in dem Moment, in dem der Knopf
+  gedrückt wird. `SIM_STEPS` steht deshalb direkt darüber. Inhaltlich
+  ist er der wichtigste Satz der Seite (siehe unten).
+- **Ein Knopf zum Übernehmen, nicht zwei.** Bis 3.2.0 hatte jede der
+  beiden Auskünfte eine eigene Karte mit eigenem Knopf; wer den zweiten
+  vergaß, bekam im Spiel eine halbe Auskunft, der man das nicht ansieht.
+  `_apply()` legt ab, was im Lauf liegt.
+- **Ein Knopf zum Verwerfen, nicht zwei.** Zwei Entfernen-Knöpfe waren
+  die Möglichkeit, eine Hälfte stehenzulassen — und genau diese Hälfte
+  ergibt später die Mischung aus zwei Läufen, vor der Schritt 4 warnt.
+- **`_read()` sammelt, es ersetzt nicht.** Das zweite Einfügen ergänzt
+  den ersten Befund. Genau das war die „zweite Runde durch dasselbe
+  Feld", die den Nutzer zwang, sich die technische Trennung zu merken.
+
+**Die Sätze stehen in `core/sim_run.py`, nicht auf der Seite**
+(`headline()`, `parts_line()`, `change_line()`, `next_step()`,
+`source_line()`, `class_note()`, `mixed_note()`). Sie sind die Antwort
+auf eine Rechnung, und der Testlauf muss sie ohne Qt prüfen können —
+dieselbe Aufteilung wie `gap_text()`/`age_text()` in
+`core/wowsims_export.py`. Zwei Fassungen desselben Satzes liefen ab der
+ersten Änderung auseinander, und die falsche stünde dann bei dem, der
+einen Fehler sucht.
+
+**Der Befund kennt zwei Läufe, und das ist kein Versehen.** „Steht hier
+etwas?" beantwortet der **eingefügte** Lauf (`self._run`) — sonst stünde
+nach jedem Übernehmen ein Befund über ein leeres Feld. „Ist es
+vollständig?" beantwortet `_effective_run()`, also derselbe Lauf plus dem,
+was für **genau ihn** schon abgelegt ist. Übernommen wird nur das
+Eingefügte; wäre es der zusammengeführte, überschriebe jeder zweite Klick
+die schon abgelegte Hälfte mit einem neuen Zeitstempel. Warum es das
+braucht: `../sim-run.md`, Abschnitt *Der Lauf sieht, was für ihn schon
+abgelegt ist*.
+
+**Ein Lesefehler wirft nicht weg, was schon gelesen wurde** (`_fail()`).
+Wer nach der Gewichtung Unsinn einfügt, hat die Gewichtung nicht
+zurückgenommen. *Feld leeren* dagegen vergisst den Lauf — das ist der
+Sinn des Knopfes, und es ist sichtbar: die Häkchenzeile springt auf
+„Gewichtung fehlt".
+
+`tests/test_sim_run.py` prüft das Rechnende ohne Qt,
+`tests/test_sim_page_target.py` baut die Seite offscreen auf.
+
+
+## Die Zielausrüstung aus dem Sim (`core/target_gear.py`, Schritt 3)
 
 Voller Vertrag (drei Gestalten, Feldbedeutungen, Zuordnung über die
 Plätze, die 0-Regel, die Rangfolge im Spiel): `../target-gear-bridge.md`.
@@ -14,8 +87,9 @@ für dieselbe Frage.
 
 Vier Dinge sind hier nicht Geschmack:
 
-- **Dasselbe Eingabefeld für beide Sorten.** Schritt 2 heisst „Ergebnis
-  einfügen", und was aus dem Sim kommt, gehört dorthin. `_read()`
+- **Dasselbe Eingabefeld für beide Sorten.** Schritt 3 heisst
+  „Sim-Ergebnis einfügen", und was aus dem Sim kommt, gehört dorthin.
+  `_read()`
   probiert `parse_target()` **zuerst**, weil es die strengere der beiden
   Lesarten ist: es erkennt nur eine Adresse, einen Base64-Rumpf ab 40
   Zeichen oder JSON. Eine getippte Gewichtung („Hit 1.77") ist keins
@@ -30,15 +104,19 @@ Vier Dinge sind hier nicht Geschmack:
 - **Die Seite sagt, ob überhaupt optimiert wurde.** Ein Sim-Export
   enthält immer das, was gerade eingestellt ist. `compare()` stellt ihn
   je Platz neben das, was der WowSimsExporter als **angelegt** meldet,
-  und die Karte schreibt das Ergebnis hin — auch und gerade den Fall
+  `sim_run.validate()` zählt es aus (Plätze, **Sockel**, Umschmiedungen)
+  und `change_line()` schreibt das Ergebnis hin — auch und gerade den Fall
   „ändert sich nichts", der zwei Erklärungen hat (schon optimal, oder
   gar nicht optimiert). Ohne diesen Satz brächte ein
   Ausgangszustand-als-Ziel im Spiel jede Empfehlung zum Schweigen, und
   das wäre von einer fertigen Ausrüstung nicht zu unterscheiden.
-- **Eigener Speicher, eigener Kanal, eigene Karte.** Gewichtung und
-  Zielzustand sind zwei Auskünfte: die eine gilt für jede Ausrüstung,
-  die andere für genau die, mit der gesimmt wurde. Unter derselben
-  Überschrift wäre nicht zu sehen, welche von beiden gerade fehlt.
+- **Eigener Speicher, eigener Kanal — aber eine Karte** (seit 3.3.0).
+  Gewichtung und Zielzustand bleiben zwei Auskünfte: die eine gilt für
+  jede Ausrüstung, die andere für genau die, mit der gesimmt wurde.
+  Getrennt bleiben deshalb Ablage und Zustellung; getrennt *angezeigt*
+  wurden sie bis 3.2.0, und das war die Trennung, die der Nutzer
+  mitdenken musste. Welche von beiden gerade fehlt, beantwortet jetzt
+  `parts_line()` in einer Zeile.
 
 `tests/test_target_gear.py` prüft das Rechnende ohne Qt,
 `tests/test_sim_page_target.py` baut die Seite offscreen auf.
@@ -118,19 +196,20 @@ Zwei Dinge hängen daran und sind kein Geschmack:
 
 ## Ein Ausgang statt zwei (seit 3.2.0)
 
-**Die Karten stehen jetzt in der Reihenfolge, in der man sie läuft:**
-Quelle → Einfügen → Zielausrüstung → Zustellung. Bis 3.1.1 stand *Ins
-Spiel bringen* in der Mitte, und das war eine Treppe, die man als
+**Die Karten stehen in der Reihenfolge, in der man sie läuft** — seit
+3.3.0: Charakter → Sim öffnen → Einfügen → Übertragen. Bis 3.1.1 stand
+*Ins Spiel bringen* in der Mitte, und das war eine Treppe, die man als
 Schleife geht: einlesen, rüberbringen, zurück in den Sim, wieder
 einlesen, nochmal rüberbringen. Zwei Strings, zweimal einfügen im Spiel
 — und der zweite blieb regelmäßig liegen, was man einer Empfehlung im
 Spiel nicht ansieht.
 
 Die Zielkarte hat deshalb ihr eigenes String-Feld, *String kopieren*,
-*Entfernen* und `copy_state` verloren. Zwei Auskünfte heißt zwei
-**Befunde**, nicht zwei Wege ins Spiel. `_draw_delivery()` besitzt Feld,
-Warnung, Hinweis und Knöpfe und liest beide Speicher;
-`_draw_stored()`/`_draw_target()` schreiben nur noch ihre Zeile.
+*Entfernen* und `copy_state` verloren — und seit 3.3.0 gibt es sie gar
+nicht mehr: zwei Auskünfte heißt **ein** Befund über einen Lauf, nicht
+zwei Karten. `_draw_delivery()` besitzt Feld, Warnung, Hinweis und
+Knöpfe und liest beide Speicher; `_draw_stored()` schreibt nur noch
+seine Zeile.
 
 **`_delivery_lines()` ist die eine Stelle, die entscheidet, was ins Feld
 kommt** — und `_combined_allowed()` das Sicherheitsnetz davor
@@ -210,6 +289,11 @@ wird).
 
 *Nur die Seite* und *Export kopieren* sind im Heiler-Zweig entsprechend
 ausgeblendet — kein Rollenschutz, ein Weg mit nur einer Tür.
+
+**Ein Heiler-Lauf ist ohne Zielzustand vollständig.** `_validation()`
+gibt `target_expected=False` weiter, wenn `qelive.spec()` die Spec
+führt; sonst stünde dort dauerhaft „Optimierte Ausrüstung fehlt" —
+eine Aufforderung ins Leere.
 
 **Die Zahlen sind dieselben wie im Addon** (`SPECS`, dieselbe Skalierung
 wie `modules/qelive.lua`); `tests/test_qelive.py` und

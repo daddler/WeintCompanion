@@ -1,13 +1,14 @@
 """
-Die Simmen-Seite mit der Zielausrüstung - offscreen aufgebaut.
+Die Simmen-Seite - offscreen aufgebaut.
 
 **Warum das eine eigene Datei mit Qt ist.** Alles Rechnende steht in
-`core/target_gear.py` und wird dort ohne Fenster geprüft. Was hier
-zählt, ist die Verdrahtung: dass die Karte überhaupt entsteht, dass
-**dasselbe Eingabefeld** beide Textsorten auseinanderhält, und dass
-die Seite die Frage „lief da überhaupt ein Optimierungslauf?"
-tatsächlich stellt. Ein Tippfehler im Kartenaufbau fiele sonst erst
-dem Nutzer auf.
+`core/target_gear.py` und `core/sim_run.py` und wird dort ohne Fenster
+geprüft. Was hier zählt, ist die Verdrahtung: dass die Karten überhaupt
+entstehen, dass **dasselbe Eingabefeld** beide Textsorten
+auseinanderhält, dass beide sich im **selben Lauf sammeln** statt sich
+zu ersetzen, und dass die Seite die Frage „lief da überhaupt ein
+Optimierungslauf?" tatsächlich stellt. Ein Tippfehler im Kartenaufbau
+fiele sonst erst dem Nutzer auf.
 
 `refresh()` darf dabei nur zeichnen (siehe
 `docs/architecture/navigation.md`) - deshalb wird sie hier mehrfach
@@ -127,18 +128,18 @@ def _sim_json() -> str:
     return DATA.read_text(encoding="utf-8")
 
 
-def test_the_page_builds_with_the_target_card(page):
+def test_the_page_builds_with_all_four_steps(page):
 
-    assert page.target_apply.isEnabled() is False
+    assert page.apply_button.isEnabled() is False
 
     assert page.transfer.toPlainText() == ""
 
-    assert "noch keine abgelegt" in page.target_stored.text()
+    assert "liegt noch nichts bereit" in page.stored.text()
 
 
 def test_the_same_field_tells_the_two_kinds_apart(page):
     """
-    In Schritt 2 gehört hinein, was aus dem Sim kommt. Welche der
+    In Schritt 3 gehört hinein, was aus dem Sim kommt. Welche der
     beiden Sorten es ist, entscheidet die Seite - nicht der Nutzer
     durch die Wahl eines Feldes.
     """
@@ -147,10 +148,9 @@ def test_the_same_field_tells_the_two_kinds_apart(page):
 
     page._read()
 
-    assert page._target is None
-    assert page._weights
+    assert page._run.target is None
+    assert page._run.weights
     assert page.apply_button.isEnabled() is True
-    assert page.target_apply.isEnabled() is False
 
     page._clear_input()
 
@@ -158,9 +158,10 @@ def test_the_same_field_tells_the_two_kinds_apart(page):
 
     page._read()
 
-    assert page._target is not None
-    assert page.target_apply.isEnabled() is True
-    assert "Sockelsteine" in page.target_result.text()
+    assert page._run.target is not None
+    assert page._run.weights == {}
+    assert page.apply_button.isEnabled() is True
+    assert "Sockelsteine" in page.notes.text()
 
 
 def test_the_page_says_when_nothing_changed(page):
@@ -192,7 +193,7 @@ def test_the_page_says_when_nothing_changed(page):
 
     page._read()
 
-    assert "kein Optimierungslauf" in page.target_notes.text()
+    assert "kein Optimierungslauf" in page.notes.text()
 
 
 def test_the_page_names_what_would_change(page):
@@ -222,10 +223,16 @@ def test_the_page_names_what_would_change(page):
 
     page._read()
 
-    text = page.target_notes.text()
+    text = page.notes.text()
 
     assert "1 Teilen" in text
     assert "Kopf" in text
+
+    # Und die nachzählbaren Zahlen daneben: ein Sockel, eine
+    # Umschmiedung. Eine Zahl ist nachprüfbar, ein "erfolgreich" nicht.
+    assert "Ausrüstungsplätze geprüft" in text
+    assert "1 Sockeländerungen" in text
+    assert "1 Umschmiedungen" in text
 
 
 def test_applying_stores_delivers_and_offers_the_string(page):
@@ -236,7 +243,7 @@ def test_applying_stores_delivers_and_offers_the_string(page):
 
     page._read()
 
-    page._apply_target()
+    page._apply()
 
     entry = page.target_gear_store_entry()
 
@@ -247,11 +254,11 @@ def test_applying_stores_delivers_and_offers_the_string(page):
 
     assert page.transfer.toPlainText().startswith("WCIMPORT:TG:")
 
-    assert "Zielausrüstung:" in page.target_stored.text()
+    assert "Optimierte Ausrüstung ✓" in page.stored.text()
 
     # Das Eingabefeld wird geleert, der Knopf ist wieder gesperrt.
     assert page.input.toPlainText() == ""
-    assert page.target_apply.isEnabled() is False
+    assert page.apply_button.isEnabled() is False
 
 
 def test_removing_delivers_too(page):
@@ -266,15 +273,15 @@ def test_removing_delivers_too(page):
 
     page._read()
 
-    page._apply_target()
+    page._apply()
 
-    page._remove_target()
+    page._remove()
 
     assert page.manager.target_gear_sync.published == 2
 
     assert page.target_gear_store_entry() is None
 
-    assert "noch keine abgelegt" in page.target_stored.text()
+    assert "liegt noch nichts bereit" in page.stored.text()
 
 
 def test_refresh_only_draws(page):
@@ -289,14 +296,14 @@ def test_refresh_only_draws(page):
 
     page._read()
 
-    vorher = page.target_result.text()
+    vorher = page.result.text()
 
     page.refresh()
     page.refresh()
 
     assert page.input.toPlainText() != ""
-    assert page.target_result.text() == vorher
-    assert page._target is not None
+    assert page.result.text() == vorher
+    assert page._run.target is not None
 
 
 # --------------------------------------------------
@@ -318,7 +325,7 @@ def test_pasting_reads_by_itself(page):
 
     page._read_quiet()
 
-    assert page._weights
+    assert page._run.weights
     assert page.apply_button.isEnabled() is True
 
 
@@ -352,14 +359,14 @@ def test_an_emptied_field_is_not_an_error(page):
 
     page._read()
 
-    assert page._target is not None
+    assert page._run.target is not None
 
     page.input.setPlainText("")
 
     page._read_quiet()
 
-    assert page._target is None
-    assert page.target_problem.text() == ""
+    assert page._run.target is None
+    assert page.result.text() == ""
     assert page.problem.text() == ""
 
 
@@ -403,7 +410,7 @@ def test_applying_leaves_the_string_in_the_clipboard(page):
 
     page._read()
 
-    page._apply_target()
+    page._apply()
 
     #
     # Und jetzt liegt BEIDES in der Zwischenablage - genau eine Zeile je
@@ -455,7 +462,7 @@ def _fill_both(page):
 
     page._read()
 
-    page._apply_target()
+    page._apply()
 
 
 def test_both_envelopes_share_one_field(page):
@@ -475,7 +482,6 @@ def test_both_envelopes_share_one_field(page):
 
     assert page.copy_button.isEnabled() is True
     assert page.remove_button.isEnabled() is True
-    assert page.target_remove.isEnabled() is True
 
     assert page.delivery_warn.text() == ""
 
@@ -525,3 +531,372 @@ def test_nothing_stored_says_so_without_a_field(page):
     assert page.copy_button.isEnabled() is False
     assert page.delivery_warn.text() == ""
     assert "Sobald oben etwas übernommen ist" in page.delivery_hint.text()
+
+
+# --------------------------------------------------
+# Ein Lauf, ein Knopf (3.3.0)
+# --------------------------------------------------
+
+
+def _with_export(page, items=None):
+    """
+    Der Seite eine gemeldete Ausrüstung unterschieben - ohne sie kann
+    sie die Frage „wurde überhaupt optimiert" gar nicht stellen.
+    """
+
+    from core.wowsims_export import parse_export
+
+    payload = json.loads(_sim_json())
+
+    page._export = parse_export(
+        json.dumps(
+            {
+                "class": "deathknight",
+                "spec": "blood",
+                "level": 90,
+                "name": "Aldrin",
+                "realm": "Everlook",
+                "gear": {
+                    "items": items
+                    if items is not None
+                    else payload["player"]["equipment"]["items"]
+                },
+            }
+        )
+    )
+
+    page._rebuild_run()
+
+    return page
+
+
+def test_the_second_paste_does_not_erase_the_first(page):
+    """
+    DER KERN DER UMSTELLUNG. Bis 3.2.0 stand die Gewichtung in einem
+    Merker und die Zielausrüstung in einem zweiten; das zweite Einfügen
+    hat den ersten Befund nicht ergänzt, sondern daneben gestellt - und
+    er brauchte einen eigenen Knopf.
+    """
+
+    page.spec_select.select_value("DEATHKNIGHT_BLOOD")
+
+    page.input.setPlainText("Hit 1.77\nCrit 0.89\nStrength 1.0")
+
+    page._read()
+
+    assert page._run.have_weights is True
+
+    #
+    # Und jetzt das Zweite in dasselbe Feld - so, wie man es tut:
+    # markieren und einfügen, nicht erst leeren.
+    #
+
+    page.input.setPlainText(_sim_json())
+
+    page._read()
+
+    assert page._run.have_weights is True
+    assert page._run.have_target is True
+
+
+def test_emptying_the_field_forgets_the_run_visibly(page):
+    """
+    *Feld leeren* heisst „nimm zurück, was ich eingefügt habe" - der
+    Befund darüber verschwindet mit. Das ist kein stiller Verlust: die
+    Häkchenzeile springt sichtbar auf „Gewichtung fehlt", und was
+    bereits übernommen wurde, steht in Schritt 4 unberührt da.
+    """
+
+    page.input.setPlainText("Hit 1.77\nCrit 0.89\nStrength 1.0")
+
+    page._read()
+
+    assert page._run.have_weights is True
+
+    page._clear_input()
+
+    assert page._run.have_weights is False
+
+    assert page.result.text() == ""
+
+    assert page.apply_button.isEnabled() is False
+
+
+def test_one_click_stores_both(page):
+    """
+    Ein Vorgang, ein Knopf. Zwei Übernehmen-Knöpfe hiessen: wer den
+    zweiten vergisst, bekommt im Spiel eine halbe Auskunft - und das
+    sieht man einer Empfehlung nicht an.
+    """
+
+    page.spec_select.select_value("DEATHKNIGHT_BLOOD")
+
+    page.input.setPlainText("Hit 1.77\nCrit 0.89\nStrength 1.0")
+
+    page._read()
+
+    page.input.setPlainText(_sim_json())
+
+    page._read()
+
+    page._apply()
+
+    assert page.weights_store_entry() is not None
+    assert page.target_gear_store_entry() is not None
+
+    assert page.manager.stat_weights_sync.published == 1
+    assert page.manager.target_gear_sync.published == 1
+
+    zeilen = page.transfer.toPlainText().splitlines()
+
+    assert len(zeilen) == 2
+
+
+def test_both_carry_the_same_run_id(page):
+    """
+    Erst die gemeinsame Kennung macht aus zwei Auskünften einen
+    Vorgang. Ohne gemeldete Ausrüstung gibt es keine - dann behauptet
+    die Seite auch nichts über Zusammengehörigkeit.
+    """
+
+    _with_export(page)
+
+    page.spec_select.select_value("DEATHKNIGHT_BLOOD")
+
+    page.input.setPlainText("Hit 1.77\nStrength 1.0")
+
+    page._read()
+
+    page.input.setPlainText(_sim_json())
+
+    page._read()
+
+    page._apply()
+
+    kennung = page.weights_store_entry().run_id
+
+    assert kennung.startswith("SIM-")
+
+    assert page.target_gear_store_entry().run_id == kennung
+
+    # Und sie steht auf der Seite, damit eine Rückfrage sie nennen kann.
+    assert kennung in page.run_line.text()
+
+
+def test_a_run_without_reported_gear_has_no_id(page):
+
+    page.spec_select.select_value("DEATHKNIGHT_BLOOD")
+
+    page.input.setPlainText(_sim_json())
+
+    page._read()
+
+    page._apply()
+
+    assert page.target_gear_store_entry().run_id == ""
+
+    assert page.run_line.text() == ""
+
+
+def test_two_runs_side_by_side_are_warned_about(page):
+    """
+    Eine Gewichtung aus dem Lauf von gestern neben einem Zielzustand von
+    heute: beide für sich in Ordnung, zusammen eine Aussage über zwei
+    verschiedene Ausrüstungen. Im Spiel sieht man das nicht.
+    """
+
+    from core.stat_weights import WeightSet
+    from core.target_gear import TargetSet, parse_target
+
+    page.spec_select.select_value("DEATHKNIGHT_BLOOD")
+
+    page.store.put(
+        WeightSet(
+            spec_key="DEATHKNIGHT_BLOOD",
+            weights={"strength": 100},
+            run_id="SIM-20260908-AAAA",
+        )
+    )
+
+    page.target_store.put(
+        TargetSet(
+            gear=parse_target(_sim_json()),
+            spec_key="DEATHKNIGHT_BLOOD",
+            run_id="SIM-20260909-BBBB",
+        )
+    )
+
+    page.refresh()
+
+    warnung = page.delivery_warn.text()
+
+    assert "SIM-20260908-AAAA" in warnung
+    assert "SIM-20260909-BBBB" in warnung
+
+
+def test_discarding_takes_both(page):
+    """
+    Zwei Entfernen-Knöpfe waren die Möglichkeit, eine Hälfte
+    stehenzulassen - und genau diese Hälfte ergibt später die Mischung
+    aus zwei Läufen.
+    """
+
+    _fill_both(page)
+
+    page._remove()
+
+    assert page.weights_store_entry() is None
+    assert page.target_gear_store_entry() is None
+
+    assert page.transfer.toPlainText() == ""
+
+
+def test_a_foreign_class_changes_the_button_rather_than_locking_it(page):
+    """
+    Vielleicht simmt jemand für seinen Zweitcharakter. Ein toter Knopf
+    beantwortet nicht, warum er tot ist.
+    """
+
+    page.spec_select.select_value("MAGE_FIRE")
+
+    page.input.setPlainText(
+        '{"player":{"class":"ClassDeathKnight"},'
+        '"statWeightsResult":{"dps":{"weights":{"stats":'
+        '[0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}}}}'
+    )
+
+    page._read()
+
+    if page._run.have_weights:
+
+        assert page.apply_button.isEnabled() is True
+
+        assert page.apply_button.text() == "Trotzdem übernehmen"
+
+
+def test_a_read_error_does_not_lose_what_was_read_before(page):
+    """
+    Wer nach der Gewichtung Unsinn einfügt, hat die Gewichtung nicht
+    zurückgenommen. Bis 3.2.0 wurde sie hier mit gelöscht, und das war
+    von aussen ein stilles Verschwinden.
+    """
+
+    page.input.setPlainText("Hit 1.77\nCrit 0.89\nStrength 1.0")
+
+    page._read()
+
+    assert page._run.have_weights is True
+
+    page.input.setPlainText("völliger Unsinn ohne jede Zahl")
+
+    page._read()
+
+    assert page.problem.text() != ""
+
+    assert page._run.have_weights is True
+
+
+def test_the_stored_half_completes_the_run(page):
+    """
+    Wer die Gewichtung übernimmt und danach die Zielausrüstung einfügt,
+    hat einen **vollständigen** Lauf — die erste Hälfte liegt nur schon
+    im Speicher statt im Feld.
+
+    Ohne die Zusammenführung stünde dort „Gewichtung fehlt", obwohl sie
+    bereitliegt, und der Satz darunter schickte den Nutzer in den Sim
+    für etwas, das er längst geholt hat.
+    """
+
+    #
+    # Eine angelegte Ausrüstung, die sich vom Sim-Ergebnis
+    # unterscheidet - sonst wäre der Befund „entspricht deiner
+    # angelegten Ausrüstung", und der beantwortet eine andere Frage.
+    #
+
+    payload = json.loads(_sim_json())
+
+    items = [dict(entry) for entry in payload["player"]["equipment"]["items"]]
+
+    items[0] = dict(items[0], gems=[76895, 76653], reforging=140)
+
+    _with_export(page, items)
+
+    page.spec_select.select_value("DEATHKNIGHT_BLOOD")
+
+    page._rebuild_run()
+
+    page.input.setPlainText("Hit 1.77\nCrit 0.89\nStrength 1.0")
+
+    page._read()
+
+    page._apply()
+
+    assert page.weights_store_entry() is not None
+    assert page.target_gear_store_entry() is None
+
+    # Zweite Runde, derselbe Lauf.
+    page.input.setPlainText(_sim_json())
+
+    page._read()
+
+    assert "vollständig" in page.result.text()
+
+    assert "Gewichtung ✓" in page.parts.text()
+
+    assert page.hint.text() == ""
+
+    page._apply()
+
+    assert (
+        page.weights_store_entry().run_id
+        == page.target_gear_store_entry().run_id
+    )
+
+
+def test_a_stored_half_from_another_run_does_not_complete_it(page):
+    """
+    Ein Eintrag aus einem anderen Lauf ist keine Hälfte dieses Laufs —
+    er ist genau die Mischung, vor der Schritt 4 warnt.
+    """
+
+    from core.stat_weights import WeightSet
+
+    _with_export(page)
+
+    page.spec_select.select_value("DEATHKNIGHT_BLOOD")
+
+    page._rebuild_run()
+
+    page.store.put(
+        WeightSet(
+            spec_key="DEATHKNIGHT_BLOOD",
+            weights={"strength": 100},
+            run_id="SIM-20260101-ZZZZ",
+        )
+    )
+
+    page.input.setPlainText(_sim_json())
+
+    page._read()
+
+    assert "Gewichtung fehlt" in page.parts.text()
+
+
+def test_an_empty_slot_is_not_a_piece_of_gear(page):
+    """
+    Ein leerer Platz überlebt die Ablage ohnehin nicht. Frisch
+    übernommen stünde hier sonst eine andere Zahl als nach dem
+    nächsten Start der App.
+    """
+
+    page.spec_select.select_value("DEATHKNIGHT_BLOOD")
+
+    page.input.setPlainText(_sim_json())
+
+    page._read()
+
+    entry = page._run.target
+
+    page._apply()
+
+    assert f"{entry.item_count} Teile" in page.stored.text()

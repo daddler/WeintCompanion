@@ -52,6 +52,10 @@ WeintCodex Bot (Discord bot backend)  ←─────────────
   `QCloseEvent` into a `hideEvent` handler) — segfaults with no Python
   traceback. Shared teardown goes in a plain, event-free, idempotent
   method. Detail: `docs/architecture/qt-pitfalls.md`.
+- **A sim result is one run, not two imports.** `stat_weights` and
+  `target_gear` stay two contracts, two stores and two channels — but
+  they carry the same run id, and the UI shows one run. Never re-split
+  them in the interface. Detail: `docs/sim-run.md`.
 - **`stars == 0` means "no data", never "bad"; `at == -1` means "no
   timestamp known", never second 0.** These two conventions cross every
   layer (analyzer, Academy, addon bridge) and must never be normalized
@@ -90,6 +94,7 @@ Linux/Windows/AppImage build commands.
 | Ausrüstungsstand (`character_sheet`) | `docs/character-sheet-bridge.md` |
 | Live-Brücke (`companion_live.lua`, überlebt `/reload`) | `docs/live-bridge.md` |
 | Raid-Termin, Countdown, Zusagen | `docs/raid-schedule-bridge.md` |
+| Sim-Lauf (Kennung, Handshake, Zustände) | `docs/sim-run.md` |
 | Sim-Gewichte (wowsims/QE Live → Addon) | `docs/stat-weights-bridge.md` |
 | Zielausrüstung (wowsims-Optimierungsergebnis → Addon) | `docs/target-gear-bridge.md` |
 | WarcraftLogs Live/Archiv/Timeline | `docs/warcraftlogs-bridge.md` |
@@ -112,7 +117,7 @@ Linux/Windows/AppImage build commands.
 | Addon-/Companion-Updates, Storage-Warnung, Changelog-Anzeige | `docs/systems/update-system.md` |
 | Übersicht-Seite (Termin, Roster, letzter Pull, Discord-Link) | `docs/systems/overview-page.md` |
 | Meine Charaktere, Vorbereitung, Charakterzuordnung-Seite | `docs/systems/character-pages.md` |
-| Simmen-Seite (wowsims/QE Live/WowSimsExporter) | `docs/systems/sim-pages.md` |
+| Simmen-Seite (wowsims/QE Live/WowSimsExporter) | `docs/systems/sim-pages.md` + `docs/sim-run.md` |
 | WeakAuras-Editor-Seite, Gilde-Freigabe | `docs/systems/weakauras-editor.md` |
 | Onboarding-Tour, "Was ist neu"-Popup | `docs/systems/whats-new-and-onboarding.md` |
 | Pfade, atomare Writes, Backups, Config/Auth-Speicherung | `docs/development/paths-and-storage.md` |
