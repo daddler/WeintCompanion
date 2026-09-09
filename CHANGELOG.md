@@ -2,6 +2,57 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 3.2.0
+
+**Ein Ausgang statt zwei.** *Simmen* hat die Schritte getauscht: erst
+beides einlesen (Gewichtung, dann Zielausrüstung), danach beides
+zusammen ins Spiel bringen. Vorher stand *Ins Spiel bringen* in der
+Mitte, und man lief eine Schleife — einlesen, rüberbringen, zurück in
+den Sim, wieder einlesen, nochmal rüberbringen. Zwei Strings, zweimal
+einfügen im Spiel, und der zweite blieb regelmäßig liegen. Dass er
+fehlt, sieht man einer Empfehlung im Spiel nicht an.
+
+Jetzt steht in Schritt 4 beides untereinander in **einem** Feld, und
+*Alles kopieren* nimmt beide Zeilen mit. Im Spiel reicht ein Einfügen
+unter *Import*.
+
+**Dafür braucht es WeintCodex 3.1.2.0.** Ältere Fassungen lesen aus
+einem eingefügten Text nur die erste Zeile und verschlucken die zweite,
+ohne sich zu beschweren. Die App prüft das und gibt dann nur eine Zeile
+aus — mit einem Satz, warum, und dem Hinweis, dass ein `/reload` im
+Spiel ohnehin beides holt.
+
+### Technisch
+
+`gui/pages/sim.py`: Kartenreihenfolge ist jetzt
+Quelle → Einfügen → Zielausrüstung → Zustellung. Die Zielkarte hat ihr
+eigenes String-Feld, *String kopieren*, *Entfernen* und `copy_state`
+verloren; `_draw_delivery()` (neu) besitzt Feld, Warnung, Hinweis und
+Knöpfe und liest **beide** Speicher. `_draw_stored()`/`_draw_target()`
+schreiben nur noch ihre jeweilige Zeile.
+
+`_delivery_lines()` ist die eine Stelle, die entscheidet, was ins Feld
+kommt — und `_combined_allowed()` das Sicherheitsnetz davor:
+`state.addon_found` plus `_version_tuple(state.addon_version) >=
+COMBINED_SINCE`. **Nicht feststellbar zählt wie zu alt**, weil der
+Preis der vorsichtigen Antwort ein zweiter Einfügevorgang ist und der
+Preis der unvorsichtigen ein stilles Verschlucken.
+
+Warum das Netz nötig ist, und nicht bloß Vorsicht: `SW.ParseTransfer`
+drüben zerlegt an `:` und nimmt Feld 6; alles dahinter — also die ganze
+zweite Zeile — fällt weg, **ohne** Fehler. Beide Zeilen zusammen
+ergäben dort eine Erfolgsmeldung, in der die Zielausrüstung schlicht
+fehlt.
+
+`self.transfer` ist deshalb ein `QPlainTextEdit` (je ein Umschlag pro
+Zeile); `_apply_target()` kopiert jetzt über `_copy_transfer()`, also
+beides.
+
+`tests/test_sim_page_target.py` pinnt die vier Punkte: beide Umschläge
+in einem Feld, ein zu altes Addon bekommt nur einen (mit Begründung und
+Ausweg im Text), eine unbekannte Fassung gilt wie ein zu altes, und ein
+leerer Zustand hat kein Feld.
+
 ## 3.1.1
 
 **Ohne einen Haken im Sim fehlen die Sockelsteine — das stand nirgends.**

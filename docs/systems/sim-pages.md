@@ -116,6 +116,46 @@ Zwei Dinge hängen daran und sind kein Geschmack:
   bricht bei leerem Text über `_forget_reading()` ab — sonst stünde
   „nicht erkannt" da, sobald jemand seinen Text herauslöscht.
 
+## Ein Ausgang statt zwei (seit 3.2.0)
+
+**Die Karten stehen jetzt in der Reihenfolge, in der man sie läuft:**
+Quelle → Einfügen → Zielausrüstung → Zustellung. Bis 3.1.1 stand *Ins
+Spiel bringen* in der Mitte, und das war eine Treppe, die man als
+Schleife geht: einlesen, rüberbringen, zurück in den Sim, wieder
+einlesen, nochmal rüberbringen. Zwei Strings, zweimal einfügen im Spiel
+— und der zweite blieb regelmäßig liegen, was man einer Empfehlung im
+Spiel nicht ansieht.
+
+Die Zielkarte hat deshalb ihr eigenes String-Feld, *String kopieren*,
+*Entfernen* und `copy_state` verloren. Zwei Auskünfte heißt zwei
+**Befunde**, nicht zwei Wege ins Spiel. `_draw_delivery()` besitzt Feld,
+Warnung, Hinweis und Knöpfe und liest beide Speicher;
+`_draw_stored()`/`_draw_target()` schreiben nur noch ihre Zeile.
+
+**`_delivery_lines()` ist die eine Stelle, die entscheidet, was ins Feld
+kommt** — und `_combined_allowed()` das Sicherheitsnetz davor
+(`state.addon_found` plus `_version_tuple(state.addon_version) >=
+COMBINED_SINCE`, also WeintCodex 3.1.2.0).
+
+**Warum das ein Netz braucht und nicht bloß Vorsicht ist:**
+`SW.ParseTransfer` drüben zerlegt an `:` und nimmt Feld 6; alles dahinter
+— also die ganze zweite Zeile — fällt weg, **ohne** Fehler. Beide Zeilen
+zusammen ergäben auf einem älteren Addon eine *Erfolgsmeldung*, in der
+die Zielausrüstung schlicht fehlt. Genau diese Sorte Fehler ist die
+schlimmste: nichts bricht, nichts meldet sich, und im Spiel folgt
+WeintCodex weiter seiner eigenen Rechnung, obwohl auf dem Desktop längst
+entschieden wurde.
+
+**Nicht feststellbar zählt wie zu alt.** Der Preis der vorsichtigen
+Antwort ist ein zweiter Einfügevorgang, der Preis der unvorsichtigen ein
+stilles Verschlucken — dieselbe Rangfolge wie bei `stars == 0`. Der
+Warnsatz nennt beides: den Grund und den Ausweg (`/reload` holt ohnehin
+beides, denn zugestellt ist es längst).
+
+Codex-Seite des Vertrags — Zerlegung an `WCIMPORT:`, Verhalten bei einem
+einzelnen String, Teilerfolg als Fehler:
+`../../../WeintCodex/docs/systems/wcimport-sync.md`.
+
 **Übernehmen kopiert mit.** *Übernehmen* und *String kopieren* waren zwei
 Klicks für eine Absicht: wer übernimmt, will es ins Spiel bringen. Der
 Zeitpunkt ist auch der einzige, an dem die Frage „welcher der beiden

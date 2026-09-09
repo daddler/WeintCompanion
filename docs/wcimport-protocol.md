@@ -30,6 +30,28 @@ das Feature, das seine Anzeige freischaltet (`IMPORT_FEATURE` in
 `modules/sync.lua`). `WA` (WeakAuras) und `SW` (Sim-Gewichte) sind frei —
 weder gildenintern.
 
+## Mehrere Umschläge in einem Text (seit Codex 3.1.2.0)
+
+Ein eingefügter Text darf **mehrere** Umschläge tragen, je einen pro
+Zeile. `Sync.ProcessImportText()` zerlegt ihn an `WCIMPORT:` — nicht an
+Zeilenumbrüchen, weil eine Nutzlast selbst welche enthalten darf — und
+verarbeitet die Teile der Reihe nach. Ein **einzelner** String verhält
+sich unverändert: derselbe Rückgabewert, dieselbe Meldung, derselbe
+Fehlertext. **Teilerfolg gilt als Fehler**, damit die Oberfläche das
+Eingabefeld stehen lässt (`SW` und `TG` ersetzen beide, ein zweiter
+Versuch schadet also nicht).
+
+Genutzt wird das von WeintCompanion nach einem Sim-Lauf: Gewichtung
+(`SW`) und Zielausrüstung (`TG`) kommen als zwei Zeilen in einem Zug.
+
+**Ältere Codex-Fassungen dürfen das nicht bekommen.** `SW.ParseTransfer`
+zerlegt an `:` und nimmt Feld 6; alles dahinter fällt weg, **ohne**
+Fehler — beide Zeilen zusammen ergäben dort eine Erfolgsmeldung, in der
+die Zielausrüstung fehlt. Die Companion prüft deshalb die installierte
+`.toc`-Fassung (`_combined_allowed()` in `gui/pages/sim.py`,
+`COMBINED_SINCE = 3.1.2.0`) und gibt im Zweifel nur eine Zeile aus. Eine
+nicht feststellbare Fassung gilt dabei wie eine zu alte.
+
 ## Typen
 
 - **`BOSS`** — Bossnotizen/-fortschritt.

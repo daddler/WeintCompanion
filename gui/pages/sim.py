@@ -33,17 +33,27 @@ Drei Schritte, in dieser Reihenfolge, und die Seite nummeriert sie:
    Einfügen**, der Knopf *Einlesen* ist nur noch da, um einen Fehler
    zu erfragen: nebenher gelesen wird still, weil eine rote Zeile nach
    jedem getippten Zeichen nur dazu erzieht, rote Zeilen zu übersehen.
-3. Ins Spiel bringen - **auf zwei Wegen**, und beide stehen da (der
-   String liegt nach dem Übernehmen schon in der Zwischenablage):
+3. Zielausrüstung übernehmen - dieselbe Karte, zweite Runde durch
+   dasselbe Feld: was *Export → Link/JSON* im Sim ausgibt, gehört
+   ebenfalls oben hinein.
+4. Ins Spiel bringen - **auf zwei Wegen**, und beide stehen da (der
+   Text liegt nach dem Übernehmen schon in der Zwischenablage):
 
-   * Die Companion stellt die Gewichtung über die Addon-Brücke zu; im
-     Spiel steht sie nach dem nächsten `/reload` bereit.
-   * Oder der `WCIMPORT:SW:`-String, der sich ohne Neuladen unter
-     *Import* einfügen lässt.
+   * Die Companion stellt beides über die Addon-Brücke zu; im Spiel
+     steht es nach dem nächsten `/reload` bereit.
+   * Oder der Text aus **einer** Zeile je Umschlag, der sich ohne
+     Neuladen unter *Import* einfügen lässt.
 
    Der zweite Weg ist nicht nur bequemer: WoW liest seine
    SavedVariables zur Laufzeit nicht erneut, und wer gerade im Raid
    steht, lädt nicht neu.
+
+**Der Ausgang steht am Ende, und er ist einer.** Bis 3.1.1 kam „Ins
+Spiel bringen" *vor* der Zielausrüstung - eine Treppe, die man als
+Schleife läuft: einlesen, rüberbringen, zurück in den Sim, einlesen,
+nochmal rüberbringen. Zwei Strings, zweimal einfügen im Spiel, und der
+zweite blieb regelmäßig liegen. Dass er fehlt, sieht man einer
+Empfehlung im Spiel nicht an.
 
 **Was ankommt, ist ein Vorschlag und keine Einstellung.** Im Spiel
 füllt er die Felder auf *Priorisierung* und wird erst auf Klick
@@ -145,6 +155,46 @@ BASE_PAGE = "https://www.wowsims.com/mop/"
 # Der Haken sitzt hinter dem Zahnrad neben dem Knopf, also an der einen
 # Stelle, an der man ihn nicht sucht.
 #
+#
+# AB DIESER ADDON-FASSUNG DUERFEN BEIDE ZEILEN ZUSAMMEN IN EIN FELD.
+#
+# WeintCodex vor 3.1.2.0 liest aus einem eingefügten Text nur den ERSTEN
+# Umschlag - und zwar ohne zu meckern: sein SW-Parser zerlegt an ":" und
+# nimmt Feld 6, alles dahinter fällt weg. Beide Zeilen zusammen ergäben
+# dort eine Erfolgsmeldung, in der die Zielausrüstung schlicht fehlt.
+#
+# Genau diese Sorte Fehler ist die schlimmste: nichts bricht, nichts
+# meldet sich, und im Spiel folgt WeintCodex weiter seiner eigenen
+# Rechnung, obwohl auf dem Desktop längst entschieden wurde. Deshalb wird
+# hier gegen die INSTALLIERTE Fassung geprüft und im Zweifel nur eine
+# Zeile ausgegeben - dieselbe Vorsicht wie beim Tag-Vergleich des
+# Updaters.
+#
+COMBINED_SINCE = (3, 1, 2, 0)
+
+
+def _version_tuple(text: str) -> tuple[int, ...]:
+    """
+    Eine Fassung als Zahlenfolge - und `()` für alles, was keine ist.
+
+    `()` ist dabei ausdrücklich **nicht** „ganz alt", sondern „nicht
+    feststellbar" (kein Addon gefunden, `-` als Platzhalter). Der
+    Aufrufer behandelt beides gleich vorsichtig, aber der Unterschied
+    gehört in seinen Satz und nicht in diese Zahl.
+    """
+
+    parts = []
+
+    for piece in str(text or "").strip().lstrip("vV").split("."):
+
+        if not piece.isdigit():
+            return ()
+
+        parts.append(int(piece))
+
+    return tuple(parts)
+
+
 SIM_STEPS = (
     "Der Sim öffnet sich mit deiner Ausrüstung, wenn der WowSimsExporter "
     "sie im Spiel gemeldet hat. Dort dann zweierlei: erst auf das Zahnrad "
@@ -237,9 +287,19 @@ class SimPage(Page):
 
         self._build_paste_card()
 
-        self._build_delivery_card()
+        #
+        # ERST BEIDES EINLESEN, DANN BEIDES RUEBERBRINGEN (seit 3.2.0).
+        #
+        # Bis 3.1.1 stand "Ins Spiel bringen" vor der Zielausrüstung, und
+        # das war eine Treppe, die man als Schleife läuft: Gewichtung
+        # einlesen, rüberbringen, zurück in den Sim, Ergebnis einlesen,
+        # nochmal rüberbringen. Zwei Strings, zweimal einfügen im Spiel.
+        # Der Ausgang gehört ans Ende, und er ist einer.
+        #
 
         self._build_target_card()
+
+        self._build_delivery_card()
 
         self.body.addStretch(1)
 
@@ -576,7 +636,7 @@ class SimPage(Page):
 
         card = Card()
 
-        self._step(card, "3", "Ins Spiel bringen")
+        self._step(card, "4", "Ins Spiel bringen")
 
         self.stored = QLabel("")
 
@@ -604,15 +664,66 @@ class SimPage(Page):
 
         card.root.addWidget(self.stored_weights)
 
+        #
+        # Die zweite Auskunft aus demselben Sim-Lauf steht direkt
+        # darunter - beide Zeilen beantworten dieselbe Frage ("was
+        # liegt bereit?"), und getrennt beantwortet sie niemand
+        # zusammen.
+        #
+
+        self.target_stored = QLabel("")
+
+        self.target_stored.setFont(font("body"))
+
+        enable_wrap(self.target_stored)
+
+        restyle(
+            self.target_stored,
+            f"color:{tokens.WHITE};background:transparent;",
+        )
+
+        card.root.addWidget(self.target_stored)
+
         self.delivery_hint = self._hint(card, "")
 
-        self.transfer = QLineEdit()
+        #
+        # DIE WARNUNG, DIE EIN STILLES VERSCHLUCKEN VERHINDERT.
+        #
+        # WeintCodex vor 3.1.2.0 liest aus einem eingefügten Text nur
+        # den ERSTEN Umschlag - und zwar ohne zu meckern: sein
+        # SW-Parser zerlegt an ":" und liest Feld 6, alles dahinter
+        # fällt weg. Beide Zeilen zusammen ergäben dort eine
+        # Erfolgsmeldung, in der die Zielausrüstung fehlt. Deshalb
+        # kommt bei einem zu alten Addon gar nicht erst beides ins
+        # Feld (siehe `_delivery_lines()`), und hier steht, warum.
+        #
+
+        self.delivery_warn = QLabel("")
+
+        self.delivery_warn.setFont(font("small"))
+
+        enable_wrap(self.delivery_warn)
+
+        restyle(
+            self.delivery_warn,
+            f"color:{tokens.STATE_TEXT['warn']};background:transparent;",
+        )
+
+        card.root.addWidget(self.delivery_warn)
+
+        #
+        # Mehrzeilig, weil zwei Umschläge hineingehören - je einer pro
+        # Zeile. Eine einzeilige Zeile hätte den zweiten unsichtbar
+        # angehängt.
+        #
+
+        self.transfer = QPlainTextEdit()
 
         self.transfer.setReadOnly(True)
 
         self.transfer.setFont(font("mono"))
 
-        self.transfer.setFixedHeight(36)
+        self.transfer.setFixedHeight(74)
 
         card.root.addWidget(self.transfer)
 
@@ -622,7 +733,7 @@ class SimPage(Page):
 
         buttons.setSpacing(tokens.SPACE[2])
 
-        self.copy_button = HeroButton("String kopieren")
+        self.copy_button = HeroButton("Alles kopieren")
 
         self.copy_button.clicked.connect(self._copy_transfer)
 
@@ -633,6 +744,14 @@ class SimPage(Page):
         self.remove_button.clicked.connect(self._remove)
 
         buttons.addWidget(self.remove_button)
+
+        self.target_remove = HeroButton(
+            "Zielausrüstung entfernen", primary=False
+        )
+
+        self.target_remove.clicked.connect(self._remove_target)
+
+        buttons.addWidget(self.target_remove)
 
         buttons.addStretch(1)
 
@@ -655,9 +774,9 @@ class SimPage(Page):
 
     def _build_target_card(self):
         """
-        Schritt 4: die **Zielausrüstung** aus demselben Sim.
+        Schritt 3: die **Zielausrüstung** aus demselben Sim.
 
-        WARUM DAS EINE EIGENE KARTE IST UND KEIN ZUSATZ ZU SCHRITT 3.
+        WARUM DAS EINE EIGENE KARTE IST UND KEINE ZEILE IN SCHRITT 2.
         Die Gewichtung und der Zielzustand sind zwei verschiedene
         Auskünfte: eine Gewichtung gilt für jede Ausrüstung, ein
         Zielzustand für genau die, mit der gesimmt wurde. Sie kommen
@@ -665,6 +784,10 @@ class SimPage(Page):
         gegen *Export → Link/JSON*), und sie wirken im Spiel an
         verschiedenen Stellen. Unter derselben Überschrift wäre nicht
         zu sehen, welche von beiden gerade fehlt.
+
+        **Der Ausgang ist trotzdem einer** (Schritt 4). Zwei Auskünfte
+        heißt zwei Befunde, nicht zwei Wege ins Spiel - deshalb trägt
+        diese Karte seit 3.2.0 kein eigenes String-Feld mehr.
 
         **Das Eingabefeld bleibt aber dasselbe** (Schritt 2): dort
         gehört hinein, was aus dem Sim kommt, und welche der beiden
@@ -675,7 +798,7 @@ class SimPage(Page):
 
         card = Card()
 
-        self._step(card, "4", "Zielausrüstung übernehmen")
+        self._step(card, "3", "Zielausrüstung übernehmen")
 
         self._hint(
             card,
@@ -743,65 +866,11 @@ class SimPage(Page):
 
         card.root.addWidget(self.target_apply, 0, Qt.AlignLeft)
 
-        self.target_stored = QLabel("")
-
-        self.target_stored.setFont(font("body"))
-
-        enable_wrap(self.target_stored)
-
-        restyle(
-            self.target_stored,
-            f"color:{tokens.WHITE};background:transparent;",
-        )
-
-        card.root.addWidget(self.target_stored)
-
-        self.target_transfer = QLineEdit()
-
-        self.target_transfer.setReadOnly(True)
-
-        self.target_transfer.setFont(font("mono"))
-
-        self.target_transfer.setFixedHeight(36)
-
-        card.root.addWidget(self.target_transfer)
-
-        buttons = QHBoxLayout()
-
-        buttons.setContentsMargins(0, 0, 0, 0)
-
-        buttons.setSpacing(tokens.SPACE[2])
-
-        self.target_copy = HeroButton("String kopieren")
-
-        self.target_copy.clicked.connect(self._copy_target_transfer)
-
-        buttons.addWidget(self.target_copy)
-
-        self.target_remove = HeroButton(
-            "Zielausrüstung entfernen", primary=False
-        )
-
-        self.target_remove.clicked.connect(self._remove_target)
-
-        buttons.addWidget(self.target_remove)
-
-        buttons.addStretch(1)
-
-        card.root.addLayout(buttons)
-
-        self.target_copy_state = QLabel("")
-
-        self.target_copy_state.setFont(font("small"))
-
-        enable_wrap(self.target_copy_state)
-
-        restyle(
-            self.target_copy_state,
-            f"color:{tokens.TEXT['faint']};background:transparent;",
-        )
-
-        card.root.addWidget(self.target_copy_state)
+        #
+        # WAS ABGELEGT IST, STEHT IN SCHRITT 4 - zusammen mit der
+        # Gewichtung und dem einen String, der beides trägt. Diese Karte
+        # liest nur ein.
+        #
 
         self.addWidget(card)
 
@@ -912,6 +981,8 @@ class SimPage(Page):
         self._draw_stored()
 
         self._draw_target()
+
+        self._draw_delivery()
 
     def _follow_reported_spec(self):
         """
@@ -1081,6 +1152,12 @@ class SimPage(Page):
             self.plain_button.setEnabled(True)
 
     def _draw_stored(self):
+        """
+        Die Gewichtungs-Zeile in Schritt 4 - und die Überschrift der
+        Seite. Das Feld mit dem String gehört ihr nicht mehr: es trägt
+        beide Auskünfte und wird deshalb von `_draw_delivery()`
+        gezeichnet.
+        """
 
         key = self.selected_spec()
 
@@ -1089,23 +1166,10 @@ class SimPage(Page):
         if entry is None:
 
             self.stored.setText(
-                f"Für {spec_label(key)} ist noch keine Gewichtung "
-                f"übernommen."
+                f"Gewichtung: für {spec_label(key)} noch keine übernommen."
             )
 
             self.stored_weights.setText("")
-
-            self.delivery_hint.setText(
-                "Sobald oben etwas eingelesen und übernommen ist, steht "
-                "hier beides: die Zustellung ins Spiel und der String zum "
-                "Einfügen ohne Neuladen."
-            )
-
-            self.transfer.setText("")
-
-            self.transfer.setEnabled(False)
-
-            self.copy_button.setEnabled(False)
 
             self.remove_button.setEnabled(False)
 
@@ -1114,25 +1178,11 @@ class SimPage(Page):
             return
 
         self.stored.setText(
-            f"{spec_label(entry.spec_key)}"
+            f"Gewichtung: {spec_label(entry.spec_key)}"
             f"{_from_character(entry)} · {_stamp(entry.created)}"
         )
 
         self.stored_weights.setText(_weights_text(entry.weights))
-
-        self.delivery_hint.setText(
-            "Die Companion hat sie an das Addon übergeben — im Spiel "
-            "liegt sie nach dem nächsten /reload unter Charakter → "
-            "Priorisierung bereit und wird dort auf deinen Klick "
-            "wirksam. Ohne Neuladen: den String hier kopieren und im "
-            "Spiel unter Import einfügen."
-        )
-
-        self.transfer.setText(build_transfer(entry))
-
-        self.transfer.setEnabled(True)
-
-        self.copy_button.setEnabled(True)
 
         self.remove_button.setEnabled(True)
 
@@ -1161,6 +1211,8 @@ class SimPage(Page):
 
         self._draw_target()
 
+        self._draw_delivery()
+
     def _on_spec_changed(self):
 
         self._draw_source()
@@ -1177,6 +1229,8 @@ class SimPage(Page):
         self._draw_stored()
 
         self._draw_target()
+
+        self._draw_delivery()
 
     # --------------------------------------------------
     # Schritt 1: was der Sim bekommt
@@ -1847,8 +1901,10 @@ class SimPage(Page):
 
         self.refresh()
 
-        # Dieselbe Überlegung wie beim Übernehmen einer Gewichtung.
-        self._copy_target_transfer()
+        # Dieselbe Überlegung wie beim Übernehmen einer Gewichtung -
+        # und derselbe Weg: kopiert wird, was in Schritt 4 steht, also
+        # beides zusammen.
+        self._copy_transfer()
 
         logger = getattr(self.manager, "logger", None)
 
@@ -1870,33 +1926,9 @@ class SimPage(Page):
         if self.target_sync is not None:
             self.target_sync.publish_now()
 
-        self.target_copy_state.setText("")
+        self.copy_state.setText("")
 
         self.refresh()
-
-    def _copy_target_transfer(self):
-
-        text = self.target_transfer.text()
-
-        if not text:
-            return
-
-        clipboard = QGuiApplication.clipboard()
-
-        if clipboard is None:
-
-            self.target_copy_state.setText(
-                "Kopieren geht auf diesem System nicht."
-            )
-
-            return
-
-        clipboard.setText(text)
-
-        self.target_copy_state.setText(
-            "Kopiert. Im Spiel unter Import einfügen — wirkt sofort, ohne "
-            "/reload."
-        )
 
     def target_gear_store_entry(self):
         """
@@ -1916,9 +1948,8 @@ class SimPage(Page):
         """
         Was abgelegt ist - und der Weg ins Spiel.
 
-        Wie bei der Gewichtung zwei Wege, und beide stehen da: über die
-        Addon-Brücke (nach dem nächsten `/reload`) oder als String ohne
-        Neuladen.
+        Nur noch die Zeile, was abgelegt ist - der Weg ins Spiel steht
+        für beide Auskünfte zusammen in Schritt 4 (`_draw_delivery()`).
         """
 
         entry = self.target_gear_store_entry()
@@ -1926,14 +1957,10 @@ class SimPage(Page):
         if entry is None:
 
             self.target_stored.setText(
-                "Für diese Spezialisierung ist noch keine Zielausrüstung "
-                "abgelegt — im Spiel rechnet WeintCodex Sockel und "
-                "Umschmiedungen dann wie bisher selbst aus."
+                "Zielausrüstung: noch keine abgelegt — im Spiel rechnet "
+                "WeintCodex Sockel und Umschmiedungen dann wie bisher "
+                "selbst aus."
             )
-
-            self.target_transfer.setText("")
-
-            self.target_copy.setEnabled(False)
 
             self.target_remove.setEnabled(False)
 
@@ -1942,9 +1969,8 @@ class SimPage(Page):
         steine = sum(1 for gem in _all_gems(entry) if gem)
 
         self.target_stored.setText(
-            "Abgelegt: {} Teile, {} Sockelsteine, {} Umschmiedungen "
-            "(vom {}). Im Spiel folgen Sockel- und Umschmiede-Empfehlung "
-            "ab dem nächsten /reload genau diesen Angaben.".format(
+            "Zielausrüstung: {} Teile, {} Sockelsteine, {} Umschmiedungen "
+            "(vom {}).".format(
                 len(entry.items),
                 steine,
                 sum(1 for item in entry.items if item.reforging),
@@ -1954,11 +1980,122 @@ class SimPage(Page):
             )
         )
 
-        self.target_transfer.setText(build_target_transfer(entry))
-
-        self.target_copy.setEnabled(True)
-
         self.target_remove.setEnabled(True)
+
+    # --------------------------------------------------
+    # Schritt 4: der eine Ausgang
+    # --------------------------------------------------
+
+    def _addon_version(self) -> str:
+
+        return str(getattr(self.manager.state, "addon_version", "") or "")
+
+    def _combined_allowed(self) -> bool:
+
+        found = getattr(self.manager.state, "addon_found", False)
+
+        if not found:
+            return False
+
+        version = _version_tuple(self._addon_version())
+
+        return bool(version) and version >= COMBINED_SINCE
+
+    def _delivery_lines(self) -> list[str]:
+        """
+        Die Umschläge, die ins Importfeld des Spiels gehören - je einer
+        pro Zeile, Gewichtung zuerst.
+
+        **Zusammen nur, wenn das Addon sie zusammen lesen kann.** Ein zu
+        altes verschluckt den zweiten still (siehe `COMBINED_SINCE`), und
+        eine Zielausrüstung, die nie ankam, sieht im Spiel genauso aus
+        wie eine, die es nicht gibt.
+        """
+
+        lines: list[str] = []
+
+        entry = self.store.get(self.selected_spec()) if self.store else None
+
+        if entry is not None:
+            lines.append(build_transfer(entry))
+
+        target = self.target_gear_store_entry()
+
+        if target is not None:
+            lines.append(build_target_transfer(target))
+
+        if len(lines) > 1 and not self._combined_allowed():
+            return lines[:1]
+
+        return lines
+
+    def _draw_delivery(self):
+        """
+        Was bereitliegt, und der eine Weg ins Spiel.
+
+        **Zwei Wege, und beide stehen da** - wie seit 2.8.0: die
+        Companion hat bereits zugestellt (wirkt nach dem nächsten
+        `/reload`), und derselbe Inhalt liegt als String bereit (wirkt
+        sofort). Neu ist nur, dass es *ein* String für *beide* Auskünfte
+        ist.
+        """
+
+        lines = self._delivery_lines()
+
+        self.transfer.setPlainText("\n".join(lines))
+
+        self.transfer.setEnabled(bool(lines))
+
+        self.copy_button.setEnabled(bool(lines))
+
+        if not lines:
+
+            self.delivery_warn.setText("")
+
+            self.delivery_hint.setText(
+                "Sobald oben etwas übernommen ist, steht hier beides: "
+                "die Zustellung ins Spiel und der String zum Einfügen "
+                "ohne Neuladen."
+            )
+
+            return
+
+        beides = (
+            self.store is not None
+            and self.store.get(self.selected_spec()) is not None
+            and self.target_gear_store_entry() is not None
+        )
+
+        if beides and not self._combined_allowed():
+
+            #
+            # Der Grund steht dabei, und der Ausweg auch. Ein blosses
+            # "geht nicht" liesse offen, ob die Zielausrüstung verloren
+            # ist - sie ist es nicht, sie kommt über die Brücke.
+            #
+
+            version = self._addon_version()
+
+            self.delivery_warn.setText(
+                "Hier steht nur die Gewichtung: dein WeintCodex "
+                + (f"({version}) " if version and version != "-" else "")
+                + "liest aus einem eingefügten Text nur die erste Zeile "
+                "und verschluckt die zweite stillschweigend. Ab 3.1.2.0 "
+                "gehen beide zusammen — bis dahin holt ein /reload im "
+                "Spiel ohnehin beides, denn zugestellt ist es längst."
+            )
+
+        else:
+
+            self.delivery_warn.setText("")
+
+        self.delivery_hint.setText(
+            "Zugestellt ist beides schon — im Spiel liegt es nach dem "
+            "nächsten /reload bereit (die Gewichtung unter Charakter → "
+            "Priorisierung, auf deinen Klick). Ohne Neuladen: hier "
+            "kopieren und im Spiel unter Import einfügen; das wirkt "
+            "sofort, auch mitten in einer Gruppe."
+        )
 
     def _apply(self):
 
@@ -2042,7 +2179,7 @@ class SimPage(Page):
 
     def _copy_transfer(self):
 
-        text = self.transfer.text()
+        text = self.transfer.toPlainText()
 
         if not text:
             return
@@ -2059,17 +2196,25 @@ class SimPage(Page):
             #
 
             self.copy_state.setText(
-                "Kopieren geht auf diesem System nicht — der String "
-                "steht oben und lässt sich markieren."
+                "Kopieren geht auf diesem System nicht — der Text steht "
+                "oben und lässt sich markieren."
             )
 
             return
 
         clipboard.setText(text)
 
+        #
+        # Die Zahl steht dabei, weil sie die eine Frage beantwortet, die
+        # man vor dem Einfügen hat: ist das jetzt beides?
+        #
+
+        anzahl = len(text.splitlines())
+
         self.copy_state.setText(
-            "Kopiert. Im Spiel unter Import einfügen — dort wirkt er "
-            "sofort, ohne /reload."
+            ("Beide Zeilen kopiert" if anzahl > 1 else "Kopiert")
+            + ". Im Spiel unter Import einfügen — das wirkt sofort, "
+            "ohne /reload."
         )
 
 

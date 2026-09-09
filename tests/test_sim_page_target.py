@@ -62,6 +62,17 @@ class _State:
 
     wow_path = None
 
+    #
+    # Ab WeintCodex 3.1.2.0 gehen beide Umschläge zusammen in ein Feld;
+    # davor verschluckt das Addon den zweiten still. Der Testlauf steht
+    # deshalb bewusst auf einer Fassung, die es kann - der Gegenfall
+    # bekommt seinen eigenen Test.
+    #
+
+    addon_found = True
+
+    addon_version = "3.1.2.0"
+
 
 class _Sync:
 
@@ -120,9 +131,9 @@ def test_the_page_builds_with_the_target_card(page):
 
     assert page.target_apply.isEnabled() is False
 
-    assert page.target_transfer.text() == ""
+    assert page.transfer.toPlainText() == ""
 
-    assert "noch keine Zielausrüstung" in page.target_stored.text()
+    assert "noch keine abgelegt" in page.target_stored.text()
 
 
 def test_the_same_field_tells_the_two_kinds_apart(page):
@@ -234,9 +245,9 @@ def test_applying_stores_delivers_and_offers_the_string(page):
 
     assert page.manager.target_gear_sync.published == 1
 
-    assert page.target_transfer.text().startswith("WCIMPORT:TG:")
+    assert page.transfer.toPlainText().startswith("WCIMPORT:TG:")
 
-    assert "Abgelegt:" in page.target_stored.text()
+    assert "Zielausrüstung:" in page.target_stored.text()
 
     # Das Eingabefeld wird geleert, der Knopf ist wieder gesperrt.
     assert page.input.toPlainText() == ""
@@ -263,7 +274,7 @@ def test_removing_delivers_too(page):
 
     assert page.target_gear_store_entry() is None
 
-    assert "noch keine Zielausrüstung" in page.target_stored.text()
+    assert "noch keine abgelegt" in page.target_stored.text()
 
 
 def test_refresh_only_draws(page):
@@ -386,7 +397,7 @@ def test_applying_leaves_the_string_in_the_clipboard(page):
 
     assert clipboard is not None
     assert clipboard.text().startswith("WCIMPORT:SW:")
-    assert clipboard.text() == page.transfer.text()
+    assert clipboard.text() == page.transfer.toPlainText()
 
     page.input.setPlainText(_sim_json())
 
@@ -394,8 +405,17 @@ def test_applying_leaves_the_string_in_the_clipboard(page):
 
     page._apply_target()
 
-    assert clipboard.text().startswith("WCIMPORT:TG:")
-    assert clipboard.text() == page.target_transfer.text()
+    #
+    # Und jetzt liegt BEIDES in der Zwischenablage - genau eine Zeile je
+    # Umschlag. Das ist der ganze Punkt von Schritt 4: ein Ausgang.
+    #
+
+    zeilen = clipboard.text().splitlines()
+
+    assert len(zeilen) == 2
+    assert zeilen[0].startswith("WCIMPORT:SW:")
+    assert zeilen[1].startswith("WCIMPORT:TG:")
+    assert clipboard.text() == page.transfer.toPlainText()
 
 
 def test_the_gear_wheel_hint_is_on_the_page(page):
@@ -410,3 +430,98 @@ def test_the_gear_wheel_hint_is_on_the_page(page):
 
     assert "Zahnrad" in text
     assert "Include gems" in text
+
+
+# --------------------------------------------------
+# Schritt 4: der eine Ausgang (3.2.0)
+# --------------------------------------------------
+
+
+def _fill_both(page):
+    """
+    Beide Auskünfte eines Sim-Laufs übernehmen - Gewichtung und
+    Zielausrüstung, in der Reihenfolge, in der man sie im Sim holt.
+    """
+
+    page.spec_select.select_value("DEATHKNIGHT_BLOOD")
+
+    page.input.setPlainText("Hit 1.77\nCrit 0.89\nStrength 1.0")
+
+    page._read()
+
+    page._apply()
+
+    page.input.setPlainText(_sim_json())
+
+    page._read()
+
+    page._apply_target()
+
+
+def test_both_envelopes_share_one_field(page):
+    """
+    Aus einem Sim-Lauf kommen zwei Auskünfte. Zwei Felder mit je einem
+    Knopf waren zwei Ausgänge für einen Vorgang - und der zweite blieb
+    liegen.
+    """
+
+    _fill_both(page)
+
+    zeilen = page.transfer.toPlainText().splitlines()
+
+    assert len(zeilen) == 2
+    assert zeilen[0].startswith("WCIMPORT:SW:")
+    assert zeilen[1].startswith("WCIMPORT:TG:")
+
+    assert page.copy_button.isEnabled() is True
+    assert page.remove_button.isEnabled() is True
+    assert page.target_remove.isEnabled() is True
+
+    assert page.delivery_warn.text() == ""
+
+
+def test_an_old_addon_gets_only_one_line(page):
+    """
+    WeintCodex vor 3.1.2.0 liest nur den ersten Umschlag und verschluckt
+    den zweiten **stillschweigend** - eine Erfolgsmeldung, in der die
+    Zielausrüstung fehlt. Diese Sorte Fehler ist die schlimmste, also
+    kommt beides dort gar nicht erst ins Feld.
+    """
+
+    page.manager.state.addon_version = "3.1.1.0"
+
+    _fill_both(page)
+
+    zeilen = page.transfer.toPlainText().splitlines()
+
+    assert len(zeilen) == 1
+    assert zeilen[0].startswith("WCIMPORT:SW:")
+
+    # Und der Grund steht dabei, samt Ausweg - sonst sähe es aus, als
+    # wäre die Zielausrüstung verloren. Sie ist es nicht.
+    warnung = page.delivery_warn.text()
+
+    assert "3.1.2.0" in warnung
+    assert "/reload" in warnung
+
+
+def test_an_unknown_addon_is_treated_as_old(page):
+    """
+    Nicht feststellbar ist nicht dasselbe wie „kann es" - und die
+    vorsichtige Antwort kostet hier nur einen zweiten Einfügevorgang,
+    während die unvorsichtige Daten verschluckt.
+    """
+
+    page.manager.state.addon_found = False
+
+    _fill_both(page)
+
+    assert len(page.transfer.toPlainText().splitlines()) == 1
+
+
+def test_nothing_stored_says_so_without_a_field(page):
+
+    assert page.transfer.toPlainText() == ""
+    assert page.copy_button.isEnabled() is False
+    assert page.delivery_warn.text() == ""
+    assert "Sobald oben etwas übernommen ist" in page.delivery_hint.text()
