@@ -81,6 +81,50 @@ Sieben Dinge nicht Geschmack:
 `refresh()` zeichnet ausschliesslich und fasst das Einfügefeld **nie**
 an — dieselbe Falle wie beim Adressfeld in Einstellungen → Discord.
 
+## Der Weg im Sim, und die zwei Klicks weniger (seit 3.1.1)
+
+**`SIM_STEPS` ist der Satz, der in den Sim schickt — einmal im
+Quelltext.** Er stand wörtlich zweimal da (Kartenaufbau und
+Zurückschalten aus dem Heiler-Zweig); die falsche Fassung hätte danach
+genau der gesehen, der zwischen zwei Spezialisierungen gewechselt hat.
+
+Inhaltlich trägt er eine Auskunft, ohne die der ganze Schritt 4 leerläuft:
+**`Suggest Reforges` optimiert von sich aus nur die Umschmiedungen.** Für
+die Sockelsteine muss im Sim das Zahnrad neben dem Knopf angeklickt und
+*Include gems* angehakt werden — ein Schalter an der einen Stelle, an der
+man ihn nicht sucht. Ohne ihn kommt ein Export zurück, der vollständig
+aussieht und an den Steinen nichts gerechnet hat, und im Spiel folgt
+WeintCodex dann genau diesen unveränderten Steinen. Derselbe Satz steht
+deshalb auch in Schritt 4 und in der Fehlermeldung „erkannt, aber darin
+steht kein Sockelstein".
+
+**Gelesen wird beim Einfügen** (`input.textChanged` → einmaliger `QTimer`,
+250 ms → `_read(quiet=True)`). *Einlesen* war ein Klick ohne eigene
+Entscheidung; der Knopf bleibt für den einen Fall, in dem er etwas kann,
+was das Lesen nebenher nicht darf: **einen Fehler sagen.** Genau das
+unterscheidet `quiet` — ein *Befund* erscheint in beiden Fällen, eine
+*Fehlermeldung* nur auf Klick. Wer mitten im Tippen ist, hat noch nichts
+falsch gemacht, und eine rote Zeile nach jedem Zeichen erzieht dazu, rote
+Zeilen zu übersehen.
+
+Zwei Dinge hängen daran und sind kein Geschmack:
+
+- **`_clear_input()` schreibt selbst ins Feld** und schaltet den
+  Zeitgeber über `_suppress_read` ab. Ohne das liefe nach jedem
+  Übernehmen ein Lesevorgang über ein leeres Feld.
+- **Ein leeres Feld ist der Ausgangszustand, kein Fehler.** `_read()`
+  bricht bei leerem Text über `_forget_reading()` ab — sonst stünde
+  „nicht erkannt" da, sobald jemand seinen Text herauslöscht.
+
+**Übernehmen kopiert mit.** *Übernehmen* und *String kopieren* waren zwei
+Klicks für eine Absicht: wer übernimmt, will es ins Spiel bringen. Der
+Zeitpunkt ist auch der einzige, an dem die Frage „welcher der beiden
+Strings ist meiner" gar nicht erst entsteht. Kopiert wird **nach**
+`refresh()` (erst dort wird das Feld gefüllt) und über **dieselben**
+Methoden wie die Knöpfe, damit ein System ohne Zwischenablage denselben
+Satz bekommt statt eines stillen Nichts. Die Knopfbeschriftung nennt es,
+weil ein stiller Griff in die Zwischenablage eine Überraschung wäre.
+
 ## Die Ausrüstung an den Sim (seit 2.6.0)
 
 Geschrieben vom **WowSimsExporter** (fremdes Addon im Spiel), gelesen von

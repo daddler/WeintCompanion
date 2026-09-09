@@ -22,10 +22,19 @@ Drei Schritte, in dieser Reihenfolge, und die Seite nummeriert sie:
 1. Sim öffnen - auf der Seite der gewählten Spezialisierung, nicht auf
    der Startseite. Ein Knopf, der den Handgriff verlangt, den er
    abnehmen sollte, nimmt nichts ab.
-2. Ergebnis einfügen - die Zeichenkette aus *Suggest Reforges*,
-   dieselbe, die ReforgeLite liest. Ein Wertname plus Zahl geht
-   genauso.
-3. Ins Spiel bringen - **auf zwei Wegen**, und beide stehen da:
+   Zwei Handgriffe, nicht einer: **erst das Zahnrad neben *Suggest
+   Reforges* und dort *Include gems* anhaken**, dann rechnen lassen.
+   Ohne den Haken optimiert der Sim nur die Umschmiedungen und lässt
+   die Sockelsteine, wie sie stecken - das Ergebnis sieht danach
+   vollständig aus und ist es nicht.
+2. Ergebnis einfügen - die Zeichenkette aus *Stat Weights* oder das
+   Ergebnis aus *Export → Link/JSON*. Beide gehören in dasselbe Feld;
+   welche Sorte es ist, erkennt die Seite. **Gelesen wird beim
+   Einfügen**, der Knopf *Einlesen* ist nur noch da, um einen Fehler
+   zu erfragen: nebenher gelesen wird still, weil eine rote Zeile nach
+   jedem getippten Zeichen nur dazu erzieht, rote Zeilen zu übersehen.
+3. Ins Spiel bringen - **auf zwei Wegen**, und beide stehen da (der
+   String liegt nach dem Übernehmen schon in der Zwischenablage):
 
    * Die Companion stellt die Gewichtung über die Addon-Brücke zu; im
      Spiel steht sie nach dem nächsten `/reload` bereit.
@@ -63,7 +72,7 @@ from __future__ import annotations
 
 import time
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -118,6 +127,31 @@ from gui.widgets.wrapped_label import enable_wrap
 
 
 BASE_PAGE = "https://www.wowsims.com/mop/"
+
+
+#
+# DER WEG IM SIM, IN EINEM SATZ - UND NUR EINMAL IM QUELLTEXT.
+#
+# Er stand bis 3.1.1 zweimal wörtlich da (beim Aufbau der Karte und beim
+# Zurückschalten aus dem Heiler-Zweig). Zwei Fassungen desselben Satzes
+# laufen ab der ersten Änderung auseinander, und die falsche steht dann
+# genau bei dem, der zwischen zwei Spezialisierungen gewechselt hat.
+#
+# INHALTLICH IST DER ZWEITE SATZ DER WICHTIGE. *Suggest Reforges*
+# optimiert ohne Zutun nur die Umschmiedungen: die Sockelsteine bleiben,
+# wie sie stecken. Wer das nicht weiß, exportiert ein Ergebnis, das
+# vollständig aussieht und in dem an den Steinen nichts gerechnet wurde -
+# und im Spiel folgt WeintCodex dann genau diesen unveränderten Steinen.
+# Der Haken sitzt hinter dem Zahnrad neben dem Knopf, also an der einen
+# Stelle, an der man ihn nicht sucht.
+#
+SIM_STEPS = (
+    "Der Sim öffnet sich mit deiner Ausrüstung, wenn der WowSimsExporter "
+    "sie im Spiel gemeldet hat. Dort dann zweierlei: erst auf das Zahnrad "
+    "neben Suggest Reforges und Include gems anhaken — ohne diesen Haken "
+    "rechnet der Sim nur die Umschmiedungen und lässt deine Sockelsteine, "
+    "wie sie sind. Danach Suggest Reforges."
+)
 
 
 def _all_gems(entry):
@@ -276,13 +310,7 @@ class SimPage(Page):
         # Siehe `_draw_source()`.
         #
 
-        self.source_hint = self._hint(
-            card,
-            "Der Sim öffnet sich mit deiner Ausrüstung, wenn der "
-            "WowSimsExporter sie im Spiel gemeldet hat. Danach reicht "
-            "dort Suggest Reforges — die Zeichenkette, die dabei "
-            "herauskommt, kommt in Schritt 2.",
-        )
+        self.source_hint = self._hint(card, SIM_STEPS)
 
         row = QHBoxLayout()
 
@@ -439,6 +467,31 @@ class SimPage(Page):
             "genauso."
         )
 
+        #
+        # GELESEN WIRD BEIM EINFÜGEN, NICHT ERST AUF KLICK (seit 3.1.1).
+        #
+        # *Einlesen* war ein Klick ohne eigene Entscheidung: es gibt
+        # keinen Grund, einen eingefügten Text NICHT zu lesen. Der Knopf
+        # bleibt trotzdem stehen, und zwar für den einen Fall, in dem er
+        # etwas kann, was das Lesen nebenher nicht darf: einen **Fehler
+        # sagen**. Wer mitten im Tippen ist, hat noch keine falsche
+        # Eingabe gemacht - eine rote Zeile nach jedem Zeichen erzieht
+        # nur dazu, rote Zeilen zu übersehen. Deshalb ist das Lesen
+        # nebenher still: es zeigt einen Befund, wenn es einen gibt, und
+        # sonst nichts.
+        #
+        self._suppress_read = False
+
+        self._read_timer = QTimer(self)
+
+        self._read_timer.setSingleShot(True)
+
+        self._read_timer.setInterval(250)
+
+        self._read_timer.timeout.connect(self._read_quiet)
+
+        self.input.textChanged.connect(self._on_input_changed)
+
         card.root.addWidget(self.input)
 
         buttons = QHBoxLayout()
@@ -509,7 +562,7 @@ class SimPage(Page):
 
         card.root.addWidget(self.problem)
 
-        self.apply_button = HeroButton("Für diese Spezialisierung übernehmen")
+        self.apply_button = HeroButton("Übernehmen und String kopieren")
 
         self.apply_button.clicked.connect(self._apply)
 
@@ -626,7 +679,8 @@ class SimPage(Page):
 
         self._hint(
             card,
-            "Wenn du im Sim die Umschmiedungen und Steine optimiert hast, "
+            "Wenn im Sim Suggest Reforges gelaufen ist — mit Include gems "
+            "hinter dem Zahnrad, sonst sind die Sockelsteine nicht dabei —, "
             "kopiere dort das Ergebnis (Export → Link oder JSON) und füge "
             "es oben in dasselbe Feld ein. WeintCodex empfiehlt dann genau "
             "diese Steine und Umschmiedungen, statt sie selbst noch einmal "
@@ -680,7 +734,7 @@ class SimPage(Page):
         card.root.addWidget(self.target_problem)
 
         self.target_apply = HeroButton(
-            "Zielausrüstung für diese Spezialisierung übernehmen"
+            "Zielausrüstung übernehmen und String kopieren"
         )
 
         self.target_apply.clicked.connect(self._apply_target)
@@ -991,12 +1045,7 @@ class SimPage(Page):
         # ausgeblendet hat, muss hier wieder dastehen.
         #
 
-        self.source_hint.setText(
-            "Der Sim öffnet sich mit deiner Ausrüstung, wenn der "
-            "WowSimsExporter sie im Spiel gemeldet hat. Danach reicht "
-            "dort Suggest Reforges — die Zeichenkette, die dabei "
-            "herauskommt, kommt in Schritt 2."
-        )
+        self.source_hint.setText(SIM_STEPS)
 
         self.open_button.setText("Sim mit meiner Ausrüstung öffnen")
 
@@ -1312,9 +1361,33 @@ class SimPage(Page):
             "kommen auch Talente, Glyphen und Berufe mit."
         )
 
-    def _clear_input(self):
+    def _on_input_changed(self):
 
-        self.input.setPlainText("")
+        #
+        # Nicht auf den eigenen Schreibzugriff reagieren: `_clear_input()`
+        # leert das Feld nach dem Übernehmen, und das ist keine Eingabe
+        # des Nutzers.
+        #
+
+        if self._suppress_read:
+            return
+
+        self._read_timer.start()
+
+    def _read_quiet(self):
+
+        self._read(quiet=True)
+
+    def _forget_reading(self):
+        """
+        Alles vergessen, was aus dem eingefügten Text kam.
+
+        Eigene Methode, weil es zwei Anlässe dafür gibt und beide
+        dasselbe meinen: das Feld wurde geleert (von Hand oder nach dem
+        Übernehmen). Zweimal ausgeschrieben liefen sie beim nächsten
+        neuen Feld auseinander, und was übrig bliebe, wäre ein Befund
+        ohne Text darüber.
+        """
 
         self._parsed = None
 
@@ -1338,9 +1411,43 @@ class SimPage(Page):
 
         self.apply_button.setEnabled(False)
 
-    def _read(self):
+    def _clear_input(self):
+
+        self._suppress_read = True
+
+        self._read_timer.stop()
+
+        self.input.setPlainText("")
+
+        self._suppress_read = False
+
+        self._forget_reading()
+
+    def _read(self, quiet: bool = False):
+        """
+        Den eingefügten Text lesen.
+
+        `quiet` unterscheidet die beiden Anlässe, und der Unterschied
+        ist genau einer: **ob ein Fehler gesagt wird.** Nebenher
+        gelesen wird bei jedem Zeichen (`_on_input_changed`), und wer
+        gerade tippt, hat noch nichts falsch gemacht. Ein Befund
+        dagegen ist in beiden Fällen willkommen - er verlangt nichts
+        und beantwortet die Frage, ob der Text angekommen ist.
+        """
 
         text = self.input.toPlainText()
+
+        if not text.strip():
+
+            #
+            # Ein leeres Feld ist kein Fehler, sondern der
+            # Ausgangszustand - auch dann, wenn der Nutzer den Text
+            # gerade selbst herausgelöscht hat.
+            #
+
+            self._forget_reading()
+
+            return
 
         #
         # ZUERST DIE ZIELAUSRUESTUNG. Beide Sorten Text kommen aus
@@ -1355,7 +1462,7 @@ class SimPage(Page):
         # nicht so.
         #
 
-        if self._read_target(text):
+        if self._read_target(text, quiet=quiet):
             return
 
         parsed = parse(text)
@@ -1366,7 +1473,7 @@ class SimPage(Page):
 
             self.notes.setText("")
 
-            self.problem.setText(parsed.problem)
+            self.problem.setText("" if quiet else parsed.problem)
 
             self.apply_button.setEnabled(False)
 
@@ -1383,6 +1490,7 @@ class SimPage(Page):
             self.notes.setText("")
 
             self.problem.setText(
+                "" if quiet else
                 "Darin steht keine brauchbare Gewichtung — alle Werte "
                 "sind null oder negativ."
             )
@@ -1551,7 +1659,7 @@ class SimPage(Page):
     # Die Zielausrüstung
     # --------------------------------------------------
 
-    def _read_target(self, text: str) -> bool:
+    def _read_target(self, text: str, quiet: bool = False) -> bool:
         """
         Den eingefügten Text als Sim-**Ergebnis** lesen.
 
@@ -1583,10 +1691,13 @@ class SimPage(Page):
             #
 
             self.target_problem.setText(
+                "" if quiet else
                 "Erkannt als "
                 + target.source_label
                 + ", aber darin steht weder ein Sockelstein noch eine "
-                "Umschmiedung. "
+                "Umschmiedung. Im Sim erst optimieren lassen (Zahnrad "
+                "neben Suggest Reforges, Include gems anhaken), dann "
+                "exportieren. "
                 + (" ".join(target.problems) if target.problems else "")
             )
 
@@ -1736,6 +1847,9 @@ class SimPage(Page):
 
         self.refresh()
 
+        # Dieselbe Überlegung wie beim Übernehmen einer Gewichtung.
+        self._copy_target_transfer()
+
         logger = getattr(self.manager, "logger", None)
 
         if logger is not None:
@@ -1881,6 +1995,21 @@ class SimPage(Page):
         self._clear_input()
 
         self.refresh()
+
+        #
+        # UND GLEICH IN DIE ZWISCHENABLAGE (seit 3.1.1).
+        #
+        # *Übernehmen* und *String kopieren* waren zwei Klicks für eine
+        # Absicht: wer übernimmt, will es ins Spiel bringen. Der
+        # Zeitpunkt ist auch der einzige, an dem die Frage "welcher der
+        # beiden Strings ist meiner" gar nicht erst entsteht - der
+        # gerade übernommene liegt bereit. Erst nach `refresh()`, denn
+        # das Feld wird dort gefüllt; und über denselben Weg wie der
+        # Knopf, damit ein System ohne Zwischenablage denselben Satz
+        # bekommt statt eines stillen Nichts.
+        #
+
+        self._copy_transfer()
 
         logger = getattr(self.manager, "logger", None)
 

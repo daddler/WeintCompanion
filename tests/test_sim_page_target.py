@@ -286,3 +286,127 @@ def test_refresh_only_draws(page):
     assert page.input.toPlainText() != ""
     assert page.target_result.text() == vorher
     assert page._target is not None
+
+
+# --------------------------------------------------
+# Die Vereinfachungen von 3.1.1
+# --------------------------------------------------
+
+
+def test_pasting_reads_by_itself(page):
+    """
+    *Einlesen* war ein Klick ohne eigene Entscheidung: es gibt keinen
+    Grund, einen eingefügten Text nicht zu lesen. Geprüft wird die
+    Verdrahtung (Feld → Zeitgeber) und das Ergebnis danach - ohne den
+    Knopf je zu drücken.
+    """
+
+    page.input.setPlainText("Hit 1.77\nCrit 0.89\nAgility 1.0")
+
+    assert page._read_timer.isActive() is True
+
+    page._read_quiet()
+
+    assert page._weights
+    assert page.apply_button.isEnabled() is True
+
+
+def test_reading_along_stays_quiet_about_errors(page):
+    """
+    Wer mitten im Tippen ist, hat noch nichts falsch gemacht. Eine rote
+    Zeile nach jedem Zeichen erzieht nur dazu, rote Zeilen zu
+    übersehen - also sagt das Lesen nebenher nichts, und der Knopf sagt
+    es.
+    """
+
+    page.input.setPlainText("völliger Unsinn ohne jede Zahl")
+
+    page._read_quiet()
+
+    assert page.problem.text() == ""
+    assert page.apply_button.isEnabled() is False
+
+    page._read()
+
+    assert page.problem.text() != ""
+
+
+def test_an_emptied_field_is_not_an_error(page):
+    """
+    Ein leeres Feld ist der Ausgangszustand, kein Fehler - auch dann,
+    wenn der Nutzer den Text gerade selbst herausgelöscht hat.
+    """
+
+    page.input.setPlainText(_sim_json())
+
+    page._read()
+
+    assert page._target is not None
+
+    page.input.setPlainText("")
+
+    page._read_quiet()
+
+    assert page._target is None
+    assert page.target_problem.text() == ""
+    assert page.problem.text() == ""
+
+
+def test_clearing_the_field_starts_no_read(page):
+    """
+    `_clear_input()` schreibt selbst ins Feld. Das ist keine Eingabe des
+    Nutzers und darf den Zeitgeber nicht auslösen - sonst liefe nach
+    jedem Übernehmen ein Lesevorgang über ein leeres Feld.
+    """
+
+    page.input.setPlainText("Hit 1.77")
+
+    page._clear_input()
+
+    assert page._read_timer.isActive() is False
+
+
+def test_applying_leaves_the_string_in_the_clipboard(page):
+    """
+    *Übernehmen* und *String kopieren* waren zwei Klicks für eine
+    Absicht. Der Zeitpunkt des Übernehmens ist auch der einzige, an dem
+    die Frage "welcher der beiden Strings ist meiner" gar nicht erst
+    entsteht.
+    """
+
+    from PySide6.QtGui import QGuiApplication
+
+    page.input.setPlainText("Hit 1.77\nCrit 0.89\nAgility 1.0")
+
+    page._read()
+
+    page._apply()
+
+    clipboard = QGuiApplication.clipboard()
+
+    assert clipboard is not None
+    assert clipboard.text().startswith("WCIMPORT:SW:")
+    assert clipboard.text() == page.transfer.text()
+
+    page.input.setPlainText(_sim_json())
+
+    page._read()
+
+    page._apply_target()
+
+    assert clipboard.text().startswith("WCIMPORT:TG:")
+    assert clipboard.text() == page.target_transfer.text()
+
+
+def test_the_gear_wheel_hint_is_on_the_page(page):
+    """
+    Ohne *Include gems* hinter dem Zahnrad optimiert der Sim nur die
+    Umschmiedungen. Das Ergebnis sieht danach vollständig aus und ist
+    es nicht - der Satz muss deshalb dort stehen, wo man in den Sim
+    geht.
+    """
+
+    text = page.source_hint.text()
+
+    assert "Zahnrad" in text
+    assert "Include gems" in text

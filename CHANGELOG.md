@@ -2,6 +2,51 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 3.1.1
+
+**Ohne einen Haken im Sim fehlen die Sockelsteine — das stand nirgends.**
+*Suggest Reforges* optimiert von sich aus nur die Umschmiedungen. Damit
+auch die Steine gerechnet werden, muss im Sim das **Zahnrad** neben dem
+Knopf angeklickt und **Include gems** angehakt werden. Ohne diesen Haken
+kam ein Ergebnis zurück, das vollständig aussah und an den Steinen nichts
+geändert hatte — und WeintCodex ist ihm im Spiel dann genau so gefolgt.
+Der Satz steht jetzt auf *Simmen*, in Schritt 1 und in Schritt 4.
+
+**Weniger Klicks auf demselben Weg.** Eingefügter Text wird jetzt sofort
+gelesen; *Einlesen* drückt man nur noch, wenn man wissen will, warum
+etwas nicht erkannt wurde. Und *Übernehmen* legt den Import-String gleich
+in die Zwischenablage — im Spiel bleibt nur noch das Einfügen unter
+*Import*.
+
+Beim Tippen bleibt die Seite dabei still: eine Fehlermeldung nach jedem
+Zeichen erzieht nur dazu, Fehlermeldungen zu übersehen.
+
+### Technisch
+
+`gui/pages/sim.py`: `input.textChanged` startet einen einmaligen
+`QTimer` (250 ms) auf `_read(quiet=True)`. `quiet` unterscheidet genau
+eine Sache — ob ein Fehler *gesagt* wird; ein Befund erscheint in beiden
+Fällen. `_clear_input()` schreibt selbst ins Feld und schaltet den
+Zeitgeber über `_suppress_read` ab, sonst liefe nach jedem Übernehmen
+ein Lesevorgang über ein leeres Feld.
+
+`_apply()`/`_apply_target()` rufen nach `refresh()` (erst dort wird das
+String-Feld gefüllt) dieselben Kopiermethoden wie die Knöpfe — ein System
+ohne Zwischenablage bekommt so denselben Satz statt eines stillen Nichts.
+Die Knopfbeschriftungen nennen das Kopieren, weil ein stiller Griff in
+die Zwischenablage eine Überraschung wäre.
+
+Aus dem Text herausgezogen: `SIM_STEPS` (der Weg im Sim) stand wörtlich
+zweimal da — beim Kartenaufbau und beim Zurückschalten aus dem
+Heiler-Zweig. Ebenso `_forget_reading()`, bisher der zweite Teil von
+`_clear_input()`.
+
+`tests/test_sim_page_target.py` pinnt die sechs Punkte: Lesen beim
+Einfügen, Stillschweigen dabei, ein geleertes Feld als Ausgangszustand
+statt als Fehler, kein Lesevorgang nach `_clear_input()`, beide Strings
+in der Zwischenablage nach dem Übernehmen, und dass der Zahnrad-Satz auf
+der Seite steht.
+
 ## 3.1.0
 
 **Dein Sim-Ergebnis geht jetzt vollständig ins Spiel — nicht nur die Gewichtung.**
