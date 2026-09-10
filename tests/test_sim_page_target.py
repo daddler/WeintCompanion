@@ -900,3 +900,260 @@ def test_an_empty_slot_is_not_a_piece_of_gear(page):
     page._apply()
 
     assert f"{entry.item_count} Teile" in page.stored.text()
+
+
+# --------------------------------------------------
+# Die Zwischenablage als Eingang (seit 3.4.0)
+# --------------------------------------------------
+
+
+def _copy(text: str):
+
+    from PySide6.QtGui import QGuiApplication
+
+    clipboard = QGuiApplication.clipboard()
+
+    assert clipboard is not None
+
+    clipboard.setText(text)
+
+    return clipboard
+
+
+def test_what_is_copied_in_the_sim_arrives_by_itself(page):
+    """
+    Der Weg durch den Sim endet zweimal an Strg+C. Danach verlangte
+    diese Seite je drei Handgriffe ohne Entscheidung: Fenster wechseln,
+    ins Feld klicken, Strg+V.
+    """
+
+    _copy(_sim_json())
+
+    page._take_from_clipboard(force=True)
+
+    assert page._run.target is not None
+    assert page.apply_button.isEnabled() is True
+    assert "Zwischenablage" in page.clip_state.text()
+
+
+def test_both_kinds_arrive_that_way_and_collect_in_one_run(page):
+    """
+    Zwei Ergebnisse, zweimal kopiert, **ein** Lauf - ohne dass der
+    Nutzer das Feld zwischendurch leert.
+    """
+
+    _copy("Hit 1.77\nCrit 0.89\nAgility 1.0")
+
+    page._take_from_clipboard(force=True)
+
+    _copy(_sim_json())
+
+    page._take_from_clipboard(force=True)
+
+    assert page._run.weights
+    assert page._run.target is not None
+
+
+def test_anything_else_never_touches_the_field(page):
+    """
+    Im Lauf eines Abends liegt in derselben Zwischenablage ein
+    Dateipfad, ein Zitat, ein halber Befehl. Keins davon gehört in
+    dieses Feld - und ein Feld, das sich mit Fremdem füllt, ist
+    schlimmer als eins, das man selbst befüllt.
+    """
+
+    for fremd in (
+        "hallo welt",
+        "C:\\Users\\Kelthuzad\\Desktop",
+        "git commit -m \"nichts\"",
+        "https://example.com/keine-ausgabe",
+    ):
+
+        _copy(fremd)
+
+        page._take_from_clipboard(force=True)
+
+        assert page.input.toPlainText() == ""
+        assert page.clip_state.text() == ""
+        assert page._run is None or page._run.target is None
+
+
+def test_the_same_clipboard_is_not_taken_twice(page):
+    """
+    Dieselbe Zwischenablage feuert je nach System mehrfach für ein
+    einziges Strg+C. Ohne diese Abgrenzung schriebe jedes Feuern
+    denselben Text noch einmal ins Feld - mitten in das hinein, was
+    der Nutzer gerade tut.
+    """
+
+    _copy(_sim_json())
+
+    page._take_from_clipboard(force=True)
+
+    page.input.setPlainText("von Hand geändert")
+
+    page._take_from_clipboard(force=True)
+
+    assert page.input.toPlainText() == "von Hand geändert"
+
+
+def test_the_page_does_not_read_back_what_it_copied_itself(page):
+    """
+    `WCIMPORT:` ist der Weg **ins Spiel**. Ihn zurückzulesen hiesse,
+    das eigene Ergebnis für ein neues zu halten.
+    """
+
+    page.input.setPlainText("Hit 1.77\nCrit 0.89\nAgility 1.0")
+
+    page._read()
+
+    page._apply()
+
+    #
+    # `_apply()` legt den String in die Zwischenablage. Das nächste
+    # Nachsehen darf daraus nichts machen.
+    #
+
+    page._take_from_clipboard(force=True)
+
+    assert page.input.toPlainText() == ""
+    assert page.clip_state.text() == ""
+
+
+def test_the_automatic_can_be_switched_off(page):
+    """
+    In die Zwischenablage zu sehen ist eine Zumutung, die man ablehnen
+    können muss - und der Schalter steht da, wo er wirkt.
+    """
+
+    page._set_clipboard_pickup(False)
+
+    _copy(_sim_json())
+
+    page._take_from_clipboard(force=True)
+
+    assert page.input.toPlainText() == ""
+
+    #
+    # Und beim Wiedereinschalten wird gleich nachgesehen: wer den
+    # Schalter umlegt, hat eben etwas kopiert, das nicht ankam.
+    #
+
+    page._set_clipboard_pickup(True)
+
+    assert page._run.target is not None
+
+
+def test_a_caught_result_still_gets_its_red_line(page):
+    """
+    Das leise Lesen gibt es für den, der gerade tippt. Wer Strg+C
+    gedrückt hat, ist fertig - ein Export ohne einen einzigen
+    gerechneten Sockelstein muss hier denselben roten Satz bekommen wie
+    beim Einlesen von Hand. Sonst sähe das Auffangen aus wie Erfolg,
+    und im Spiel folgte WeintCodex unveränderten Steinen.
+    """
+
+    roh = json.loads(_sim_json())
+
+    for item in roh.get("player", {}).get("equipment", {}).get("items", []):
+
+        item.pop("gems", None)
+
+        item.pop("reforging", None)
+
+    _copy(json.dumps(roh))
+
+    page._take_from_clipboard(force=True)
+
+    assert "Include gems" in page.problem.text()
+
+
+# --------------------------------------------------
+# Wo stehe ich
+# --------------------------------------------------
+
+
+def test_the_title_says_what_to_do_now(page):
+
+    assert page.header.title.text() == "Ausrüstung im Spiel bereitstellen."
+
+    page.input.setPlainText("Hit 1.77\nCrit 0.89\nAgility 1.0")
+
+    page._read()
+
+    page.refresh()
+
+    assert page.header.title.text() == "Sim-Ergebnis übernehmen."
+
+    page._apply()
+
+    assert page.header.title.text().startswith("Fertig")
+
+
+def test_step_two_never_gets_a_tick(page):
+    """
+    Schritt 2 passiert im Browser, und was dort geschehen ist, weiss
+    diese App nicht. Ein Häkchen dafür wäre eine Behauptung - dieselbe
+    Zurückhaltung wie bei `at == -1` und `stars == 0`.
+    """
+
+    page.input.setPlainText("Hit 1.77\nCrit 0.89\nAgility 1.0")
+
+    page._read()
+
+    page._apply()
+
+    assert page._step_marks["2"].text() == "2"
+
+    assert page._step_marks["3"].text() == "3"  # Feld nach dem Übernehmen leer
+
+    assert page._step_marks["4"].text() == "✓"
+
+
+def test_typing_by_hand_takes_the_origin_line_with_it(page):
+    """
+    „Aus der Zwischenablage übernommen" gälte sonst für einen Text, der
+    nicht mehr dasteht - und eine Herkunftsangabe, die nicht stimmt, ist
+    schlechter als keine.
+    """
+
+    _copy(_sim_json())
+
+    page._take_from_clipboard(force=True)
+
+    assert page.clip_state.text() != ""
+
+    page.input.setPlainText("Hit 1.77")
+
+    page._on_input_changed()
+
+    assert page.clip_state.text() == ""
+
+
+def test_coming_back_rereads_the_reported_gear(page):
+    """
+    Wer im Spiel bereitstellt, während die Seite offen liegt, musste
+    bis 3.3.0 einmal weg- und wieder hinnavigieren, damit Schritt 1
+    aufhört, den alten Stand zu behaupten.
+    """
+
+    from PySide6.QtCore import Qt
+
+    gelesen = []
+
+    page.read_export = lambda: gelesen.append(1)
+
+    page.setVisible(True)
+
+    page._app_state_changed(Qt.ApplicationActive)
+
+    assert gelesen == [1]
+
+    #
+    # Und nur beim Aktivwerden: jeder andere Zustandswechsel fasst
+    # keine Datei an.
+    #
+
+    page._app_state_changed(Qt.ApplicationInactive)
+
+    assert gelesen == [1]

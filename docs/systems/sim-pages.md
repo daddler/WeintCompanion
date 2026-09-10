@@ -19,7 +19,7 @@ Die Seite bildet den Weg ab, den man geht:
 |---|---|---|
 | 1 Charakter vorbereiten | *keine* | Ist mein Charakter richtig erkannt? Sieht die Companion meinen Stand? |
 | 2 Sim öffnen und rechnen lassen | *Sim mit meiner Ausrüstung öffnen* | Was habe ich jetzt zu tun? |
-| 3 Sim-Ergebnis einfügen | *Sim-Ergebnis übernehmen* | Ist es vollständig? Wurde wirklich optimiert? |
+| 3 Sim-Ergebnis einfügen | *Sim-Ergebnis übernehmen* (das Einfügen selbst entfällt seit 3.4.0) | Ist es vollständig? Wurde wirklich optimiert? |
 | 4 Ins Spiel übertragen | *Ins Spiel übertragen* | Was wird übertragen? Muss ich noch etwas tun? |
 
 Fünf Dinge daran sind nicht Geschmack:
@@ -158,6 +158,97 @@ Sieben Dinge nicht Geschmack:
 
 `refresh()` zeichnet ausschliesslich und fasst das Einfügefeld **nie**
 an — dieselbe Falle wie beim Adressfeld in Einstellungen → Discord.
+
+## Die Zwischenablage als Eingang (seit 3.4.0)
+
+**Der Weg durch den Sim endet zweimal an Strg+C**, einmal unter *Stat
+Weights* und einmal unter *Export*. Danach verlangte Schritt 3 je drei
+Handgriffe, die keine Entscheidung tragen: Fenster wechseln, ins Feld
+klicken, Strg+V. Sechs Handgriffe für null Entscheidungen — und sie
+waren der ganze Rest an Bedienaufwand, den 3.3.0 noch übriggelassen
+hatte.
+
+`SimPage._take_from_clipboard()` nimmt jetzt, was dort liegt, und
+schreibt es ins Feld wie eine Eingabe von Hand. Sechs Dinge daran sind
+nicht Geschmack:
+
+- **Entschieden wird in `sim_run.recognize()`, und nur dort.** Die
+  Reihenfolge (Zielausrüstung zuerst, weil `parse_target()` die
+  strengere Lesart ist) stand bis 3.3.0 ausschliesslich in `_read()`.
+  Das genügt, solange die Antwort nur „lies weiter" heisst; von sich aus
+  hinzusehen verlangt, die Frage **ohne Nebenwirkung stellen zu
+  können**. Zwei Fassungen derselben Reihenfolge liefen ab der ersten
+  Änderung auseinander, und dann nähme die Automatik ausgerechnet die
+  Sorte nicht an, die das Feld gelesen hätte.
+- **Erkannt ≠ brauchbar.** Ein Export ohne einen einzigen gerechneten
+  Sockelstein ist `TARGET` und läuft damit in den roten Satz über
+  *Include gems*. Wäre er `NOTHING`, käme er nie so weit — und im Spiel
+  folgte WeintCodex unveränderten Steinen, ohne dass sich etwas meldet.
+- **Gelesen wird laut** (`quiet=False`). `quiet` gibt es für den, der
+  gerade tippt; wer Strg+C gedrückt hat, ist fertig. Ein stilles
+  Auffangen ohne Befund sähe aus wie Erfolg.
+- **Geschrieben wird ersetzend, nicht anhängend.** `_read()` liest den
+  ganzen Feldinhalt und ordnet ihn **einer** Sorte zu; zwei Sorten
+  übereinander hiessen, dass die zweite die erste verdeckt. Gesammelt
+  wird im Lauf, nicht im Feld (`../sim-run.md`).
+- **`_clip_seen` ist eine Abgrenzung, kein Zwischenspeicher.** Dieselbe
+  Zwischenablage feuert je nach System mehrfach für ein einziges
+  Strg+C. Er trägt auch, was diese App selbst kopiert hat
+  (`_copy_transfer()`, `_copy_export()`): `WCIMPORT:` ist der Weg *ins
+  Spiel*, und ihn zurückzulesen hiesse, das eigene Ergebnis für ein
+  neues zu halten. `recognize()` weist ihn ohnehin ab — sich darauf zu
+  verlassen wäre ein stiller Fehler, sobald sich das ändert.
+- **Es wird gesagt, nicht gezaubert** (`clip_state`). Ein Feld, das sich
+  von selbst füllt, ist ohne Satz daneben von einem Fehler nicht zu
+  unterscheiden — und wer gerade auf den Sim gesehen hat, hat das Füllen
+  nicht gesehen.
+
+**Zwei Anlässe, und beide sind derselbe Moment.** `dataChanged` feuert
+beim Kopieren, solange die App die Zwischenablage sehen darf — unter
+Wayland nur mit Fokus, also nie, während der Nutzer im Browser ist.
+Deshalb `applicationStateChanged` auf `ApplicationActive` als zweiter:
+wer zurückwechselt, macht die Companion aktiv. Ohne ihn wäre die
+Automatik auf der halben Linux-Welt eine, die nie anspringt. `force=True`
+umgeht dabei die Sichtbarkeitsprüfung für die beiden Anlässe, bei denen
+die Absicht des Nutzers der Auslöser ist (`on_enter()`, Schalter an).
+
+**Derselbe Anlass liest den WowSimsExporter neu.** Wer im Spiel
+bereitstellt, während die Seite offen liegt, musste bis 3.3.0 einmal weg-
+und wieder hinnavigieren, damit Schritt 1 aufhört, den alten Stand zu
+behaupten. Eine Datei anzufassen ist Aufwand — aber `on_enter()` tut
+dasselbe und aus demselben Grund, und in `refresh()` steht davon nichts.
+
+**Abstellbar, und zwar dort, wo es wirkt** (`sim_clipboard`, Standard
+an). In die Zwischenablage zu sehen ist eine Zumutung, die man ablehnen
+können muss, auch wenn nichts davon den Rechner verlässt und nichts
+gespeichert wird, was nicht erkannt wurde. Der Schalter steht über dem
+Feld und nicht in den Einstellungen: die Frage stellt sich beim Blick
+auf das Feld, das sich von selbst füllt.
+
+## Wo stehe ich (seit 3.4.0)
+
+Vier gleich aussehende Karten untereinander sind eine **Leseaufgabe**:
+„was habe ich jetzt zu tun" ergibt sich erst aus dem Lesen aller vier
+Hinweise. `_draw_progress()` beantwortet dieselbe Frage im Hinsehen,
+ohne eine einzige Auskunft wegzunehmen.
+
+- **Der Seitentitel ist der nächste Schritt** — dieselbe Regel wie bei
+  der Übersicht, deren Titel den Termin nennt statt das Wort
+  „Übersicht".
+- **Schritt 2 bekommt kein Häkchen.** Er passiert im Browser, und was
+  dort geschehen ist, weiss diese App nicht — dieselbe Zurückhaltung wie
+  bei `at == -1` und `stars == 0`. Abgehakt wird nur, was die Companion
+  tatsächlich sieht: die gemeldete Ausrüstung (1), der eingelesene Lauf
+  (3), das Abgelegte (4).
+
+**Eine fehlende Gewichtung ist keine Sperre.** `next_step()` sagt seit
+3.4.0 dazu, dass Übernehmen schon geht und dass die zweite Hälfte im Sim
+einen **zweiten Lauf** kostet. „Noch nicht vollständig" allein hat das
+Gegenteil nahegelegt: wer es geglaubt hat, hat den Sim ein zweites Mal
+laufen lassen, bevor er das Ergebnis des ersten ins Spiel gebracht hat.
+Wo ein Zielzustand vorliegt, entscheidet drüben ohnehin er
+(`../../../WeintCodex/docs/systems/gearing.md`); die Gewichtung ist der
+Rückfall für die Plätze, über die er nichts sagt.
 
 ## Der Weg im Sim, und die zwei Klicks weniger (seit 3.1.1)
 

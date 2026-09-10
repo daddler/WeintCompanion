@@ -180,7 +180,7 @@ davon der falsche Satz. Die Rangfolge steht in `_RANK`:
 |---|---|---|
 | `MISMATCH` | die Gewichtung **oder** der Zielzustand gehört zu einer anderen Klasse | prüfen — übernehmen darf er trotzdem |
 | `STALE` | ≥ 2 Plätze **und** ≥ die Hälfte tragen ein anderes Teil | im Spiel neu bereitstellen, neu simmen |
-| `INCOMPLETE` | eine der beiden Auskünfte fehlt | die andere Ausgabe aus dem Sim holen |
+| `INCOMPLETE` | eine der beiden Auskünfte fehlt | übernehmen geht schon; die andere Ausgabe nachreichen |
 | `UNCHANGED` | vollständig, mindestens ein **vergleichbarer** Platz, und kein Unterschied | nachsehen: schon optimal, oder nie optimiert |
 | `READY` | vollständig, und es ändert sich etwas | übertragen |
 | `EMPTY` | nichts eingelesen | einfügen |

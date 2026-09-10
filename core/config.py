@@ -54,6 +54,19 @@ class Config:
             "access_profile_sync_enabled": True,
 
             #
+            # Simmen-Seite: das Ergebnis des Sims von selbst aus der
+            # Zwischenablage nehmen (gui/pages/sim.py). Erkannt wird
+            # nur, was `sim_run.recognize()` als Sim-Ausgabe ausweist;
+            # alles andere wird nicht angefasst, nichts davon verlässt
+            # den Rechner. In die Zwischenablage zu sehen ist trotzdem
+            # eine Zumutung, und wer sie ablehnen will, findet den
+            # Schalter auf der Seite selbst - hier steht nur, was er
+            # umlegt.
+            #
+
+            "sim_clipboard": True,
+
+            #
             # Zuordnung Discord-Rollenname -> Rang
             # ("gast"/"extern"/"mitglied"/"offizier"). Leer bedeutet:
             # die Standardzuordnung aus core/access_roles.py verwenden.

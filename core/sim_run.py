@@ -62,13 +62,99 @@ import hashlib
 import time
 from dataclasses import dataclass, field, replace
 
-from core.stat_weights import class_label, spec as spec_of, spec_label
+from core.stat_weights import (
+    class_label,
+    normalize,
+    parse,
+    spec as spec_of,
+    spec_label,
+)
 from core.target_gear import (
     TargetGear,
     changed_slots,
     compare,
     foreign_slots,
+    parse_target,
 )
+
+
+#
+# --------------------------------------------------
+# Was für ein Text ist das?
+# --------------------------------------------------
+#
+# EINE STELLE, DIE ES ENTSCHEIDET - UND SIE KENNT KEIN QT.
+#
+# Bisher wurde diese Frage im Lesen selbst beantwortet: `_read()`
+# probiert die strengere Lesart zuerst und lässt die andere
+# durchfallen. Das genügt, solange die Antwort nur „lies weiter"
+# heisst.
+#
+# Seit die Seite den Text auch von sich aus aus der Zwischenablage
+# nimmt, muss die Frage **gestellt werden können, ohne etwas zu tun**:
+# was nicht aus dem Sim kommt, darf das Eingabefeld nicht anfassen.
+# Ein Dateipfad, ein Zitat, ein halber Befehl - alles drei landet im
+# Lauf eines Abends in derselben Zwischenablage, und keins davon
+# gehört in dieses Feld.
+#
+# Zwei Fassungen derselben Reihenfolge liefen ab der ersten Änderung
+# auseinander, und dann nähme die Zwischenablage ausgerechnet die
+# Sorte nicht an, die das Feld gelesen hätte. Deshalb steht die
+# Reihenfolge hier, und `_read()` folgt ihr.
+#
+
+NOTHING = ""
+
+TARGET = "target"
+
+WEIGHTS = "weights"
+
+
+def recognize(text: str) -> str:
+    """
+    `TARGET`, `WEIGHTS` oder `NOTHING` - was dieser Text ist.
+
+    **Die Zielausrüstung zuerst**, denn `parse_target()` ist die
+    strengere der beiden Lesarten: sie erkennt nur eine Adresse, einen
+    Base64-Rumpf ab 40 Zeichen oder JSON. Eine getippte Gewichtung
+    („Hit 1.77") ist keins davon und fällt sicher durch - andersherum
+    wäre es nicht so.
+
+    **Erkannt heisst nicht brauchbar.** Ein Sim-Export ohne einen
+    einzigen Sockelstein ist `TARGET`, und das ist Absicht: die Seite
+    hat dazu einen eigenen Satz (*Include gems* fehlt), und den soll
+    sie sagen dürfen. Nur was gar nicht aus dem Sim stammt, ist
+    `NOTHING`.
+
+    **Was diese App selbst in die Zwischenablage legt, ist `NOTHING`.**
+    `WCIMPORT:` ist der Weg *ins Spiel*; ihn zurückzulesen hiesse, das
+    eigene Ergebnis für ein neues zu halten. Die beiden Lesarten
+    weisen ihn ohnehin ab - hier steht es trotzdem, weil sich das
+    stillschweigend ändern kann und der Fehler dann keiner wäre, den
+    man sieht.
+    """
+
+    text = (text or "").strip()
+
+    if not text:
+        return NOTHING
+
+    if text.upper().startswith("WCIMPORT:"):
+        return NOTHING
+
+    target = parse_target(text)
+
+    if target is not None and target.known:
+        return TARGET
+
+    parsed = parse(text)
+
+    if parsed.problem:
+        return NOTHING
+
+    weights, _ = normalize(parsed.weights)
+
+    return WEIGHTS if weights else NOTHING
 
 
 #
@@ -838,16 +924,40 @@ def next_step(validation: Validation) -> str:
 
         if "target" in validation.missing:
 
+            #
+            # Der billigere der beiden Wege: der Sim hat schon
+            # gerechnet, es fehlt nur der Export daraus.
+            #
+
             return (
-                "Noch nicht vollständig — im Sim Export → Link oder JSON "
-                "kopieren und hier einfügen. Vorher das Zahnrad neben "
-                "Suggest Reforges: ohne Include gems bleiben die "
-                "Sockelsteine, wie sie stecken."
+                "Fehlt noch: im Sim Export → Link oder JSON kopieren. "
+                "Vorher das Zahnrad neben Suggest Reforges — ohne "
+                "Include gems bleiben die Sockelsteine, wie sie stecken."
             )
 
+        #
+        # WAS HIER FEHLT, KOSTET EINEN ZWEITEN SIM-LAUF - und deshalb
+        # steht dabei, dass das Übernehmen darauf nicht wartet.
+        #
+        # *Stat Weights* rechnet im Sim von vorn und dauert Minuten. Wo
+        # ein Zielzustand vorliegt, entscheidet drüben ohnehin er
+        # (`../../WeintCodex/docs/systems/gearing.md`); die Gewichtung
+        # ist der Rückfall für die Plätze, für die er nichts sagt - eine
+        # Auskunft, die man nachreichen kann, und keine, ohne die das
+        # Vorliegende nichts wert wäre.
+        #
+        # „Noch nicht vollständig" allein hat genau das Gegenteil
+        # nahegelegt: es klang wie eine Sperre, und wer es geglaubt hat,
+        # hat den Sim ein zweites Mal laufen lassen, bevor er das
+        # Ergebnis des ersten ins Spiel gebracht hat.
+        #
+
         return (
-            "Noch nicht vollständig — im Sim unter Stat Weights die Ausgabe "
-            "kopieren und hier einfügen."
+            "Übernehmen geht schon — die optimierte Ausrüstung reicht "
+            "fürs Erste. Die Gewichtung dazu kostet im Sim einen "
+            "zweiten Lauf unter Stat Weights; sie zählt für die Plätze, "
+            "über die das Ergebnis nichts sagt, und lässt sich jederzeit "
+            "nachreichen."
         )
 
     if state == STALE:

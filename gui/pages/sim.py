@@ -34,13 +34,29 @@ VIER SCHRITTE, UND JEDER HAT GENAU EINE HAUPTHANDLUNG.
 3. **Sim-Ergebnis einfügen** — **ein** Feld, **ein** Befund, **ein**
    Knopf. Was eingefügt wird, erkennt die Seite an seiner Gestalt; was
    noch fehlt, sagt sie. Beide Sorten sammeln sich im selben Lauf, statt
-   sich gegenseitig zu ersetzen.
+   sich gegenseitig zu ersetzen. Seit 3.4.0 entfällt das Einfügen
+   selbst: was im Sim kopiert wurde, holt sich die Seite (siehe unten).
 4. **Ins Spiel übertragen** — ein Vorgang, zwei Wege dorthin, und die
    Seite entscheidet, welcher gerade gilt.
 
+WAS AN SCHRITT 3 NOCH BEDIENUNG WAR, UND JETZT KEINE MEHR IST.
+
+Der Weg durch den Sim endet zweimal an Strg+C — einmal unter *Stat
+Weights*, einmal unter *Export*. Danach verlangte diese Seite je drei
+Handgriffe, die keine Entscheidung tragen: Fenster wechseln, ins Feld
+klicken, Strg+V. Sechs Handgriffe für null Entscheidungen, und sie
+waren nach 3.3.0 der ganze Rest an Bedienaufwand.
+
+`_take_from_clipboard()` nimmt jetzt, was dort liegt — aber nur, wenn
+`sim_run.recognize()` es als Sim-Ausgabe ausweist. Ein Dateipfad, ein
+Zitat, ein halber Befehl landen im Lauf eines Abends in derselben
+Zwischenablage, und ein Feld, das sich mit Fremdem füllt, wäre
+schlimmer als eins, das man selbst befüllt. Gesagt wird es trotzdem
+jedes Mal (`clip_state`), und abstellen lässt es sich dort, wo es wirkt.
+
 WAS DIE SEITE BEANTWORTEN MUSS, UND ZWAR IMMER:
 
-* Was habe ich gerade zu tun?         → die Schrittüberschrift
+* Was habe ich gerade zu tun?         → der Seitentitel, `_draw_progress()`
 * Ist mein Charakter richtig erkannt? → Schritt 1
 * Ist mein Sim-Ergebnis vollständig?  → `parts_line()`
 * Wurde wirklich etwas optimiert?     → `change_line()`
@@ -132,6 +148,7 @@ from gui.widgets.card import Card
 from gui.widgets.eyebrow import eyebrow_label
 from gui.widgets.hero_banner import HeroButton
 from gui.widgets.select import Select
+from gui.widgets.toggle_switch import ToggleSwitch
 from gui.widgets.wrapped_label import enable_wrap
 
 
@@ -213,10 +230,56 @@ SIM_STEPS = (
 #
 
 PASTE_HINT = (
-    "Beides aus dem Sim gehört hier hinein, nacheinander in dasselbe "
-    "Feld: die Ausgabe unter Stat Weights und das Ergebnis unter "
-    "Export → Link oder JSON. Welche Sorte es ist, erkennt die "
-    "Companion selbst."
+    "Im Sim einfach kopieren — hier musst du nichts einfügen: die "
+    "Ausgabe unter Stat Weights und das Ergebnis unter Export → Link "
+    "oder JSON holt sich die Companion selbst aus der Zwischenablage, "
+    "sobald du zurückwechselst. Welche Sorte es ist, erkennt sie an "
+    "der Gestalt; von Hand einfügen geht weiterhin."
+)
+
+
+#
+# DIE ZWISCHENABLAGE ALS EINGANG (seit 3.4.0).
+#
+# WARUM ES DEN SCHRITT GAR NICHT MEHR GEBEN SOLLTE. Der Weg durch den
+# Sim endet zweimal an derselben Stelle: einmal unter Stat Weights,
+# einmal unter Export. Beide Male drückt der Nutzer Strg+C - und beide
+# Male verlangte diese Seite danach noch drei Handgriffe, die keine
+# Entscheidung tragen: Fenster wechseln, ins Feld klicken, Strg+V.
+# Sechs Handgriffe für null Entscheidungen.
+#
+# Was die Companion dafür wissen muss, weiss sie längst: `recognize()`
+# beantwortet ohne Nebenwirkung, ob ein Text aus dem Sim stammt. Was
+# nicht aus dem Sim kommt, fasst das Feld nicht an - ein Dateipfad, ein
+# Zitat, ein halber Befehl landen im Lauf eines Abends in derselben
+# Zwischenablage.
+#
+# DREI DINGE SIND DABEI NICHT GESCHMACK:
+#
+# 1. ES WIRD GESAGT, NICHT GEZAUBERT. Ein Feld, das sich von selbst
+#    füllt, ist ohne Satz daneben von einem Fehler nicht zu
+#    unterscheiden. `clip_state` sagt jedes Mal, was hereinkam.
+#
+# 2. ES LAESST SICH ABSTELLEN. In die Zwischenablage zu sehen ist eine
+#    Zumutung, die man ablehnen können muss - auch wenn hier nichts
+#    davon den Rechner verlässt und nichts gespeichert wird, was nicht
+#    erkannt wurde. Der Schalter steht an der Stelle, an der er wirkt,
+#    nicht in den Einstellungen.
+#
+# 3. GELESEN WIRD NICHT LEISE. `_read(quiet=True)` gibt es für den, der
+#    gerade tippt und noch nichts falsch gemacht hat. Wer Strg+C
+#    gedrückt hat, ist damit fertig - ein Export ohne einen einzigen
+#    gerechneten Sockelstein muss hier denselben roten Satz bekommen
+#    wie beim Einlesen von Hand, sonst sieht das Auffangen aus wie
+#    Erfolg.
+#
+
+CLIP_ON = (
+    "Kopiertes aus dem Sim wird hier automatisch aufgefangen."
+)
+
+CLIP_OFF = (
+    "Automatik aus — die Ausgabe des Sims von Hand hier einfügen."
 )
 
 
@@ -304,6 +367,37 @@ class SimPage(Page):
 
         self._follow_export = False
 
+        #
+        # Die Nummern der vier Schrittkarten - sie werden zu Häkchen,
+        # sobald der Schritt beantwortet ist (`_draw_progress()`).
+        # Angelegt vor dem ersten `_step()`, das hineinschreibt.
+        #
+
+        self._step_marks: dict[str, QLabel] = {}
+
+        #
+        # DIE ZWISCHENABLAGE: was schon angesehen wurde, und ob
+        # überhaupt hingesehen werden darf.
+        #
+        # `_clip_seen` ist kein Zwischenspeicher, sondern eine
+        # Abgrenzung: dieselbe Zwischenablage feuert je nach System
+        # mehrfach für einen einzigen Strg+C, und ohne diese Zeile
+        # schriebe jedes Feuern denselben Text noch einmal ins Feld -
+        # mitten in das hinein, was der Nutzer gerade tut.
+        #
+        # Er trägt auch, was diese App SELBST kopiert hat (siehe
+        # `_copy_transfer()`): der WCIMPORT-String ist der Weg *ins
+        # Spiel*, und ihn zurückzulesen hiesse, das eigene Ergebnis für
+        # ein neues zu halten.
+        #
+
+        self._clip_seen = ""
+
+        self._clip_active = bool(
+            getattr(manager, "config", None) is None
+            or manager.config.data.get("sim_clipboard", True)
+        )
+
         self._build_character_card()
 
         self._build_open_card()
@@ -314,6 +408,8 @@ class SimPage(Page):
 
         self.body.addStretch(1)
 
+        self._connect_clipboard()
+
         self.refresh()
 
     # --------------------------------------------------
@@ -321,6 +417,19 @@ class SimPage(Page):
     # --------------------------------------------------
 
     def _step(self, card: Card, number: str, text: str):
+        """
+        Die Kopfzeile einer Schrittkarte - Nummer, Titel, und Platz für
+        ein Häkchen.
+
+        DIE NUMMER WIRD ZUM HAEKCHEN, WENN DER SCHRITT BEANTWORTET IST.
+        Vier gleich aussehende Karten untereinander sind eine
+        Leseaufgabe: „wo bin ich" steht dann nur in den Sätzen, und die
+        muss man alle vier lesen, um es zu wissen. Ein Häkchen
+        beantwortet dieselbe Frage im Hinsehen.
+
+        Es ersetzt keine Auskunft - jede Zeile, die vorher dastand,
+        steht weiter da. Es ordnet sie nur.
+        """
 
         row = QHBoxLayout()
 
@@ -338,6 +447,8 @@ class SimPage(Page):
         )
 
         row.addWidget(step, 0, Qt.AlignTop)
+
+        self._step_marks[number] = step
 
         title = QLabel(text)
 
@@ -574,6 +685,42 @@ class SimPage(Page):
 
         self.paste_gap = self._hint(card, "", tokens.STATE_TEXT["warn"])
 
+        #
+        # DER SCHALTER STEHT DA, WO ER WIRKT.
+        #
+        # In die Zwischenablage zu sehen ist eine Zumutung, und wer sie
+        # ablehnen will, soll das nicht in den Einstellungen suchen
+        # müssen - er hat die Frage genau hier, beim Blick auf das
+        # Feld, das sich von selbst füllt.
+        #
+
+        automatik = QHBoxLayout()
+
+        automatik.setContentsMargins(0, 0, 0, 0)
+
+        automatik.setSpacing(tokens.SPACE[2])
+
+        self.clip_toggle = ToggleSwitch(self._clip_active)
+
+        self.clip_toggle.toggled.connect(self._set_clipboard_pickup)
+
+        automatik.addWidget(self.clip_toggle, 0, Qt.AlignVCenter)
+
+        self.clip_label = QLabel(CLIP_ON if self._clip_active else CLIP_OFF)
+
+        self.clip_label.setFont(font("small"))
+
+        enable_wrap(self.clip_label)
+
+        restyle(
+            self.clip_label,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+        automatik.addWidget(self.clip_label, 1)
+
+        card.root.addLayout(automatik)
+
         self.input = QPlainTextEdit()
 
         self.input.setMinimumHeight(120)
@@ -581,9 +728,9 @@ class SimPage(Page):
         self.input.setFont(font("mono"))
 
         self.input.setPlaceholderText(
-            "Die Ausgabe des Sims hier ganz hinein — Stat Weights oder "
-            "Export → Link/JSON. Ein Wertname und eine Zahl je Zeile geht "
-            "genauso."
+            "Füllt sich, sobald du im Sim etwas kopierst — Stat Weights "
+            "oder Export → Link/JSON. Von Hand einfügen geht genauso, "
+            "ein Wertname und eine Zahl je Zeile auch."
         )
 
         #
@@ -612,6 +759,17 @@ class SimPage(Page):
         self.input.textChanged.connect(self._on_input_changed)
 
         card.root.addWidget(self.input)
+
+        #
+        # WAS HEREINKAM, BEKOMMT EINEN SATZ. Ein Feld, das sich von
+        # selbst füllt, ist ohne diese Zeile von einem Fehler nicht zu
+        # unterscheiden - und wer gerade auf den Sim gesehen hat, hat
+        # das Füllen nicht gesehen. Sie steht getrennt vom Befund, weil
+        # sie etwas anderes beantwortet: nicht „was ist das", sondern
+        # „woher kommt es".
+        #
+
+        self.clip_state = self._hint(card, "", tokens.TEXT["faint"])
 
         buttons = QHBoxLayout()
 
@@ -900,6 +1058,198 @@ class SimPage(Page):
         self.addWidget(card)
 
     # --------------------------------------------------
+    # Die Zwischenablage als Eingang
+    # --------------------------------------------------
+
+    def _connect_clipboard(self):
+        """
+        Zwei Anlässe, hinzusehen - und beide sind derselbe Moment.
+
+        `dataChanged` feuert, wenn kopiert wird, solange diese App die
+        Zwischenablage sehen darf. Unter Wayland darf sie das nur, wenn
+        sie den Fokus hat - dort feuert also nichts, während der Nutzer
+        im Browser ist. **Genau dafür der zweite Anlass:** wer
+        zurückwechselt, macht die Companion aktiv, und dann wird
+        nachgesehen. Auf den Nutzer wirkt beides gleich; ohne den
+        zweiten Anlass wäre die Automatik auf der halben Linux-Welt
+        eine, die nie anspringt.
+
+        Gebundene Methoden, keine Lambdas: `QGuiApplication` lebt so
+        lange wie das Programm, und eine Lambda darin hielte diese
+        Seite für immer fest (dieselbe Regel wie beim ThemeManager,
+        `docs/architecture/theming.md`).
+        """
+
+        clipboard = QGuiApplication.clipboard()
+
+        if clipboard is not None:
+            clipboard.dataChanged.connect(self._clipboard_changed)
+
+        app = QGuiApplication.instance()
+
+        if app is not None and hasattr(app, "applicationStateChanged"):
+            app.applicationStateChanged.connect(self._app_state_changed)
+
+    def _clipboard_changed(self):
+
+        self._take_from_clipboard()
+
+    def _app_state_changed(self, state):
+        """
+        Die Companion wird wieder aktiv - also kommt jemand zurück.
+
+        Zurück kommt man aus genau zwei Richtungen, und beide bringen
+        etwas mit: aus dem Sim ein Ergebnis in der Zwischenablage, aus
+        dem Spiel eine frisch bereitgestellte Ausrüstung in den
+        SavedVariables. Bis 3.3.0 hat die Seite beides erst beim
+        **Betreten** bemerkt - wer sie offen liegen liess und im Spiel
+        bereitstellte, musste einmal weg- und wieder hinnavigieren,
+        damit Schritt 1 aufhörte, den alten Stand zu behaupten.
+
+        Eine Datei anzufassen ist Aufwand, aber `on_enter()` tut
+        dasselbe und aus demselben Grund; was hier ausdrücklich **nicht**
+        passiert, ist ein Netzabruf - und in `refresh()` steht davon
+        nichts (`docs/architecture/navigation.md`).
+        """
+
+        if state != Qt.ApplicationActive:
+            return
+
+        if not self.isVisible():
+            return
+
+        self.read_export()
+
+        self.refresh()
+
+        self._take_from_clipboard()
+
+    def _set_clipboard_pickup(self, on: bool):
+
+        self._clip_active = bool(on)
+
+        self.clip_label.setText(CLIP_ON if on else CLIP_OFF)
+
+        config = getattr(self.manager, "config", None)
+
+        if config is not None:
+
+            config.data["sim_clipboard"] = self._clip_active
+
+            config.save()
+
+        if not on:
+
+            self.clip_state.setText("")
+
+            return
+
+        #
+        # Beim Einschalten gleich nachsehen: wer den Schalter umlegt,
+        # hat in aller Regel eben etwas kopiert, das nicht ankam.
+        #
+
+        self._take_from_clipboard(force=True)
+
+    def _take_from_clipboard(self, force: bool = False):
+        """
+        Was in der Zwischenablage liegt, ins Feld - **wenn** es aus dem
+        Sim stammt.
+
+        Die Entscheidung darüber fällt in `sim_run.recognize()` und
+        nirgends sonst: sie ist dieselbe, nach der auch `_read()` die
+        beiden Sorten auseinanderhält. Alles andere wird nicht
+        angefasst, nicht gemeldet und nicht gemerkt.
+
+        **Gelesen wird laut** (`quiet=False`). Das leise Lesen gibt es
+        für den, der gerade tippt und noch nichts falsch gemacht hat;
+        wer Strg+C gedrückt hat, ist fertig. Ein Sim-Export, in dem
+        kein einziger Sockelstein gerechnet wurde, muss hier denselben
+        roten Satz bekommen wie beim Einlesen von Hand - sonst sähe das
+        Auffangen aus wie Erfolg, und im Spiel folgte WeintCodex
+        anschliessend unveränderten Steinen.
+        """
+
+        if not self._clip_active:
+            return
+
+        #
+        # SICHTBARKEIT IST DIE GRENZE - AUSSER, WENN GERADE GEFRAGT
+        # WURDE. Beim Betreten der Seite und beim Umlegen des Schalters
+        # ist die Absicht des Nutzers der Anlass, nicht ein Ereignis von
+        # aussen; ob Qt das Widget in diesem Augenblick schon als
+        # sichtbar führt, ist dann eine Frage über die Animation und
+        # nicht über ihn.
+        #
+
+        if not force and not self.isVisible():
+            return
+
+        clipboard = QGuiApplication.clipboard()
+
+        if clipboard is None:
+            return
+
+        try:
+            text = (clipboard.text() or "").strip()
+
+        except Exception:
+
+            #
+            # Fremde Zwischenablage, fremdes Format, kein X-Server -
+            # eine Seite, die daran hängenbleibt, wäre der teurere
+            # Ausgang als eine Automatik, die diesmal nichts tut.
+            #
+
+            return
+
+        if not text or text == self._clip_seen:
+            return
+
+        #
+        # GEMERKT WIRD VOR DEM PRUEFEN. Sonst sieht dasselbe Feuern
+        # denselben nicht erkannten Text bei jedem Fensterwechsel neu
+        # an - und `recognize()` ist zwar billig, aber nicht umsonst.
+        #
+
+        self._clip_seen = text
+
+        kind = sim_run.recognize(text)
+
+        if kind == sim_run.NOTHING:
+            return
+
+        if text == self.input.toPlainText().strip():
+            return
+
+        #
+        # Ins Feld schreiben wie von Hand - ersetzend, nicht anhängend.
+        # `_read()` liest den GANZEN Feldinhalt und ordnet ihn EINER
+        # Sorte zu; zwei Sorten übereinander hiessen, dass die zweite
+        # die erste verdeckt. Gesammelt wird im Lauf, nicht im Feld
+        # (siehe `../../docs/sim-run.md`).
+        #
+
+        self._suppress_read = True
+
+        self._read_timer.stop()
+
+        self.input.setPlainText(text)
+
+        self._suppress_read = False
+
+        self._read(quiet=False)
+
+        self.clip_state.setText(
+            "Aus der Zwischenablage übernommen: "
+            + (
+                "optimierte Ausrüstung."
+                if kind == sim_run.TARGET
+                else "Gewichtung."
+            )
+        )
+
+    # --------------------------------------------------
     # Zustand
     # --------------------------------------------------
 
@@ -908,6 +1258,13 @@ class SimPage(Page):
         self.read_export()
 
         self.refresh()
+
+        #
+        # Wer im Sim kopiert und dann erst hierher navigiert, hat
+        # dasselbe getan wie der, der zurückwechselt.
+        #
+
+        self._take_from_clipboard(force=True)
 
     # --------------------------------------------------
     # Die Ausrüstung aus dem Spiel
@@ -1081,6 +1438,103 @@ class SimPage(Page):
         self._draw_result()
 
         self._draw_delivery()
+
+        self._draw_progress()
+
+    def _draw_progress(self):
+        """
+        Wo stehe ich - im Hinsehen statt im Lesen.
+
+        Die Seite beantwortet das bisher nur in Sätzen, und die stehen
+        alle gleichzeitig da: vier Karten, jede mit ihrem Hinweis, und
+        „was habe ich jetzt zu tun" ergibt sich erst aus dem Lesen
+        aller vier. Zwei Dinge ändern das, ohne eine einzige Auskunft
+        wegzunehmen.
+
+        **Der Seitentitel ist der nächste Schritt.** Ein Titel, der
+        immer „Sim-Ergebnis übernehmen." heisst, sagt nichts über
+        diesen Besuch - dieselbe Regel wie bei der Übersicht, deren
+        Titel den Termin nennt statt das Wort „Übersicht".
+
+        **Und Schritt 2 bekommt kein Häkchen.** Er passiert im Browser,
+        und was dort geschehen ist, weiss diese App nicht. Ein Häkchen
+        dafür wäre eine Behauptung - dieselbe Zurückhaltung wie bei
+        `at == -1` und `stars == 0`. Abgehakt wird nur, was die
+        Companion tatsächlich sieht: die gemeldete Ausrüstung (1), der
+        eingelesene Lauf (3), das Abgelegte (4).
+        """
+
+        healer = self._healer()
+
+        vorbereitet = (
+            healer is not None
+            or fits_spec(self._export, self.selected_spec())
+        )
+
+        pasted = sim_run.validate(
+            self._run,
+            expected_spec=self.selected_spec(),
+            target_expected=healer is None,
+        )
+
+        abgelegt = bool(
+            self.weights_store_entry() or self.target_gear_store_entry()
+        )
+
+        self._mark_step("1", vorbereitet)
+
+        self._mark_step("3", pasted.usable)
+
+        self._mark_step("4", abgelegt)
+
+        #
+        # DER TITEL IST DER NAECHSTE SCHRITT, in der Reihenfolge des
+        # Wegs: was jetzt ansteht, steht vor dem, was schon erledigt
+        # ist. Der Satz nach dem Übernehmen ist bewusst keine
+        # Aufforderung an diese App, sondern der eine Handgriff, der
+        # noch im Spiel zu tun ist.
+        #
+
+        if not self.selected_spec():
+            titel = "Spezialisierung wählen."
+
+        elif pasted.usable:
+
+            titel = (
+                "Trotzdem übernehmen?"
+                if pasted.state == sim_run.MISMATCH
+                else "Sim-Ergebnis übernehmen."
+            )
+
+        elif abgelegt:
+            titel = "Fertig — im Spiel /wc import, dann einfügen."
+
+        elif vorbereitet:
+            titel = "Simmen, dann im Sim kopieren."
+
+        else:
+            titel = "Ausrüstung im Spiel bereitstellen."
+
+        self.header.setTitle(titel)
+
+    def _mark_step(self, number: str, done: bool):
+
+        label = self._step_marks.get(number)
+
+        if label is None:
+            return
+
+        text = "✓" if done else number
+
+        if label.text() != text:
+            label.setText(text)
+
+        restyle(
+            label,
+            "color:"
+            + (tokens.STATE_TEXT["ok"] if done else tokens.TEXT["faint"])
+            + ";background:transparent;",
+        )
 
     def _follow_reported_spec(self):
         """
@@ -1272,6 +1726,8 @@ class SimPage(Page):
 
         self._draw_delivery()
 
+        self._draw_progress()
+
     def _on_spec_changed(self):
 
         #
@@ -1296,6 +1752,8 @@ class SimPage(Page):
         self._draw_result()
 
         self._draw_delivery()
+
+        self._draw_progress()
 
     # --------------------------------------------------
     # Schritt 1/2: was der Sim bekommt
@@ -1485,6 +1943,14 @@ class SimPage(Page):
 
         clipboard.setText(self._export.raw)
 
+        #
+        # Derselbe Grund wie in `_copy_transfer()`: das ist der Weg *in
+        # den Sim*, und die Automatik in Schritt 3 wartet auf das, was
+        # von dort zurückkommt.
+        #
+
+        self._clip_seen = self._export.raw.strip()
+
         self.gear_copy_state.setText(
             "Kopiert. Im Sim oben unter Import → Addon einfügen — so "
             "kommen auch Talente, Glyphen und Berufe mit."
@@ -1504,6 +1970,14 @@ class SimPage(Page):
 
         if self._suppress_read:
             return
+
+        #
+        # Ab hier stammt der Text vom Nutzer. Die Herkunftszeile darüber
+        # gälte dann für etwas, das nicht mehr dasteht - `_suppress_read`
+        # sorgt dafür, dass das Auffangen selbst hier nicht vorbeikommt.
+        #
+
+        self.clip_state.setText("")
 
         self._read_timer.start()
 
@@ -1541,6 +2015,14 @@ class SimPage(Page):
         self.input.setPlainText("")
 
         self._suppress_read = False
+
+        #
+        # Die Herkunftszeile geht mit. Sie sagt, woher der Text im Feld
+        # kam - über ein leeres Feld ist das keine Auskunft mehr,
+        # sondern ein Rest.
+        #
+
+        self.clip_state.setText("")
 
         self._forget_reading()
 
@@ -2417,6 +2899,16 @@ class SimPage(Page):
             return
 
         clipboard.setText(text)
+
+        #
+        # NICHT ZURUECKLESEN. Was hier hineingeht, ist der Weg *ins
+        # Spiel*; die Automatik in Schritt 3 würde es sonst gleich
+        # wieder ansehen. `recognize()` weist einen WCIMPORT-String zwar
+        # ab - aber sich darauf zu verlassen hiesse, einen stillen
+        # Fehler zu bauen, falls sich das je ändert.
+        #
+
+        self._clip_seen = text
 
         #
         # Die Zahl steht dabei, weil sie die eine Frage beantwortet, die

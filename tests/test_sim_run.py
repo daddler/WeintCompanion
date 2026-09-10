@@ -724,3 +724,88 @@ def test_another_spec_of_the_same_class_stays_a_note():
     assert befund.state != sim_run.MISMATCH
 
     assert "other_spec" in befund.notes
+
+
+# --------------------------------------------------
+# Was für ein Text ist das?
+# --------------------------------------------------
+
+
+def test_a_sim_result_is_recognized_without_being_read():
+    """
+    Die Frage muss gestellt werden können, **ohne etwas zu tun** -
+    sonst darf die Seite nicht von sich aus in die Zwischenablage
+    sehen.
+    """
+
+    assert sim_run.recognize(_sim_json()) == sim_run.TARGET
+
+    assert sim_run.recognize("Hit 1,77\nCrit 0,89") == sim_run.WEIGHTS
+
+
+def test_everything_else_is_nothing():
+    """
+    Im Lauf eines Abends liegt in derselben Zwischenablage ein
+    Dateipfad, ein Zitat, ein halber Befehl. Ein „vielleicht doch"
+    hiesse hier: ein Eingabefeld, das sich mit Fremdem füllt.
+    """
+
+    for fremd in (
+        "",
+        "   ",
+        "hallo welt",
+        "C:\\Users\\Kelthuzad\\Desktop",
+        "https://example.com/keine-ausgabe",
+        "SIM-20260909-7F4A",
+    ):
+
+        assert sim_run.recognize(fremd) == sim_run.NOTHING
+
+
+def test_what_goes_into_the_game_is_never_read_back():
+    """
+    `WCIMPORT:` ist der Weg *ins Spiel*. Ihn zurückzulesen hiesse, das
+    eigene Ergebnis für ein neues zu halten.
+    """
+
+    run = sim_run.start_run(
+        "DEATHKNIGHT_FROST",
+        export=_export(),
+        reported_at=1788186000,
+    )
+
+    run = sim_run.with_weights(run, {"strength": 100}, "sim", "deathknight")
+
+    for umschlag in (
+        "WCIMPORT:SW:deathknight_frost:x:1:Kel:sim:strength|100:"
+        + run.run_id
+        + ":1788186000",
+        "WCIMPORT:TG:deathknight_frost:x:1:Kel:sim:head|76895-0:"
+        + run.run_id
+        + ":1788186000",
+    ):
+
+        assert sim_run.recognize(umschlag) == sim_run.NOTHING
+
+
+def test_a_result_without_a_single_gem_is_still_a_result():
+    """
+    Erkannt heisst nicht brauchbar, und das ist Absicht: für den
+    Export, in dem kein Sockelstein gerechnet wurde, hat die Seite
+    einen eigenen roten Satz (*Include gems* fehlt). Wäre er hier
+    `NOTHING`, käme er nie so weit - und der Nutzer sähe gar nichts.
+    """
+
+    roh = json.loads(_sim_json())
+
+    for item in roh["player"]["equipment"]["items"]:
+
+        item.pop("gems", None)
+
+        item.pop("reforging", None)
+
+    text = json.dumps(roh)
+
+    assert sim_run.recognize(text) == sim_run.TARGET
+
+    assert parse_target(text).usable is False

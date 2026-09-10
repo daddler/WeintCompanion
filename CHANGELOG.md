@@ -2,6 +2,96 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 3.4.0
+
+**Simmen: kopieren reicht.** Am Ende eines Sim-Laufs drückst du im Sim
+zweimal Strg+C — einmal unter *Stat Weights*, einmal unter *Export →
+Link/JSON*. Danach verlangte *Simmen* jedes Mal drei Handgriffe, die
+gar keine Entscheidung enthielten: Fenster wechseln, ins Feld klicken,
+Strg+V. Sechsmal Hand anlegen für nichts.
+
+Das entfällt. Sobald du zur Companion zurückwechselst, liegt da, was du
+im Sim kopiert hast:
+
+> Aus der Zwischenablage übernommen: optimierte Ausrüstung.
+
+Beide Sorten werden erkannt, beide sammeln sich im selben Lauf, und die
+Reihenfolge ist egal. Von Hand einfügen geht weiterhin genauso.
+
+**Angefasst wird nur, was aus dem Sim kommt.** Ein Dateipfad, ein Zitat,
+ein halber Befehl — davon landet nichts im Feld. Wer trotzdem nicht will,
+dass die Companion in die Zwischenablage sieht, legt den Schalter über
+dem Feld um; er steht auf der Seite selbst und nicht in den
+Einstellungen.
+
+**Die Seite bemerkt jetzt, was passiert, während du weg bist.** Stellst
+du im Spiel deine Ausrüstung neu bereit, während *Simmen* offen liegt,
+steht das beim Zurückwechseln da. Bisher musstest du dafür einmal weg-
+und wieder hinnavigieren, und bis dahin behauptete Schritt 1 den alten
+Stand.
+
+**Der Seitentitel sagt, was dran ist.** Statt immer derselben
+Überschrift steht dort der nächste Schritt — *Ausrüstung im Spiel
+bereitstellen.*, *Simmen, dann im Sim kopieren.*, *Sim-Ergebnis
+übernehmen.*, *Fertig — im Spiel /wc import, dann einfügen.* Erledigte
+Schritte tragen ein Häkchen statt ihrer Nummer.
+
+Schritt 2 bekommt **keins**: er passiert im Browser, und was dort
+geschehen ist, weiß die Companion nicht. Ein Häkchen dafür wäre geraten.
+
+**Und die fehlende Gewichtung hält nichts mehr auf.** Wer den Sim
+laufen lässt und nur das Ergebnis exportiert, las bisher „Noch nicht
+vollständig" — das klang nach Sperre, und wer es glaubte, ließ den Sim
+ein zweites Mal laufen, bevor er das erste Ergebnis überhaupt ins Spiel
+gebracht hatte. Jetzt steht dort, was stimmt:
+
+> Übernehmen geht schon — die optimierte Ausrüstung reicht fürs Erste.
+> Die Gewichtung dazu kostet im Sim einen zweiten Lauf unter Stat
+> Weights.
+
+### Technisch
+
+**`sim_run.recognize()` ist die eine Stelle, die entscheidet, was ein
+Text ist** — `TARGET`, `WEIGHTS` oder `NOTHING`, ohne Nebenwirkung und
+ohne Qt. Bisher fiel diese Entscheidung im Lesen selbst (`_read()`
+probiert die strengere Lesart zuerst und lässt die andere
+durchfallen). Das genügt, solange die Antwort nur „lies weiter" heißt;
+für die Zwischenablage muss die Frage **gestellt werden können, ohne
+etwas zu tun**. Zwei Fassungen derselben Reihenfolge liefen ab der
+ersten Änderung auseinander — dann nähme die Automatik ausgerechnet die
+Sorte nicht an, die das Feld gelesen hätte.
+
+**Erkannt heißt nicht brauchbar, und das ist Absicht.** Ein Sim-Export
+ohne einen einzigen gerechneten Sockelstein ist `TARGET` und läuft
+damit in den roten Satz über *Include gems*. Wäre er `NOTHING`, käme er
+nie so weit, und im Spiel folgte WeintCodex anschließend unveränderten
+Steinen — genau die Sorte Fehler, die nichts meldet.
+
+**Aufgefangenes wird laut gelesen** (`quiet=False`). Das leise Lesen
+gibt es für den, der gerade tippt und noch nichts falsch gemacht hat;
+wer Strg+C gedrückt hat, ist fertig. Ein stilles Auffangen ohne Befund
+sähe aus wie Erfolg.
+
+**Zwei Anlässe zum Hinsehen, und beide sind derselbe Moment.**
+`dataChanged` feuert beim Kopieren, solange die App die Zwischenablage
+sehen darf — unter Wayland nur mit Fokus, also nie, während der Nutzer
+im Browser ist. Deshalb der zweite Anlass: `applicationStateChanged`
+auf `ApplicationActive`. Ohne ihn wäre die Automatik auf der halben
+Linux-Welt eine, die nie anspringt. Derselbe Anlass liest auch die
+SavedVariables des WowSimsExporters neu.
+
+**Was diese App selbst kopiert, merkt sie sich** (`_clip_seen`, gesetzt
+in `_copy_transfer()` und `_copy_export()`). `WCIMPORT:` ist der Weg
+*ins Spiel*; ihn zurückzulesen hieße, das eigene Ergebnis für ein neues
+zu halten. `recognize()` weist ihn ohnehin ab — sich darauf zu
+verlassen hieße, einen stillen Fehler zu bauen, falls sich das je
+ändert.
+
+**Der Schalter liegt in `sim_clipboard`** (Standard: an). In die
+Zwischenablage zu sehen ist eine Zumutung, die man ablehnen können
+muss; nichts davon verlässt den Rechner, und gespeichert wird nichts,
+was nicht als Sim-Ausgabe erkannt wurde.
+
 ## 3.3.0
 
 **Ein Sim-Lauf statt zwei Importe.** *Simmen* fragt nicht mehr, ob du
