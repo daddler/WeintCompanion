@@ -379,7 +379,13 @@ def test_mit_geladenem_pull_steht_da_welcher(archive_page):
 
     assert archive_page.actions.isVisibleTo(archive_page)
 
-    assert "Garrosh" in archive_page.loaded_label.text()
+    #
+    # Der Satz daneben wiederholt den Titel nicht, sondern nennt das,
+    # was man von hier aus nicht sieht: die Auswahl gilt auch in
+    # WeintTV und der Academy.
+    #
+
+    assert "WeintTV" in archive_page.loaded_label.text()
 
     #
     # Und im Kopf steht der Kampf statt der Aufforderung, einen zu

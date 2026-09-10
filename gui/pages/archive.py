@@ -199,8 +199,17 @@ class ArchivePage(Page):
             text if loaded else "Einen vergangenen Kampf ansehen."
         )
 
+        #
+        # Der Satz wiederholt nicht, was oben im Titel steht - er sagt
+        # das, was man von hier aus nicht sieht: dass dieser Pull auf
+        # beiden anderen Seiten bereitliegt. Genau diese geteilte
+        # Auswahl war der Teil, den niemand kannte.
+        #
+
         self.loaded_label.setText(
-            f"Geladen: {text}" if loaded else ""
+            "Dieser Pull liegt in WeintTV und der Academy bereit."
+            if loaded
+            else ""
         )
 
         self.actions.setVisible(loaded)

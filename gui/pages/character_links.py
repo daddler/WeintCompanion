@@ -733,6 +733,19 @@ class CharacterLinksPage(Page):
             widget = item.widget()
 
             if widget is not None:
+
+                #
+                # Erst abhängen, dann löschen lassen - genau wie in
+                # `ArchiveDialog._clear()`. `deleteLater()` allein
+                # nimmt das Widget nur aus dem Layout; Kind des
+                # Wirts bleibt es bis zum nächsten Durchlauf der
+                # Ereignisschleife und steht so lange sichtbar an
+                # seiner alten Stelle. Beim Wechsel des Raids stand
+                # die vorherige Liste damit kurz unter der neuen.
+                #
+
+                widget.setParent(None)
+
                 widget.deleteLater()
 
         if self._loading:
