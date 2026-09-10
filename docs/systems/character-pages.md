@@ -70,3 +70,17 @@ the pure half here, `core/character_links_client.py` the HTTP half.
   wouldn't actually use.
 - **Every fetch runs in a short-lived thread**, signalling back via
   `loaded`.
+- **Which raid is being edited is a choice, not the bot's default.**
+  Parallel sign-ups are allowed in Discord (a 25 next to a 10), and the
+  endpoint answers about the *next* one unless `?raid=<id>` names one —
+  so with two open raids the older one was simply unreachable from this
+  page. The picker in the header is filled from `raid_choices()`
+  (`core/raid_schedule.py`) over the schedule `RaidScheduleSync` already
+  holds; there is no second enumeration of running raids and no second
+  fetch. Three rules: a raid **without** an id is dropped rather than
+  listed (an entry that loads something else when clicked is worse than
+  a missing one); with no choice made, **no** `raid` parameter is sent
+  (a `0` would be a selection that matches nothing); and the raid that
+  the bot *answered* about is named in its own line above the summary —
+  also when only one raid runs and the picker stays hidden. Contract
+  side: `../raid-schedule-bridge.md` (`raid_ids`/`others`, `?raid=`).

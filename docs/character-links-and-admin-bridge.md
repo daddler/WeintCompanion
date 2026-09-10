@@ -47,6 +47,22 @@ raid_id)` liegt bewusst in `raid_export_manager.py` und läuft durch dieselbe
 Auflösung wie der Export, damit Übersicht und tatsächlicher Export nie
 auseinanderlaufen.
 
+**Welcher Raid?** `GET /companion/character-links` nimmt `?raid=<id>`
+und antwortet ohne Angabe zum nächsten Raid. Laufen zwei Anmeldungen
+nebeneinander, ist „der nächste" die zuletzt erstellte — die ältere war
+über die Companion-Seite damit nicht mehr erreichbar (gemeldet mit
+einem offenen 25er, zu dem später ein 10er kam). Die Seite schickt die
+Kennung deshalb seit Companion 3.5.0 mit; die Liste der wählbaren Raids
+kommt aus `/companion/raid-schedule` (`raid_ids`/`others`, siehe
+`raid-schedule-bridge.md`) und **nicht** aus einer zweiten Aufzählung an
+diesem Endpunkt. Ohne bekannte Kennung wird auch keine geschickt, und es
+bleibt beim bisherigen Verhalten.
+
+Die **Handeinträge selbst kennen keinen Raid**: sie gelten für den
+Account, nicht für eine Anmeldung. `POST`/`DELETE` tragen deshalb
+weiterhin keinen Raidparameter — nur das erneute Holen danach braucht
+ihn, damit die Liste dieselbe bleibt.
+
 **Companion-Seite: sperren, nicht verstecken.** Ohne Raidlead-Rolle
 antwortet der Bot mit 403; das reist als eigenes Feld (`Overview.forbidden`)
 und erklärt, wofür die Seite da wäre, statt sie unsichtbar zu machen (*lock,

@@ -302,6 +302,17 @@ Die Companion zeigt daraus eine Zeile unter der Aufstellung
 der App unsichtbar — man sähe nicht, dass man sich noch woanders
 eintragen kann.
 
+**`raid_id` ist der Wert, mit dem man auf einen davon zeigt.** Die
+Companion liest ihn seit 3.5.0 in `RaidSchedule.raid_id` ein — im
+Hauptteil wie in jedem `others`-Eintrag, durch dieselbe Funktion.
+`raid_choices()` macht daraus die fertige Auswahl (Kennung plus
+Beschriftung aus Titel, Größe und nächstem Termin), und das ist die
+**einzige** Aufzählung laufender Raids in der App: eine Seite, die
+einen Raid wählen lässt (heute die Charakterzuordnung), fragt sie ab,
+statt sich ihre eigene zu holen. Ein Eintrag ohne Kennung fällt dabei
+heraus — auf ihn ließe sich nicht zeigen, und ein Auswahleintrag, der
+beim Anklicken etwas anderes lädt, ist schlimmer als ein fehlender.
+
 Die übrigen Endpunkte nehmen den Raid als Parameter, wo die Auswahl
 nötig ist: `?raid=<id>` bei `/companion/raid-roster`,
 `/companion/raid-signups` und `/companion/character-links`, `raid_id`

@@ -68,7 +68,12 @@ class CharacterLinksClient:
     # Gemeinsamer HTTP-Teil
     # --------------------------------------------------
 
-    def _request(self, method: str, payload: dict | None = None):
+    def _request(
+        self,
+        method: str,
+        payload: dict | None = None,
+        params: dict | None = None,
+    ):
         """
         Liefert (status, body, reason). `status` ist -1 bei einem
         Netzwerkfehler, `body` dann None.
@@ -91,6 +96,7 @@ class CharacterLinksClient:
                 headers={
                     "Authorization": f"Bearer {account['companion_token']}",
                 },
+                params=params or None,
                 json=payload,
                 timeout=TIMEOUT,
             )
@@ -169,9 +175,27 @@ class CharacterLinksClient:
     # Lesen
     # --------------------------------------------------
 
-    def fetch(self) -> Overview:
+    def fetch(self, raid_id: int | None = None) -> Overview:
+        """
+        Den Stand zu **einem** Raid holen.
 
-        status, body, reason = self._request("GET")
+        `raid_id` wählt bei mehreren gleichzeitig laufenden Raids den
+        gemeinten (`?raid=<id>`, siehe
+        `docs/raid-schedule-bridge.md`). Ohne Angabe antwortet der Bot
+        zum nächsten Raid - genau das Verhalten von vorher, und der
+        richtige Rückfall, solange die Companion die Kennungen noch
+        nicht kennt (frisch gestartet, Termin noch nicht abgeholt).
+
+        **Ohne Angabe wird auch keine geschickt.** Eine `0` oder ein
+        leerer Wert im Parameter wäre für den Bot eine Auswahl und
+        träfe keinen Raid; die Seite stünde dann auf "keine
+        Anmeldung", obwohl eine läuft.
+        """
+
+        status, body, reason = self._request(
+            "GET",
+            params={"raid": int(raid_id)} if raid_id else None,
+        )
 
         if body is None:
             return Overview(reason=reason, forbidden=status == 403)

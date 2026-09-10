@@ -422,6 +422,19 @@ class RaidSchedule:
 
     known: bool = False
 
+    #
+    # Die Kennung des Raids beim Bot. Sie ist der Wert, mit dem die
+    # übrigen Endpunkte einen von mehreren gleichzeitig laufenden
+    # Raids auswählen (`?raid=<id>`, siehe
+    # `docs/raid-schedule-bridge.md`) - ohne sie wäre `others` eine
+    # Aufzählung, auf die niemand zeigen kann.
+    #
+    # `None` heißt "der Bot hat keine genannt" (ältere Fassung, oder
+    # ein Eintrag ohne Kennung), nicht "Raid 0".
+    #
+
+    raid_id: int | None = None
+
     title: str = ""
 
     raid_type: str = "standard"
@@ -573,6 +586,30 @@ def _parse_moment(value) -> datetime | None:
     return moment
 
 
+def _parse_raid_id(value) -> int | None:
+    """
+    Die Raidkennung, oder `None`.
+
+    `bool` wird ausdrücklich ausgeschlossen, obwohl es in Python ein
+    `int` ist: ein `true` an dieser Stelle wäre Raid 1, und das ist
+    ein echter Raid. Eine Zeichenkette wird gelesen - JSON-Zahlen
+    kommen zwar als Zahl an, aber ein Bot, der Kennungen wie die
+    Discord-Snowflakes als Zeichenkette schickt, soll nicht
+    stillschweigend zu "keine Kennung" werden.
+    """
+
+    if isinstance(value, bool):
+        return None
+
+    if isinstance(value, int):
+        return value
+
+    if isinstance(value, str) and value.strip().lstrip("-").isdigit():
+        return int(value.strip())
+
+    return None
+
+
 def parse_schedule(data) -> RaidSchedule:
     """
     Die Antwort von `/companion/raid-schedule` einlesen.
@@ -626,6 +663,7 @@ def parse_schedule(data) -> RaidSchedule:
 
     return RaidSchedule(
         known=True,
+        raid_id=_parse_raid_id(data.get("raid_id")),
         title=str(data.get("title") or "Raid"),
         raid_type=str(data.get("raid_type") or "standard"),
         signup_status=str(data.get("signup_status") or "open"),
@@ -1126,3 +1164,103 @@ def others_text(
         return ""
 
     return "Außerdem offen: " + " · ".join(teile)
+
+
+@dataclass(frozen=True)
+class RaidChoice:
+    """
+    Ein wählbarer Raid: Kennung plus fertige Beschriftung.
+
+    Die Beschriftung entsteht hier und nicht in der Seite, aus
+    demselben Grund wie `others_text()` daneben: welcher Raid wie
+    heißt, ist eine Auskunft und keine Darstellung, und zwei Seiten
+    mit je eigener Beschriftung würden denselben Raid verschieden
+    benennen.
+    """
+
+    raid_id: int
+
+    title: str
+
+    #
+    # Der nächste Termin dieses Raids als Text, oder leer. Leer ist
+    # der ehrliche Zustand für einen Sonderraid mit unlesbarem Datum
+    # - er existiert, sein Termin ist nur unbekannt.
+    #
+
+    when: str = ""
+
+    #
+    # Die Sollstärke, wenn der Bot sie nennt. `0` heißt "unbekannt",
+    # nicht "Raid für null Leute".
+    #
+
+    size: int = 0
+
+    @property
+    def label(self) -> str:
+        """
+        Was im Auswahlkasten steht.
+
+        Der Titel trägt die Auskunft; Größe und Termin unterscheiden
+        zwei Raids, die gleich heißen - und genau das ist der Fall,
+        für den es diese Auswahl gibt ("Belagerung von Orgrimmar"
+        zweimal, einmal als 10er und einmal als 25er).
+        """
+
+        teile = [self.title or f"Raid {self.raid_id}"]
+
+        if self.size:
+            teile.append(f"{self.size}er")
+
+        if self.when:
+            teile.append(self.when)
+
+        return " · ".join(teile)
+
+
+def raid_choices(
+    schedule: RaidSchedule | None,
+    now: datetime | None = None,
+) -> tuple[RaidChoice, ...]:
+    """
+    Alle gleichzeitig laufenden Raids als Auswahl, der nächste zuerst.
+
+    **Wozu.** Mehrere Anmeldungen dürfen im Discord nebeneinander
+    laufen (siehe `docs/raid-schedule-bridge.md`), und die Endpunkte,
+    die einen davon meinen, nehmen ihn als `?raid=<id>`. Ohne diese
+    Liste hätte die Companion keinen Wert, den sie dort einsetzen
+    könnte - sie bekäme immer den nächsten Raid, und ein parallel
+    laufender zweiter wäre schlicht nicht erreichbar. Genau das war
+    der Fall bei der Charakterzuordnung: 25er offen, 10er später
+    dazu, bearbeitbar nur der 10er.
+
+    **Ein Raid ohne Kennung fällt heraus**, statt mit einem
+    Platzhalter dazustehen: auf ihn ließe sich nicht zeigen, und ein
+    Eintrag, der beim Anklicken etwas anderes lädt, ist schlimmer als
+    ein fehlender. Das ist der Zustand bei einer älteren Bot-Fassung,
+    und dann bleibt es beim bisherigen Verhalten - keine Auswahl, der
+    nächste Raid.
+
+    `schedule.all_raids()` liefert die Reihenfolge; sie kommt vom Bot
+    und wird hier nicht noch einmal sortiert.
+    """
+
+    if schedule is None:
+        return ()
+
+    auswahl = []
+
+    for raid in schedule.all_raids():
+
+        if raid.raid_id is None:
+            continue
+
+        auswahl.append(RaidChoice(
+            raid_id=raid.raid_id,
+            title=raid.title or "",
+            when=day_text(raid.next_day(now)),
+            size=raid.raid_size,
+        ))
+
+    return tuple(auswahl)

@@ -31,6 +31,28 @@ Drei Dinge daran sind nicht Geschmack:
   Archiv-Abrufe und `ConnectionsPage.sync_now()`. Eine Netzrunde im
   Klick-Handler friert das Fenster für ihre Dauer ein, und `refresh()`
   darf ohnehin nur zeichnen.
+
+**Und seit 3.5.0: welcher Raid?** Im Discord dürfen mehrere
+Anmeldungen nebeneinander laufen (ein 25er für die Twinks, später ein
+10er für die Mains). Diese Seite fragte den Bot ohne Angabe, und ohne
+Angabe antwortet er zum *nächsten* Raid - also zu dem, der zuletzt
+dazukam. Der 25er war damit nicht mehr zu bearbeiten, obwohl er offen
+stand, und nichts an der Seite sagte, welchen der beiden man gerade
+vor sich hatte.
+
+Der Bot nimmt den Raid längst als `?raid=<id>` entgegen (siehe
+`docs/raid-schedule-bridge.md`); es fehlte nur die Wahl. Drei Regeln
+dazu:
+
+* **Die Kennungen kommen aus dem Termin**, den `RaidScheduleSync`
+  ohnehin im Takt holt (`raid_choices()` in `core/raid_schedule.py`) -
+  kein zweiter Abruf und keine zweite Aufzählung laufender Raids.
+* **Ein Raid wird gewählt, nicht geraten.** Solange die Companion
+  keine Kennung kennt (frisch gestartet, ältere Bot-Fassung), wird
+  keine geschickt, und es bleibt beim bisherigen Verhalten.
+* **Was geladen ist, steht im Kopf** - auch bei einem einzigen Raid.
+  Die Frage "welchen bearbeite ich hier gerade" darf nicht davon
+  abhängen, ob die Auswahl sichtbar ist.
 """
 
 from __future__ import annotations
@@ -54,6 +76,7 @@ from core.character_links import (
     SignupRow,
 )
 from core.character_links_client import CharacterLinksClient
+from core.raid_schedule import raid_choices
 from gui.pages._page import Page
 from gui.theme import tokens
 from gui.theme.fonts import font
@@ -284,13 +307,77 @@ class CharacterLinksPage(Page):
 
         self._notice = ""
 
+        #
+        # Welcher der laufenden Raids gemeint ist. `None` heißt "noch
+        # keiner gewählt" und wird als *keine* Angabe geschickt - der
+        # Bot antwortet dann zum nächsten Raid, wie bisher.
+        #
+
+        self._raid_id: int | None = None
+
+        #
+        # Die zuletzt gezeichnete Auswahl. `refresh()` vergleicht
+        # dagegen und zeichnet nur bei einer Änderung neu: die Liste
+        # trägt Eingabefelder, und ein Neubau unter den Fingern
+        # verwirft, was gerade getippt wurde.
+        #
+
+        self._choice_key: tuple = ()
+
         self.loaded.connect(self._on_loaded)
+
+        #
+        # Die Raidwahl steht **vor** dem Neu-laden-Knopf: sie
+        # bestimmt, was geladen wird.
+        #
+
+        self.raid_label = QLabel("Raid")
+
+        self.raid_label.setFont(font("caption"))
+
+        restyle(
+            self.raid_label,
+            f"color:{tokens.TEXT['faint']};background:transparent;",
+        )
+
+        self.header.addAction(self.raid_label)
+
+        self.raids = Select()
+
+        self.raids.setMinimumWidth(240)
+
+        self.raids.currentIndexChanged.connect(self._on_raid_changed)
+
+        self.header.addAction(self.raids)
+
+        self._set_raid_picker_visible(False)
 
         self.reload = HeroButton("Neu laden", primary=False)
 
         self.reload.clicked.connect(self.load)
 
         self.header.addAction(self.reload)
+
+        #
+        # Welcher Raid hier gerade gezeigt wird. Eigene Zeile und
+        # nicht Teil der Zusammenfassung: sie steht auch dann da, wenn
+        # nur ein Raid läuft und der Auswahlkasten deshalb fehlt -
+        # "welchen bearbeite ich" ist die erste Frage, sobald es
+        # überhaupt mehrere geben kann.
+        #
+
+        self.raid_line = QLabel("")
+
+        self.raid_line.setFont(font("caption"))
+
+        enable_wrap(self.raid_line)
+
+        restyle(
+            self.raid_line,
+            f"color:{tokens.TEXT['muted']};background:transparent;",
+        )
+
+        self.addWidget(self.raid_line)
 
         self.summary = QLabel("")
 
@@ -351,7 +438,22 @@ class CharacterLinksPage(Page):
         Besuchen dieser Seite ständig, und ein veralteter Stand ist
         hier schlimmer als eine kurze Wartezeit: er behauptet
         geschlossene Lücken.
+
+        Der Termin wird dabei **fällig gestellt**, nicht abgerufen:
+        `invalidate()` setzt nur den Merker zurück, geholt wird im
+        Sync-Takt (also im nächsten Durchlauf, ein paar Sekunden
+        später). Ein Abruf von hier aus wäre ein zweiter Leser
+        desselben Endpunkts neben `RaidScheduleSync` - und ein
+        gerade im Discord neu erstellter Raid soll in der Auswahl
+        auftauchen, ohne dass man fünf Minuten wartet.
         """
+
+        sync = getattr(self.manager, "raid_schedule_sync", None)
+
+        if sync is not None:
+            sync.invalidate()
+
+        self._sync_raids()
 
         self.load()
 
@@ -361,8 +463,110 @@ class CharacterLinksPage(Page):
         # Nur zeichnen. Kein `full_refresh()`, kein Netzabruf - siehe
         # `tests/test_update_visibility.py`, das genau das prüft.
         #
+        # Und nur dann, wenn sich an der Auswahl etwas geändert hat.
+        # `refresh()` hängt an `state_changed`, das im Sync-Takt kommt;
+        # ein unbedingter Neubau der Liste verwürfe einen halb
+        # getippten Charakternamen. Der Inhalt selbst wird ohnehin
+        # nicht hier, sondern nach jedem Abruf gezeichnet.
+        #
 
-        self.render()
+        if self._sync_raids():
+            self.render()
+
+    # --------------------------------------------------
+    # Raidwahl
+    # --------------------------------------------------
+
+    def _choices(self):
+        """
+        Die laufenden Raids, so wie der Termin sie kennt.
+
+        Über `getattr`, weil `refresh()` auch aus Tests und aus dem
+        Aufbau der Seite heraus läuft, wo der Manager ein einfacher
+        Platzhalter sein kann - dieselbe Vorsicht wie in
+        `OverviewPage._schedule()`.
+        """
+
+        sync = getattr(self.manager, "raid_schedule_sync", None)
+
+        return raid_choices(getattr(sync, "schedule", None))
+
+    def _sync_raids(self) -> bool:
+        """
+        Den Auswahlkasten nachziehen. Gibt zurück, ob sich etwas
+        geändert hat.
+
+        **Die Auswahl erscheint erst ab zwei Raids.** Bei einem
+        einzigen gäbe es nichts zu wählen, und ein Kasten mit genau
+        einem Eintrag sieht aus wie eine Entscheidung, die man treffen
+        müsste. Welcher Raid geladen ist, steht trotzdem im Kopf -
+        dafür sorgt `render()`, unabhängig von diesem Kasten.
+        """
+
+        choices = self._choices()
+
+        key = tuple(
+            (choice.raid_id, choice.label)
+            for choice in choices
+        )
+
+        changed = key != self._choice_key
+
+        self._choice_key = key
+
+        if len(choices) < 2:
+
+            self._set_raid_picker_visible(False)
+
+            return changed
+
+        #
+        # Ein gewählter Raid, den es nicht mehr gibt (im Discord
+        # gelöscht), fällt auf "keiner gewählt" zurück statt eine
+        # Kennung zu behalten, auf die der Bot mit "keine Anmeldung"
+        # antwortet.
+        #
+
+        known = {choice.raid_id for choice in choices}
+
+        if self._raid_id is not None and self._raid_id not in known:
+            self._raid_id = None
+
+        self.raids.blockSignals(True)
+
+        self.raids.set_items(
+            [(choice.label, choice.raid_id) for choice in choices],
+            current=self._raid_id if self._raid_id is not None else choices[0].raid_id,
+        )
+
+        self.raids.blockSignals(False)
+
+        self._set_raid_picker_visible(True)
+
+        return changed
+
+    def _set_raid_picker_visible(self, visible: bool):
+
+        self.raid_label.setVisible(visible)
+
+        self.raids.setVisible(visible)
+
+    def _on_raid_changed(self, index: int):
+
+        raid_id = self.raids.itemData(index)
+
+        if raid_id is None or raid_id == self._raid_id:
+            return
+
+        self._raid_id = int(raid_id)
+
+        #
+        # Ein Wechsel ist eine Frage an den Bot, keine Filterung des
+        # bereits geholten Standes: die Anmeldungen des anderen Raids
+        # liegen hier gar nicht vor.
+        #
+
+        self.load()
 
     # --------------------------------------------------
     # Abruf
@@ -381,17 +585,24 @@ class CharacterLinksPage(Page):
 
         self.render()
 
+        #
+        # Die Kennung wird **hier** abgelesen und mitgegeben, nicht im
+        # Thread: wer während des Abrufs umschaltet, bekäme sonst die
+        # Antwort zum neuen Raid unter dem alten Kopf.
+        #
+
         self._thread = threading.Thread(
             target=self._load_worker,
+            args=(self._raid_id,),
             daemon=True,
             name="CharacterLinksFetch",
         )
 
         self._thread.start()
 
-    def _load_worker(self):
+    def _load_worker(self, raid_id):
 
-        overview = self.client.fetch()
+        overview = self.client.fetch(raid_id)
 
         self._overview = overview
 
@@ -418,7 +629,7 @@ class CharacterLinksPage(Page):
 
         self._thread = threading.Thread(
             target=self._write_worker,
-            args=(discord_id, character, class_token, False),
+            args=(discord_id, character, class_token, False, self._raid_id),
             daemon=True,
             name="CharacterLinkWrite",
         )
@@ -434,14 +645,24 @@ class CharacterLinksPage(Page):
 
         self._thread = threading.Thread(
             target=self._write_worker,
-            args=(discord_id, "", "", True),
+            args=(discord_id, "", "", True, self._raid_id),
             daemon=True,
             name="CharacterLinkWrite",
         )
 
         self._thread.start()
 
-    def _write_worker(self, discord_id, character, class_token, remove):
+    def _write_worker(self, discord_id, character, class_token, remove, raid_id):
+        """
+        Schreiben und danach neu holen.
+
+        **Der Handeintrag selbst kennt keinen Raid** - er gilt für den
+        Account, nicht für eine Anmeldung (siehe
+        `docs/character-links-and-admin-bridge.md`). Nur das erneute
+        Holen braucht den Raid, damit die Liste danach dieselbe ist
+        wie vorher und nicht die des nächsten Raids.
+        """
+
 
         if remove:
             result = self.client.remove_link(discord_id)
@@ -469,7 +690,7 @@ class CharacterLinksPage(Page):
             else "Zuordnung entfernt."
         )
 
-        self._overview = self.client.fetch()
+        self._overview = self.client.fetch(raid_id)
 
         self.loaded.emit()
 
@@ -483,6 +704,18 @@ class CharacterLinksPage(Page):
 
         self.reload.setEnabled(True)
 
+        #
+        # Ohne eigene Wahl gilt, was der Bot geantwortet hat. Erst
+        # damit zeigt der Auswahlkasten den Raid, der wirklich vor
+        # einem liegt - sonst stünde er auf dem ersten Eintrag,
+        # während die Liste zu einem anderen gehört.
+        #
+
+        if self._raid_id is None and self._overview.raid_id is not None:
+            self._raid_id = self._overview.raid_id
+
+        self._sync_raids()
+
         self.render()
 
     def render(self):
@@ -490,6 +723,8 @@ class CharacterLinksPage(Page):
         from core.character_links import summary_text
 
         overview = self._overview
+
+        self._apply_raid_line()
 
         while self.list_layout.count():
 
@@ -612,6 +847,43 @@ class CharacterLinksPage(Page):
         self.list_layout.addWidget(card)
 
         self.list_layout.addStretch(1)
+
+    def _apply_raid_line(self):
+        """
+        Die Zeile "welcher Raid liegt hier".
+
+        Benannt wird der Raid, den der **Bot** geantwortet hat, nicht
+        der eigene Merker: die beiden fallen genau in dem Moment
+        auseinander, in dem etwas schiefging (Raid gelöscht, ältere
+        Bot-Fassung, Abruf noch unterwegs), und dann ist die Antwort
+        die richtige Auskunft.
+
+        Kennt die Companion den Termin nicht, bleibt die Zeile leer
+        statt eine Kennung wie "Raid 7" anzuzeigen - eine Zahl, die im
+        Discord nirgends steht, benennt nichts.
+        """
+
+        if self._loading:
+
+            self.raid_line.setVisible(False)
+
+            return
+
+        raid_id = self._overview.raid_id
+
+        label = ""
+
+        for choice in self._choices():
+
+            if choice.raid_id == raid_id:
+
+                label = choice.label
+
+                break
+
+        self.raid_line.setText(f"Anmeldung: {label}" if label else "")
+
+        self.raid_line.setVisible(bool(label))
 
     def _set_status(self, text: str, color: str | None = None):
 
