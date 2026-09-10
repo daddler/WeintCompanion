@@ -82,11 +82,41 @@ from gui.widgets.tv.entry_list import EntryData, EntryList
 from gui.widgets.tv.meter_bar import MeterBar
 from gui.widgets.tv.metric_tile import MetricTile
 from gui.widgets.tv.replay_bar import ReplayBar
+from gui.widgets.tv.source_strip import SourceStrip
 
 
 TAB_OVERVIEW = "overview"
 TAB_PLAN = "plan"
 TAB_CATALOG = "catalog"
+
+
+#
+# Ein Satz je Reiter, unter dem Umschalter - dieselbe Überlegung wie
+# in WeintTV: "Übersicht", "Trainingsplan" und "Katalog" benennen, was
+# dahintersteckt, sagen aber nicht, welche Frage man dort stellt oder
+# was man selbst tun muss. Genau das war die Beschwerde.
+#
+
+TAB_HINTS = {
+
+    TAB_OVERVIEW: (
+        "Deine Bewertung im gezeigten Kampf: sechs Bereiche mit "
+        "Sternen, die Kennzahlen dahinter und die Kurve über mehrere "
+        "Pulls."
+    ),
+
+    TAB_PLAN: (
+        "Was du als Nächstes üben solltest - aus der Bewertung "
+        "abgeleitet. Abgehakt wird von Hand; die Prüfung daneben liest "
+        "der Log."
+    ),
+
+    TAB_CATALOG: (
+        "Alle Lektionen, die es für deine Spezialisierung gibt. Hier "
+        "schaltest du aus, was dich nicht betrifft."
+    ),
+
+}
 
 
 class AcademyPage(QWidget):
@@ -245,6 +275,15 @@ class AcademyPage(QWidget):
         # gui/widgets/tv/archive_picker.py.
         #
 
+        #
+        # Woher die Zahlen kommen - und wie man sie wechselt. Dieselbe
+        # Zeile wie in WeintTV und im Archiv. Sie steht ueber dem
+        # Archiv-Waehler, weil sie die groebere Frage beantwortet:
+        # welche Quelle ueberhaupt, und erst dann welcher Kampf daraus.
+        #
+
+        root.addWidget(SourceStrip(self.service))
+
         self.archive_picker = ArchivePicker(self.service)
 
         root.addWidget(self.archive_picker)
@@ -288,6 +327,17 @@ class AcademyPage(QWidget):
 
         root.addWidget(self.tabs)
 
+        self.tab_hint = QLabel("")
+
+        self.tab_hint.setWordWrap(True)
+
+        self.tab_hint.setStyleSheet(
+            f"font-size:12px;color:{Colors.TEXT_MUTED};"
+            "background:transparent;border:none;"
+        )
+
+        root.addWidget(self.tab_hint)
+
         self.stack = QStackedWidget()
 
         root.addWidget(self.stack, 1)
@@ -305,6 +355,14 @@ class AcademyPage(QWidget):
             self.stack.addWidget(builder())
 
         self.tabs.setValue(TAB_OVERVIEW)
+
+        #
+        # `setValue()` meldet nur eine *Aenderung*; der Anfangswert ist
+        # keine. Ohne diesen Aufruf bliebe der Erklaersatz auf dem
+        # zuerst sichtbaren Reiter leer.
+        #
+
+        self._show_tab(TAB_OVERVIEW)
 
         #
         # Signale
@@ -872,6 +930,8 @@ class AcademyPage(QWidget):
             return
 
         self.stack.setCurrentIndex(index)
+
+        self.tab_hint.setText(TAB_HINTS.get(key, ""))
 
     # --------------------------------------------------
     # Lebenszyklus

@@ -52,11 +52,22 @@ from gui.widgets.segmented_control import SegmentedControl
 
 class ArchivePicker(QWidget):
 
-    def __init__(self, service, parent=None):
+    def __init__(self, service, parent=None, browse: bool = True):
+        """
+        `browse=False` lässt den Knopf "Log wählen …" weg.
+
+        Für die Archiv-Seite: dort steht der Browser seit 3.5.0
+        eingebettet auf der Seite selbst (siehe
+        `gui/dialogs/archive_dialog.ArchiveBrowser`). Ein Knopf, der
+        dieselbe Liste noch einmal als Fenster darüber legt, wäre zwei
+        Wege zum selben Ort - und der obere verdeckt den unteren.
+        """
 
         super().__init__(parent)
 
         self.service = service
+
+        self._browse = bool(browse)
 
         layout = QHBoxLayout(self)
 
@@ -86,6 +97,8 @@ class ArchivePicker(QWidget):
         self.browse_button = HeroButton("Log wählen …", primary=False)
 
         self.browse_button.clicked.connect(self.open_browser)
+
+        self.browse_button.setVisible(self._browse)
 
         layout.addWidget(self.browse_button)
 
@@ -156,7 +169,10 @@ class ArchivePicker(QWidget):
             # nicht wieder wählen.
             #
 
-            if self.service.archive_state().selected_fight is None:
+            if (
+                self._browse
+                and self.service.archive_state().selected_fight is None
+            ):
                 self.open_browser()
 
     # --------------------------------------------------

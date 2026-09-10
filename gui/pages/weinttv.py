@@ -75,6 +75,7 @@ from gui.widgets.tv.metric_tile import MetricTile
 from gui.widgets.bar_table import BarTable, format_per_second
 from gui.widgets.tv.live_header import LiveHeader
 from gui.widgets.tv.replay_bar import ReplayBar
+from gui.widgets.tv.source_strip import SourceStrip
 from gui.widgets.tv.timer_chip import TimerChip
 
 
@@ -121,6 +122,40 @@ EVENT_KIND_LABELS = {
 TAB_LIVE = "live"
 TAB_ANALYSIS = "analysis"
 TAB_HISTORY = "history"
+
+
+#
+# Ein Satz je Reiter, unter dem Umschalter.
+#
+# Gemeldet wurde "viele wissen nicht, wo man was findet", und drei
+# Reiter mit je einem Wort ("Live", "Analyse", "Verlauf") beantworten
+# das nicht: sie benennen, was dahintersteckt, sagen aber nicht, welche
+# Frage man dort stellt. Ein Satz kostet 18 px und erspart das Raten.
+#
+# "Verlauf" bekommt seinen Satz zusätzlich deshalb, weil das Wort in
+# dieser App zweimal vorkommt: hier die Pulls DIESER Sitzung, im Archiv
+# ein beliebiger vergangener Bericht. Der Unterschied steht sonst nur
+# im Quelltext.
+#
+
+TAB_HINTS = {
+
+    TAB_LIVE: (
+        "Der laufende Kampf: Bossleben, Pulldauer, Schaden und Heilung "
+        "je Spieler, Tode, Cooldowns."
+    ),
+
+    TAB_ANALYSIS: (
+        "Die Tiefenauswertung des gezeigten Pulls - Schaden erlitten, "
+        "Laufwege, Wirkzeiten, Cooldown-Nutzung."
+    ),
+
+    TAB_HISTORY: (
+        "Die abgeschlossenen Pulls dieser Sitzung. Einen älteren Abend "
+        "findest du im Archiv."
+    ),
+
+}
 
 
 class WeintTvPage(QWidget):
@@ -216,13 +251,16 @@ class WeintTvPage(QWidget):
         header.addStretch()
 
         #
-        # Zwei Angaben, die sich nicht überschneiden dürfen: WOHER
-        # die Daten kommen und OB gerade welche fließen.
+        # WOHER die Daten kommen, steht seit 3.5.0 in der Quellenzeile
+        # darunter (`SourceStrip`) - dort, wo es sich auch umstellen
+        # laesst. Der Chip hier hat dieselbe Frage ein zweites Mal
+        # beantwortet, und zwar aus einer anderen Quelle (dem Label des
+        # Snapshots statt der Einstellung): zwei Antworten auf eine
+        # Frage, die sich beim Umschalten kurz widersprachen.
         #
-
-        self.source_chip = TimerChip("Simulation", "neutral")
-
-        header.addWidget(self.source_chip)
+        # Was hier bleibt, ist die andere Frage: OB gerade Daten
+        # fliessen.
+        #
 
         self.feed_chip = TimerChip("KEINE DATEN", "neutral")
 
@@ -248,6 +286,31 @@ class WeintTvPage(QWidget):
         self._overlay_window = None
 
         root.addLayout(header)
+
+        #
+        # Ein Satz zum gewählten Reiter. Er steht unter dem
+        # Umschalter und nicht daneben: daneben waere er eine
+        # Beschriftung des Knopfes, darunter ist er die Auskunft, was
+        # auf dieser Ansicht steht.
+        #
+
+        self.tab_hint = QLabel("")
+
+        self.tab_hint.setWordWrap(True)
+
+        self.tab_hint.setStyleSheet(
+            f"font-size:12px;color:{Colors.TEXT_MUTED};"
+            "background:transparent;border:none;"
+        )
+
+        root.addWidget(self.tab_hint)
+
+        #
+        # Woher die Zahlen kommen - und wie man sie wechselt. Dieselbe
+        # Zeile wie in der Academy und im Archiv.
+        #
+
+        root.addWidget(SourceStrip(self.service))
 
         #
         # --------------------------------------------------
@@ -305,6 +368,14 @@ class WeintTvPage(QWidget):
             self.stack.addWidget(builder())
 
         self.tabs.setValue(TAB_LIVE)
+
+        #
+        # `setValue()` meldet nur eine *Aenderung*; der Anfangswert ist
+        # keine. Ohne diesen Aufruf bliebe der Erklaersatz beim ersten
+        # Oeffnen leer - genau auf dem Reiter, den man zuerst sieht.
+        #
+
+        self._show_tab(TAB_LIVE)
 
         #
         # Signale
@@ -1104,6 +1175,8 @@ class WeintTvPage(QWidget):
 
         self.stack.setCurrentIndex(index)
 
+        self.tab_hint.setText(TAB_HINTS.get(key, ""))
+
     # --------------------------------------------------
     # Lebenszyklus (von MainWindow.change_page aufgerufen)
     # --------------------------------------------------
@@ -1223,11 +1296,6 @@ class WeintTvPage(QWidget):
     # --------------------------------------------------
 
     def _apply_header(self, snapshot: RaidSnapshot):
-
-        self.source_chip.setValue(
-            snapshot.source_label,
-            "info" if snapshot.live else "neutral",
-        )
 
         if not snapshot.has_data:
 

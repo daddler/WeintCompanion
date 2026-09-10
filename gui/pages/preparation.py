@@ -127,7 +127,7 @@ class PreparationCard(Card):
 
         name = QLabel(sheet.get("name", ""))
 
-        name.setFont(font("h2"))
+        name.setFont(font("section"))
 
         restyle(name, f"color:{color};background:transparent;")
 

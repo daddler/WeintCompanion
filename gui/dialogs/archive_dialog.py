@@ -229,35 +229,41 @@ class _FightRow(_Row):
         self.clicked.emit(self.code, self.fight_id)
 
 
-class ArchiveDialog(QDialog):
+class ArchiveBrowser(QWidget):
     """
     Zwei Spalten, ein Suchfeld, ein Schalter.
+
+    **Seit 3.5.0 ein Widget und kein Fenster mehr.** Der Browser
+    steckte bis dahin fest in einem Dialog, und die Seite *Archiv*
+    bestand damit aus einem Wähler und dem Satz "die Zahlen stehen in
+    WeintTV" - ein Bereich in der Navigationsspalte, der selbst nichts
+    zeigte. Wer "Archiv" anklickte, wollte aber genau das sehen, was
+    hier drinsteht: die Abende und ihre Pulls.
+
+    Es bleibt **eine** Ansicht: die Seite bettet dieses Widget ein
+    (`embedded=True`, ohne eigenen Kopf und ohne Schliessen-Knopf),
+    und `ArchiveDialog` weiter unten legt dasselbe Widget in ein
+    modales Fenster - für WeintTV und die Academy, wo man einen Pull
+    wählen will, ohne den Bereich zu verlassen. Zwei Nachbauten
+    derselben Liste würden ab der ersten Änderung verschieden
+    gruppieren.
     """
 
-    def __init__(self, service, parent=None):
+    #
+    # Der hier angeklickte Pull ist angekommen. Das Fenster schliesst
+    # sich daraufhin; die Seite bleibt stehen, wo sie ist - dort gibt
+    # es nichts zu schliessen.
+    #
+
+    fightLoaded = Signal()
+
+    def __init__(self, service, parent=None, embedded: bool = False):
 
         super().__init__(parent)
 
         self.service = service
 
-        self.setWindowTitle("Log auswählen")
-
-        self.setModal(True)
-
-        self.resize(940, 660)
-
-        self.setAttribute(Qt.WA_StyledBackground, True)
-
-        restyle(
-            self,
-            f"""
-            QDialog{{
-                background:{tokens.SURFACE["base"]};
-                border:1px solid {tokens.BORDER["base"]};
-                border-radius:{tokens.RADIUS["lg"]}px;
-            }}
-            """,
-        )
+        self._embedded = bool(embedded)
 
         #
         # Womit die beiden Spalten zuletzt gefüllt wurden - siehe der
@@ -290,11 +296,26 @@ class ArchiveDialog(QDialog):
 
         root = QVBoxLayout(self)
 
-        root.setContentsMargins(28, 24, 28, 20)
+        #
+        # Eingebettet trägt die Seite die Ränder (§6.2), im Fenster
+        # dieses Widget selbst.
+        #
+
+        if self._embedded:
+            root.setContentsMargins(0, 0, 0, 0)
+        else:
+            root.setContentsMargins(28, 24, 28, 20)
 
         root.setSpacing(14)
 
-        self._build_head(root)
+        #
+        # Eingebettet trägt die Seite ihren eigenen Kopf (Rubrik und
+        # Titel). Ein zweiter darunter wäre dieselbe Überschrift
+        # zweimal.
+        #
+
+        if not self._embedded:
+            self._build_head(root)
 
         self._build_filters(root)
 
@@ -479,13 +500,29 @@ class ArchiveDialog(QDialog):
 
         footer.addWidget(self.status, 1)
 
-        close_button = HeroButton("Schliessen", primary=False)
+        if not self._embedded:
 
-        close_button.clicked.connect(self.reject)
+            close_button = HeroButton("Schliessen", primary=False)
 
-        footer.addWidget(close_button)
+            close_button.clicked.connect(self._close_requested)
+
+            footer.addWidget(close_button)
 
         root.addLayout(footer)
+
+    def _close_requested(self):
+        """
+        Den Rahmen schliessen lassen, ohne ihn zu kennen.
+
+        `self.reject()` gäbe es hier nicht mehr - dieses Widget ist
+        kein Dialog. Der Umweg über das Elternteil hält den Browser
+        frei von der Frage, worin er gerade steckt.
+        """
+
+        window = self.window()
+
+        if window is not None:
+            window.close()
 
     # --------------------------------------------------
     # Nutzeraktionen
@@ -560,7 +597,7 @@ class ArchiveDialog(QDialog):
 
             self._awaiting = None
 
-            self.accept()
+            self.fightLoaded.emit()
 
     def _fill_days(self, state):
 
@@ -958,3 +995,47 @@ class ArchiveDialog(QDialog):
         )
 
         self._insert(body, label)
+
+
+class ArchiveDialog(QDialog):
+    """
+    Der Browser als modales Fenster.
+
+    Nur noch der Rahmen: Titel, Größe, Hintergrund - und die eine
+    Regel, die ein Fenster hat und eine Seite nicht, nämlich sich zu
+    schliessen, sobald der angeklickte Pull geladen ist. Der Inhalt
+    kommt unverändert von `ArchiveBrowser`.
+    """
+
+    def __init__(self, service, parent=None):
+
+        super().__init__(parent)
+
+        self.setWindowTitle("Log auswählen")
+
+        self.setModal(True)
+
+        self.resize(940, 660)
+
+        self.setAttribute(Qt.WA_StyledBackground, True)
+
+        restyle(
+            self,
+            f"""
+            QDialog{{
+                background:{tokens.SURFACE["base"]};
+                border:1px solid {tokens.BORDER["base"]};
+                border-radius:{tokens.RADIUS["lg"]}px;
+            }}
+            """,
+        )
+
+        root = QVBoxLayout(self)
+
+        root.setContentsMargins(0, 0, 0, 0)
+
+        self.browser = ArchiveBrowser(service, self)
+
+        self.browser.fightLoaded.connect(self.accept)
+
+        root.addWidget(self.browser)

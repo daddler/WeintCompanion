@@ -243,26 +243,15 @@ class ModulesSection(SectionContent):
 
     def _save_source(self, source: str):
 
-        config = self.manager.config.data
+        #
+        # Speichern, aufräumen und protokollieren macht der Service
+        # (`set_source()`): der Wechsel ist seit 3.5.0 auch von
+        # WeintTV, der Academy und dem Archiv aus möglich, und drei
+        # Fassungen desselben Ablaufs würden auseinanderlaufen.
+        #
 
-        if config.get("raid_data_source") == source:
+        if not self.manager.raid_data.set_source(source):
             return
-
-        config["raid_data_source"] = source
-
-        self.manager.config.save()
-
-        #
-        # Die alte Quelle sauber beenden und die Historie verwerfen -
-        # das erledigt der Service, damit WeintTV und Academy beide
-        # sofort auf der neuen Quelle stehen.
-        #
-
-        self.manager.raid_data.reload_provider()
-
-        self.manager.logger.info(
-            f"Raid-Datenquelle: {SOURCE_LABELS.get(source, source)}."
-        )
 
         self._update_source()
 

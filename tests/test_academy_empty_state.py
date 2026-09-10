@@ -186,9 +186,16 @@ def page(pull):
         snapshotChanged = Signal(object)
         archiveChanged = Signal()
         replayChanged = Signal()
+        sourceChanged = Signal()
 
         def current(self):
             return pull
+
+        def configured_source(self):
+            return "mock"
+
+        def active_source(self):
+            return "mock"
 
         def archive_state(self):
             return ArchiveState(mode=MODE_LIVE)

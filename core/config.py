@@ -134,7 +134,32 @@ class Config:
 
             "academy_enabled": True,
 
-            "raid_data_source": "mock",
+            #
+            # Seit 3.5.0 der Livelog und nicht mehr die Simulation.
+            #
+            # Die Simulation war der sichere Rueckfall: sie laeuft ohne
+            # jede Einrichtung. Genau das war das Problem - wer die App
+            # zum ersten Mal oeffnete, sah einen vollstaendigen Pull mit
+            # 25 Namen, die es nicht gibt, und einen kleinen grauen Chip
+            # als einzigen Hinweis darauf. "Warum steht mein Raid da
+            # nicht drin" war die haeufigste Frage zu diesem Bereich.
+            #
+            # Ohne verknuepftes Konto oder laufenden Log steht jetzt
+            # ehrlich "keine Daten" da - und die Simulation ist einen
+            # Klick entfernt (die Quellenzeile auf jeder der drei
+            # Seiten), statt zwei Ebenen tief in den Einstellungen.
+            #
+
+            "raid_data_source": "warcraftlogs",
+
+            #
+            # Merker der einmaligen Umstellung, siehe load(). Eine
+            # frische Datei traegt ihn von Anfang an - sie startet
+            # bereits auf der neuen Voreinstellung und darf nicht
+            # spaeter noch einmal "umgestellt" werden.
+            #
+
+            "raid_data_source_migrated": True,
 
             "combatlog_path": "",
 
@@ -220,7 +245,8 @@ class Config:
                     "onboarding_tour_edition": 0,
                     "weinttv_enabled": True,
                     "academy_enabled": True,
-                    "raid_data_source": "mock",
+                    "raid_data_source": "warcraftlogs",
+                    "raid_data_source_migrated": True,
                     "combatlog_path": "",
                     "academy_player_name": "",
                     "academy_follow_game": True,
@@ -234,6 +260,28 @@ class Config:
                     "nav_collapsed": False,
 
                 }
+
+                #
+                # Einmalige Umstellung der Datenquelle (3.5.0).
+                #
+                # Der Block darunter ergaenzt nur *fehlende* Schluessel
+                # - eine bestehende Installation traegt "mock" laengst
+                # in ihrer Datei und bliebe damit fuer immer auf der
+                # Simulation, also genau in dem Zustand, den die neue
+                # Voreinstellung behebt. Die Umstellung passiert
+                # deshalb genau einmal und wird vermerkt: wer die
+                # Simulation danach bewusst waehlt, behaelt sie.
+                #
+
+                if not self.data.get("raid_data_source_migrated"):
+
+                    if self.data.get("raid_data_source") == "mock":
+
+                        self.data["raid_data_source"] = "warcraftlogs"
+
+                    self.data["raid_data_source_migrated"] = True
+
+                    changed = True
 
                 for key, value in defaults.items():
 

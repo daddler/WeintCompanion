@@ -27,6 +27,52 @@ onto one time axis only in `WeintTvPage._event_rows()`, i.e. in the
 presentation. `analyzer/replay/models.TimelineEvent` is an alias of
 `CombatEvent`, not a second class.
 
+## Finding your way around: the guide and the source strip (3.5.0)
+
+Reported as: *"Viele wissen nicht, inwieweit man alles überhaupt
+bedienen muss/kann und wo man was findet."* Three nav entries share one
+data source, one snapshot and one archive selection — invisibly. Someone
+who doesn't know that sees three pages, two of them saying "keine
+Daten", with no clue why.
+
+- **`core/analysis_guide.py`** holds the words (Qt-free, like
+  `analysis_gap.py`): an intro plus four sections, each answering the
+  *same three questions* — what it's for, what you do there, what it
+  needs. `gui/dialogs/guide_dialog.py` draws them; a *Was ist das hier?*
+  button on all three pages opens it. The onboarding tour explains each
+  area once, at first start — the right place for "what exists", the
+  wrong one for "what do I do now", because a tour can't be found again
+  when the question comes up.
+- **`gui/widgets/tv/source_strip.py`** is the one line on all three
+  pages: which source is set, what that means, a picker to change it,
+  and the way into the guide. It reads `active_source()` (what *runs*,
+  not what is configured — an unknown key falls back to the mock in
+  `_create_provider()`), and warns in `STATE["warn"]` when
+  `is_demo_source()` says the numbers belong to nobody. **A demo source
+  being mistaken for the reader's own raid was the single most common
+  confusion in this area.**
+- **Switching goes through `RaidDataService.set_source()`** — the one
+  place that stores, tears the old provider down and logs. Four copies
+  of that sequence (Settings plus three pages) would clean up
+  differently after the first change. It emits `sourceChanged` so a
+  switch made in Settings doesn't leave a stale strip behind.
+- **WeintTV's `source_chip` is gone.** It answered "where do the numbers
+  come from" a second time and from a different source (the snapshot's
+  label rather than the setting), so the two contradicted each other
+  briefly while switching. `feed_chip` stays — it answers the other
+  question, whether data is flowing at all.
+- **Every tab carries one explaining sentence** (`TAB_HINTS` in both
+  pages). *Verlauf* needs its own for a second reason: the word means
+  two different things in this app (this session's pulls here, any past
+  report in the Archiv).
+- **The default source is `warcraftlogs` since 3.5.0**, with a one-time
+  migration in `core/config.py` (`raid_data_source_migrated`) that moves
+  an existing `mock` over exactly once. The simulation was the safe
+  fallback — it needs no setup at all — and that was the problem: a
+  first-time user saw a complete pull with 25 names that don't exist.
+  Without a linked account there is now an honest "keine Daten", and the
+  simulation is one click away in the strip.
+
 ## `RaidDataService`: the single place that picks and polls a data source
 
 `core/raid_data_service.py`. Key points:

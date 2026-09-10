@@ -148,7 +148,7 @@ class _SignupRow(QWidget):
 
         meta = QLabel(f"{row.class_name} · {row.role}")
 
-        meta.setFont(font("caption"))
+        meta.setFont(font("small"))
 
         restyle(
             meta,
@@ -186,7 +186,7 @@ class _SignupRow(QWidget):
 
         origin = QLabel(row.source_label)
 
-        origin.setFont(font("caption"))
+        origin.setFont(font("small"))
 
         restyle(
             origin,
@@ -333,7 +333,7 @@ class CharacterLinksPage(Page):
 
         self.raid_label = QLabel("Raid")
 
-        self.raid_label.setFont(font("caption"))
+        self.raid_label.setFont(font("small"))
 
         restyle(
             self.raid_label,
@@ -368,7 +368,7 @@ class CharacterLinksPage(Page):
 
         self.raid_line = QLabel("")
 
-        self.raid_line.setFont(font("caption"))
+        self.raid_line.setFont(font("small"))
 
         enable_wrap(self.raid_line)
 
@@ -394,7 +394,7 @@ class CharacterLinksPage(Page):
 
         self.status = QLabel("")
 
-        self.status.setFont(font("caption"))
+        self.status.setFont(font("small"))
 
         enable_wrap(self.status)
 

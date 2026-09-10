@@ -2,6 +2,110 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 3.5.0
+
+**Charakterzuordnung: du wählst den Raid.** Stehen im Discord zwei
+Anmeldungen gleichzeitig offen — ein 25er, und später kommt ein 10er
+dazu —, zeigte die Seite immer nur den zuletzt erstellten. Der 25er war
+damit nicht mehr zu bearbeiten, obwohl er offen stand, und nichts sagte,
+welchen der beiden man gerade vor sich hatte.
+
+Jetzt steht oben rechts ein Auswahlkasten mit allen laufenden Raids, und
+unter dem Titel steht, zu welchem die Liste gehört:
+
+> Anmeldung: 25er Twinks · 25er · Donnerstag, 11.09. um 20:00
+
+Bei einem einzigen Raid erscheint der Kasten nicht — es gäbe nichts zu
+wählen. Die Zeile darunter steht trotzdem da.
+
+**WeintTV, Academy und Archiv: ein Wegweiser.** Die drei Bereiche hängen
+an derselben Datenquelle und zeigen denselben Kampf — sichtbar war das
+nirgends. Wer nicht wusste, dass eine Auswahl im Archiv auch für WeintTV
+und die Academy gilt, sah drei Seiten, von denen zwei „keine Daten"
+sagten, ohne Anhaltspunkt, woran es liegt.
+
+Vier Dinge ändern sich:
+
+- Auf jeder der drei Seiten steht jetzt eine **Quellenzeile**: woher die
+  Zahlen kommen, was das bedeutet, und ein Kasten, mit dem du die Quelle
+  direkt dort wechselst. Bisher ging das nur unter *Einstellungen ·
+  Module*.
+- Daneben ein Knopf **„Was ist das hier?"**. Er öffnet einen Wegweiser,
+  der für jeden der drei Bereiche dieselben drei Fragen beantwortet:
+  wofür er da ist, was du dort tust, und was er dafür braucht.
+- Jeder Reiter trägt **einen erklärenden Satz**. „Live", „Analyse" und
+  „Verlauf" benennen, was dahintersteckt — sie sagen aber nicht, welche
+  Frage man dort stellt. Bei *Verlauf* kommt hinzu, dass das Wort in
+  dieser App zweimal vorkommt: hier die Pulls dieses Abends, im Archiv
+  ein beliebiger vergangener Bericht.
+- Der Bereich **Archiv zeigt endlich das Archiv**. Bisher bestand die
+  Seite aus einer Auswahlzeile und dem Satz, die Zahlen erschienen in
+  WeintTV; die Liste der Raidabende lag hinter einem Knopf in einem
+  eigenen Fenster. Jetzt stehen die Abende und ihre Pulls auf der Seite
+  selbst, mit Suche und *Nur Kills* — und sobald ein Pull geladen ist,
+  steht darunter, welcher, samt der beiden Wege zu ihm.
+
+**Die Voreinstellung ist jetzt der Livelog und nicht mehr die
+Simulation.** Die Simulation läuft ohne jede Einrichtung, und genau das
+war das Problem: wer WeintTV zum ersten Mal öffnete, sah einen
+vollständigen Pull mit 25 Namen, die es nicht gibt, und einen kleinen
+grauen Chip als einzigen Hinweis darauf. „Warum steht mein Raid da nicht
+drin" war die häufigste Frage zu diesem Bereich.
+
+Ohne verknüpftes Konto oder laufenden Log steht jetzt ehrlich „keine
+Daten" da. **Die Umstellung passiert einmalig auch bei bestehenden
+Installationen**, die noch auf der Simulation stehen; wer sie danach
+bewusst wieder wählt, behält sie. Sie ist einen Klick entfernt — in der
+Quellenzeile auf jeder der drei Seiten.
+
+### Technisch
+
+**`raid_choices()` in `core/raid_schedule.py` ist die eine Aufzählung
+laufender Raids.** Der Bot nimmt den Raid an `/companion/character-links`
+längst als `?raid=<id>` entgegen (und ebenso an `/companion/raid-roster`
+und `/companion/raid-signups`); die Companion schickte ihn nie. Die
+Kennungen kommen aus dem Termin, den `RaidScheduleSync` ohnehin im Takt
+holt — kein zweiter Abruf und keine zweite Liste, die irgendwann anders
+sortiert. Ein Raid ohne Kennung fällt aus der Auswahl heraus, statt als
+Eintrag dazustehen, der beim Anklicken etwas anderes lädt. Ohne eigene
+Wahl wird **kein** Parameter geschickt: eine `0` wäre für den Bot eine
+Auswahl, die keinen Raid trifft.
+
+**Der Archivbrowser ist ein Widget und kein Fenster mehr.**
+`ArchiveBrowser` trägt Spalten, Suche und Filter; `ArchiveDialog` ist
+nur noch der modale Rahmen darum und schließt auf dessen Signal
+`fightLoaded`. Die Archiv-Seite bettet dasselbe Widget ein. Ein Nachbau
+hätte ab der ersten Änderung anders gruppiert als das Original.
+
+**`RaidDataService.set_source()` ist die eine Stelle, an der die Quelle
+wechselt** — speichern, alten Provider beenden, protokollieren, und
+`sourceChanged` melden. Vier Fassungen desselben Ablaufs (Einstellungen
+plus drei Seiten) hätten ab der ersten Änderung verschieden aufgeräumt.
+`active_source()` nennt die Quelle, die **wirklich** läuft: eine
+unbekannte Angabe in der `config.json` fällt auf die Simulation zurück,
+und eine Zeile, die dann „WarcraftLogs" behauptet, wäre genau die
+Verwechslung, gegen die sie gebaut wurde.
+
+**Der Quellen-Chip in WeintTV ist entfallen.** Er beantwortete dieselbe
+Frage wie die neue Zeile ein zweites Mal, und zwar aus einer anderen
+Quelle — dem Label des Snapshots statt der Einstellung. Beim Umschalten
+widersprachen sich die beiden kurz. Der Chip daneben bleibt: er
+beantwortet die andere Frage, ob überhaupt Daten fließen.
+
+**Zwei stille Schriftgrößen-Fehler behoben.** `font()` fällt bei einem
+unbekannten Token stumm auf Fließtext zurück. `font("caption")` und
+`font("h2")` gibt es nicht — die betroffenen Zeilen auf *Meine
+Charaktere*, *Vorbereitung* und *Charakterzuordnung* standen deshalb in
+der falschen Größe, ohne dass irgendwo etwas fehlschlug. Ein neuer Test
+prüft jedes in `gui/` benutzte Typo-Token gegen `tokens.TYPE`.
+
+**Der Titel der Archiv-Seite las ein Feld, das es nie gab.**
+`ArchiveState` trägt kein `fight`; der Titel stand deshalb dauerhaft auf
+„Einen vergangenen Kampf ansehen.", auch mit geladenem Pull. Er kommt
+jetzt aus `archive_index.selection_text()` — derselben Stelle wie die
+Quellenzeile, die bewusst sagt, was *geladen* ist, und nicht, was
+angeklickt wurde.
+
 ## 3.4.0
 
 **Simmen: kopieren reicht.** Am Ende eines Sim-Laufs drückst du im Sim

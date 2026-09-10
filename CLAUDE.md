@@ -112,7 +112,7 @@ Linux/Windows/AppImage build commands.
 | Theme/accent, signals, animations, lambda leaks | `docs/architecture/theming.md` |
 | Page registry, `PageId`, page lifecycle | `docs/architecture/navigation.md` |
 | Qt segfaults, startup ordering, platform paths | `docs/architecture/qt-pitfalls.md` |
-| WeintTV/Academy (live), ratings, lesson catalog, "wer bin ich" | `docs/systems/weinttv-academy.md` |
+| WeintTV/Academy (live), ratings, lesson catalog, "wer bin ich", Datenquelle/Quellenzeile/Wegweiser | `docs/systems/weinttv-academy.md` |
 | Archiv-Modus, Wiedergabe/Replay | `docs/systems/archive-and-replay.md` |
 | Addon-/Companion-Updates, Storage-Warnung, Changelog-Anzeige | `docs/systems/update-system.md` |
 | Übersicht-Seite (Termin, Roster, letzter Pull, Discord-Link) | `docs/systems/overview-page.md` |

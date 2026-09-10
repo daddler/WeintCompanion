@@ -119,6 +119,38 @@ SOURCE_DESCRIPTIONS = {
 
 
 #
+# Ein Satz je Quelle für die Quellenzeile auf den Seiten selbst -
+# kürzer als SOURCE_DESCRIPTIONS, das in den Einstellungen steht und
+# dort mehr Platz hat. Hier und nicht in der Oberfläche, aus demselben
+# Grund wie die beiden Tabellen darüber: eine neue Quelle soll wirklich
+# nur diese Datei berühren.
+#
+
+SOURCE_SHORT = {
+
+    SOURCE_MOCK: "Beispieldaten - kein echter Raid",
+
+    SOURCE_WARCRAFTLOGS: "Der Livelog deines Raids, über den Bot",
+
+}
+
+
+#
+# Welche Quelle nur zum Ausprobieren da ist. Die Unterscheidung steht
+# hier und nicht als `== SOURCE_MOCK` in drei Seiten: sie entscheidet,
+# ob die Quellenzeile warnt, und "das sind erfundene Zahlen" ist die
+# Auskunft, ohne die jemand eine Simulation für seinen Raid hält.
+#
+
+DEMO_SOURCES = frozenset({SOURCE_MOCK})
+
+
+def is_demo_source(source: str) -> bool:
+
+    return (source or "") in DEMO_SOURCES
+
+
+#
 # Abstand zwischen zwei Abfragen. Bewusst ein eigener Takt und nicht
 # der 5-Sekunden-Sync-Timer des CompanionManagers: der ist für
 # HTTP-Synchronisation gedacht, ein Live-Dashboard braucht deutlich
@@ -358,6 +390,18 @@ class RaidDataService(QObject):
     replayChanged = Signal()
 
     #
+    # Die eingestellte Datenquelle hat gewechselt. Ohne Payload wie
+    # die beiden darüber: wer zuhört, liest `configured_source()`.
+    #
+    # Gebraucht, weil der Wechsel seit 3.5.0 an vier Stellen möglich
+    # ist (Einstellungen, WeintTV, Academy, Archiv) und die drei
+    # Quellenzeilen sonst den Stand von vorhin zeigten - also genau
+    # die Sorte Anzeige, wegen der jemand glaubt, es sei kaputt.
+    #
+
+    sourceChanged = Signal()
+
+    #
     # Rein interner Kanal: "bring die Wiedergabe-Uhr in Einklang mit
     # dem Zustand".
     #
@@ -466,6 +510,61 @@ class RaidDataService(QObject):
             SOURCE_MOCK,
         )
 
+    def active_source(self) -> str:
+        """
+        Die Quelle, die **wirklich** läuft.
+
+        Sie kann von der eingestellten abweichen: eine unbekannte
+        Quelle (von Hand in die `config.json` geschrieben) fällt in
+        `_create_provider()` auf die Simulation zurück. Die
+        Quellenzeile auf den Seiten nennt deshalb diese hier - eine
+        Anzeige, die "WarcraftLogs" behauptet, während die Simulation
+        läuft, wäre genau die Verwechslung, gegen die sie gebaut wurde.
+
+        Solange noch kein Provider gebaut wurde (keine Seite war
+        offen), gilt die eingestellte - geraten wird nichts.
+        """
+
+        return self._provider_source or self.configured_source()
+
+    def set_source(self, source: str) -> bool:
+        """
+        Die Quelle wechseln - speichern, alten Provider beenden,
+        protokollieren. Gibt zurück, ob sich etwas geändert hat.
+
+        **Die eine Stelle, an der gewechselt wird.** Bis 3.5.0 stand
+        der Wechsel allein in `SettingsSections/modules.py`, weil er
+        nur dort möglich war. Er ist inzwischen auch von WeintTV, der
+        Academy und dem Archiv aus erreichbar (siehe
+        `gui/widgets/tv/source_strip.py`) - und drei Fassungen
+        desselben Ablaufs würden ab der ersten Änderung verschieden
+        aufräumen.
+        """
+
+        source = (source or "").strip()
+
+        if not source or source == self.configured_source():
+            return False
+
+        self.manager.config.data["raid_data_source"] = source
+
+        self.manager.config.save()
+
+        #
+        # Die alte Quelle sauber beenden und die Historie verwerfen -
+        # damit WeintTV und Academy beide sofort auf der neuen stehen.
+        #
+
+        self.reload_provider()
+
+        self.manager.logger.info(
+            f"Raid-Datenquelle: {SOURCE_LABELS.get(source, source)}."
+        )
+
+        self.sourceChanged.emit()
+
+        return True
+
     def _create_provider(self):
         """
         Erzeugt den Provider zur konfigurierten Quelle. Ist die
@@ -521,6 +620,15 @@ class RaidDataService(QObject):
             provider = self._provider
 
             self._provider = None
+
+            #
+            # Auch den Merker, welche Quelle wirklich lief: sonst
+            # meldete `active_source()` bis zum nächsten Poll die alte,
+            # und die Quellenzeile stünde nach dem Umschalten noch
+            # sekundenlang auf dem Stand von vorher.
+            #
+
+            self._provider_source = ""
 
             #
             # Die Historie gehört zur alten Quelle - sie mit Daten

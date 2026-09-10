@@ -165,7 +165,7 @@ class CharacterCard(Card):
 
         self.name = QLabel(sheet.get("name", ""))
 
-        self.name.setFont(font("h2"))
+        self.name.setFont(font("section"))
 
         restyle(self.name, f"color:{color};background:transparent;")
 
@@ -297,7 +297,7 @@ def _stat(label: str, value: str) -> QVBoxLayout:
 
     number = QLabel(value)
 
-    number.setFont(font("h2"))
+    number.setFont(font("section"))
 
     restyle(number, f"color:{tokens.WHITE};background:transparent;")
 

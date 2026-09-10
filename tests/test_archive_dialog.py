@@ -167,6 +167,19 @@ def _flat(body):
     return [" | ".join(row) for row in _rows(body)]
 
 
+def _browser(qt_app, service):
+    """
+    Der Browser selbst - seit 3.5.0 ein Widget, das sowohl in der
+    Archiv-Seite steckt als auch im Fenster darum. Geprueft wird
+    deshalb er und nicht der Rahmen; fuer die zwei Regeln, die wirklich
+    zum Fenster gehoeren, gibt es `_dialog()` daneben.
+    """
+
+    from gui.dialogs.archive_dialog import ArchiveBrowser
+
+    return ArchiveBrowser(service)
+
+
 def _dialog(qt_app, service):
 
     from gui.dialogs.archive_dialog import ArchiveDialog
@@ -181,9 +194,9 @@ def _dialog(qt_app, service):
 
 def test_reports_are_listed_under_their_evening(qt_app):
 
-    dialog = _dialog(qt_app, FakeService())
+    browser = _browser(qt_app, FakeService())
 
-    days = _flat(dialog.days_body)
+    days = _flat(browser.days_body)
 
     assert days[0].startswith("Mittwoch, ")
     assert "Mittwochsraid" in days[1]
@@ -192,9 +205,9 @@ def test_reports_are_listed_under_their_evening(qt_app):
 
 def test_pulls_are_grouped_under_their_boss(qt_app):
 
-    dialog = _dialog(qt_app, FakeService())
+    browser = _browser(qt_app, FakeService())
 
-    rows = _flat(dialog.fights_body)
+    rows = _flat(browser.fights_body)
 
     assert rows[0] == "Immerseus | 1 Versuch · Kill"
     assert rows[2].startswith("Garrosh | 2 Versuche · bester Versuch 4 %")
@@ -206,9 +219,9 @@ def test_a_pull_row_carries_the_time_of_day_not_a_second_date(qt_app):
     Lärm - wiederzuerkennen ist ein Pull an seiner Uhrzeit.
     """
 
-    dialog = _dialog(qt_app, FakeService())
+    browser = _browser(qt_app, FakeService())
 
-    row = _rows(dialog.fights_body)[1]
+    row = _rows(browser.fights_body)[1]
 
     assert "Pull 1" in row
     assert any(":" in cell and len(cell) == 5 for cell in row)
@@ -221,9 +234,9 @@ def test_the_best_wipe_is_marked_but_a_lonely_one_is_not(qt_app):
     Auszeichnung ohne Konkurrenz.
     """
 
-    dialog = _dialog(qt_app, FakeService())
+    browser = _browser(qt_app, FakeService())
 
-    rows = _flat(dialog.fights_body)
+    rows = _flat(browser.fights_body)
 
     assert "BESTER VERSUCH" in rows[4]
     assert "BESTER VERSUCH" not in rows[3]
@@ -234,7 +247,7 @@ def test_the_best_wipe_is_marked_but_a_lonely_one_is_not(qt_app):
         fights=build_fight_list({"fights": [FIGHTS[1]]}),
     )
 
-    lonely = _dialog(qt_app, single)
+    lonely = _browser(qt_app, single)
 
     assert not any("BESTER VERSUCH" in row for row in _flat(lonely.fights_body))
 
@@ -250,9 +263,9 @@ def test_a_kill_is_not_also_called_the_best_try(qt_app):
         fights=build_fight_list({"fights": [FIGHTS[1], dict(FIGHTS[2], kill=True, boss_percentage=0)]}),
     )
 
-    dialog = _dialog(qt_app, service)
+    browser = _browser(qt_app, service)
 
-    assert not any("BESTER VERSUCH" in row for row in _flat(dialog.fights_body))
+    assert not any("BESTER VERSUCH" in row for row in _flat(browser.fights_body))
 
 
 # --------------------------------------------------
@@ -262,24 +275,24 @@ def test_a_kill_is_not_also_called_the_best_try(qt_app):
 
 def test_the_search_narrows_both_columns(qt_app):
 
-    dialog = _dialog(qt_app, FakeService())
+    browser = _browser(qt_app, FakeService())
 
-    dialog.search.setText("garrosh")
+    browser.search.setText("garrosh")
 
-    assert all("Immerseus" not in row for row in _flat(dialog.fights_body))
+    assert all("Immerseus" not in row for row in _flat(browser.fights_body))
 
-    dialog.search.setText("zzz9")
+    browser.search.setText("zzz9")
 
-    assert all("Mittwochsraid" not in row for row in _flat(dialog.days_body))
+    assert all("Mittwochsraid" not in row for row in _flat(browser.days_body))
 
 
 def test_only_kills_removes_the_boss_rather_than_leaving_a_heading(qt_app):
 
-    dialog = _dialog(qt_app, FakeService())
+    browser = _browser(qt_app, FakeService())
 
-    dialog.kills_only.setChecked(True)
+    browser.kills_only.setChecked(True)
 
-    rows = _flat(dialog.fights_body)
+    rows = _flat(browser.fights_body)
 
     assert len(rows) == 2
     assert rows[0].startswith("Immerseus")
@@ -287,22 +300,22 @@ def test_only_kills_removes_the_boss_rather_than_leaving_a_heading(qt_app):
 
 def test_a_search_without_a_hit_says_so_instead_of_showing_nothing(qt_app):
 
-    dialog = _dialog(qt_app, FakeService())
+    browser = _browser(qt_app, FakeService())
 
-    dialog.search.setText("gibtesnicht")
+    browser.search.setText("gibtesnicht")
 
-    assert "passt" in " ".join(_flat(dialog.fights_body))
+    assert "passt" in " ".join(_flat(browser.fights_body))
 
 
 def test_the_pull_count_is_on_the_heading(qt_app):
 
-    dialog = _dialog(qt_app, FakeService())
+    browser = _browser(qt_app, FakeService())
 
-    assert dialog.fights_eyebrow.text() == "PULLS · 3"
+    assert browser.fights_eyebrow.text() == "PULLS · 3"
 
-    dialog.kills_only.setChecked(True)
+    browser.kills_only.setChecked(True)
 
-    assert dialog.fights_eyebrow.text() == "PULLS · 1"
+    assert browser.fights_eyebrow.text() == "PULLS · 1"
 
 
 # --------------------------------------------------
@@ -314,9 +327,9 @@ def test_clicking_a_report_asks_the_service_for_its_pulls(qt_app):
 
     service = FakeService()
 
-    dialog = _dialog(qt_app, service)
+    browser = _browser(qt_app, service)
 
-    dialog._day_rows["zZz9"].activate()
+    browser._day_rows["zZz9"].activate()
 
     assert ("report", "zZz9") in service.calls
 
@@ -325,9 +338,9 @@ def test_clicking_a_pull_loads_it(qt_app):
 
     service = FakeService()
 
-    dialog = _dialog(qt_app, service)
+    browser = _browser(qt_app, service)
 
-    dialog._fight_rows[3].activate()
+    browser._fight_rows[3].activate()
 
     assert ("fight", "aBcDeF12", 3) in service.calls
 
@@ -345,23 +358,23 @@ def test_the_window_stays_open_while_the_pull_is_still_loading(qt_app):
 
     service.select_archive_fight = lambda code, fight_id: None
 
-    dialog._awaiting = 3
+    dialog.browser._awaiting = 3
 
     service.state = replace(service.state, selected_fight=3, fight_loading=True)
 
-    dialog._refresh()
+    dialog.browser._refresh()
 
-    assert dialog.isVisible() or not dialog.result()
-    assert dialog._awaiting == 3
+    assert dialog.result() == 0
+    assert dialog.browser._awaiting == 3
 
 
 def test_an_error_does_not_close_the_window_over_its_own_message(qt_app):
 
     service = FakeService()
 
-    dialog = _dialog(qt_app, service)
+    browser = _browser(qt_app, service)
 
-    dialog._awaiting = 3
+    browser._awaiting = 3
 
     service.state = replace(
         service.state,
@@ -369,10 +382,10 @@ def test_an_error_does_not_close_the_window_over_its_own_message(qt_app):
         fight_error="Bot nicht erreichbar",
     )
 
-    dialog._refresh()
+    browser._refresh()
 
-    assert dialog._awaiting is None
-    assert "Bot nicht erreichbar" in dialog.status.text()
+    assert browser._awaiting is None
+    assert "Bot nicht erreichbar" in browser.status.text()
 
 
 def test_a_pull_selected_before_the_window_opened_does_not_close_it(qt_app):
@@ -386,7 +399,7 @@ def test_a_pull_selected_before_the_window_opened_does_not_close_it(qt_app):
 
     dialog = _dialog(qt_app, service)
 
-    assert dialog._awaiting is None
+    assert dialog.browser._awaiting is None
     assert dialog.result() == 0
 
 
@@ -404,9 +417,9 @@ def test_loading_reports_says_so_instead_of_looking_empty(qt_app):
         reports_loading=True,
     )
 
-    dialog = _dialog(qt_app, service)
+    browser = _browser(qt_app, service)
 
-    assert "geladen" in " ".join(_flat(dialog.days_body))
+    assert "geladen" in " ".join(_flat(browser.days_body))
 
 
 def test_without_a_report_the_pull_column_points_left(qt_app):
@@ -414,9 +427,9 @@ def test_without_a_report_the_pull_column_points_left(qt_app):
     service = FakeService()
     service.state = replace(service.state, selected_report="", fights=())
 
-    dialog = _dialog(qt_app, service)
+    browser = _browser(qt_app, service)
 
-    assert "Raidabend" in " ".join(_flat(dialog.fights_body))
+    assert "Raidabend" in " ".join(_flat(browser.fights_body))
 
 
 # --------------------------------------------------

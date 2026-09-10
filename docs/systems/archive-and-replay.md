@@ -41,6 +41,25 @@ logs" — the data was all there and it found nothing.
 evening's pulls grouped by boss on the right, a search field, a *Nur
 Kills* switch, time of day on every pull.
 
+**Since 3.5.0 the browser is a widget, not a window.** `ArchiveBrowser`
+holds all of the above; `ArchiveDialog` is only the modal frame around
+it (for WeintTV and the Academy, where you pick a pull without leaving
+the page) and closes on the browser's `fightLoaded` signal. The
+**Archiv page embeds the same widget** (`embedded=True`: no head of its
+own, no close button) — until then that page was a picker plus the
+sentence "the numbers appear in WeintTV", i.e. a nav entry that showed
+nothing while the thing you go there for sat behind a button in a
+window. Two consequences that are not taste: the page passes
+`browse=False` to `ArchivePicker` so the *Log wählen …* button doesn't
+lay a window over the list already on screen, and there is still exactly
+**one** list — a second implementation would group differently from the
+first after the first change.
+
+The Archiv page's header and its action row (*In WeintTV ansehen* / *In
+der Academy auswerten*) read `index.selection_text(state)`: what is
+**loaded**, not what was clicked. Until 3.5.0 it read a `state.fight`
+attribute that `ArchiveState` never had, so the title never changed.
+
 `core/archive_index.py` is the pure half (grouping, search, best try,
 labels) — no Qt, no `httpx`. Six rules that are not taste:
 
