@@ -37,11 +37,11 @@ from analyzer.academy.models import (
     SkillRating,
     TrainingPlan,
 )
+from analyzer.analysis import cooldowns as cd_math
 from analyzer.analysis.damage import has_usable_classification
 from analyzer.analysis.spec_reference import cooldown_hint, reference_hint
 from analyzer.names import match_name
 from analyzer.models import (
-    CD_PERSONAL,
     MECHANIC_DEFENSIVE,
     MECHANIC_INTERRUPT,
     MECHANIC_MOVEMENT,
@@ -66,18 +66,10 @@ PLAN_LENGTH = 6
 
 
 #
-# Ab welchem Vielfachen des Rollenschnitts ein Laufweg als auffällig
-# gilt. Leicht über dem Schnitt zu liegen ist Streuung, kein Fehler -
-# und wer viel ausweicht, läuft zwangsläufig mehr.
-#
-
-MOVEMENT_TOLERANCE = 1.25
-
-
-#
-# Dasselbe für den Anteil vermeidbaren Schadens. Enger gefasst als
-# beim Laufweg, weil hier jeder Prozentpunkt tatsächlich Heilung
-# kostet.
+# Ab welchem Vielfachen des Rollenschnitts der Anteil vermeidbaren
+# Schadens als auffällig gilt. Leicht über dem Schnitt zu liegen ist
+# Streuung, kein Fehler - eng gefasst ist die Grenze trotzdem, weil
+# hier jeder Prozentpunkt tatsächlich Heilung kostet.
 #
 
 SURVIVAL_TOLERANCE = 1.1
@@ -645,39 +637,41 @@ def _rate_output(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
 
 def _rate_cooldowns(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
     """
-    Genutzte gegen mögliche Einsätze - und ob sie zum richtigen
-    Zeitpunkt kamen.
+    Genutzte gegen mögliche Einsätze - und ob die grossen zum
+    richtigen Zeitpunkt kamen.
 
-    Die frühere Fassung konnte das nicht bewerten und sagte das auch
-    ehrlich: aus einem einzelnen Snapshot ging nicht hervor, ob ein
-    bereiter Cooldown ungenutzt oder gerade wieder verfügbar war. Mit
-    den Einsatzzeitpunkten ist die Frage beantwortbar geworden.
+    Gewertet werden nur Cooldowns, die **auf Abklingzeit gehören**.
+    Ein Schildwall, ein Gottesschild oder eine Aura der Hingabe warten
+    auf ihren Moment; sie in dieselbe Quote zu rechnen hiesse, Umsicht
+    als verschenkten Einsatz zu zählen - und da ein Tank mehr
+    Defensives hat als jeder andere, träfe es genau die Rolle am
+    härtesten, die am meisten davon richtig macht. Welche Kategorie
+    zählt, beantwortet `analyzer/analysis/cooldowns.py`.
 
-    Gewertet werden nur Cooldowns, die **auf Abklingzeit gehören**
-    (`CD_PERSONAL`). Ein Schildwall, ein Gottesschild oder eine Aura
-    der Hingabe warten auf ihren Moment; sie in dieselbe Quote zu
-    rechnen hieße, Umsicht als verschenkten Einsatz zu zählen - und
-    da ein Tank mehr Defensives hat als jeder andere, träfe es genau
-    die Rolle am härtesten, die am meisten davon richtig macht.
-    Liefert eine Quelle ausschließlich situative Cooldowns, bleibt es
-    beim alten Verhalten, statt die Bewertung ganz fallen zu lassen.
+    Zwei Fehler der früheren Fassung, beide hier behoben:
+
+    * Fehlte die Kategorie, fiel sie auf **alle** gemeldeten Zeilen
+      zurück (`or rows`) - also genau auf die Defensivcooldowns, die
+      der Absatz oben ausschliesst. Wer nur Defensives gemeldet
+      bekommt, hat keine Nutzungsquote; das ist dann "keine Daten"
+      und keine schlechte Note.
+    * Die Ausrichtung aufs Heldentum war ein Anteil an allen
+      Einsätzen und bestrafte damit jeden, der einen kurzen Cooldown
+      oft drückt. Gezählt werden jetzt **Gelegenheiten**: ein grosser
+      Cooldown, der im Fenster bereit war, gehört ins Fenster - ein
+      Ein-Minuten-Cooldown gehört auf Abklingzeit.
     """
 
     rows = [
         entry
         for entry in snapshot.cooldowns_of(actor.name)
         if entry.possible > 0
+        and cd_math.counts_towards_usage(entry.category)
     ]
-
-    usage = [
-        entry
-        for entry in rows
-        if entry.category == CD_PERSONAL
-    ] or rows
 
     missing = _missing_consumables(snapshot, actor.name)
 
-    if not usage:
+    if not rows:
 
         #
         # Ohne Cooldown-Daten bleibt nur die alte Näherung über
@@ -706,11 +700,9 @@ def _rate_cooldowns(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
             ),
         )
 
-    used = sum(entry.uses for entry in usage)
+    used = sum(entry.uses for entry in rows)
 
-    possible = sum(entry.possible for entry in usage)
-
-    wasted = sum(entry.wasted for entry in usage)
+    possible = sum(entry.possible for entry in rows)
 
     efficiency = used / possible if possible else 0.0
 
@@ -720,19 +712,20 @@ def _rate_cooldowns(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
 
     #
     # Ausrichtung auf Burstfenster nur bewerten, wenn es überhaupt
-    # welche gab - sonst würde ein Kampf ohne Heldentum jedem eine
-    # verpasste Ausrichtung anlasten.
+    # eine Gelegenheit gab: ohne Heldentum, ohne grossen Cooldown
+    # oder mit einem, der das ganze Fenster über unten war, ist
+    # nichts zu treffen gewesen.
     #
 
-    if snapshot.heroism_windows and used:
+    aligned, chances = cd_math.alignment_of(tuple(rows), snapshot.heroism_windows)
 
-        in_burst = sum(entry.in_burst for entry in usage)
+    if chances:
 
-        share = in_burst / used
+        parts.append((_stars_from_share(aligned / chances), 1))
 
-        parts.append((_stars_from_share(share), 1))
-
-        details.append(f"{in_burst} davon im Heldentum")
+        details.append(
+            f"{aligned} von {chances} grossen Cooldowns im Heldentum"
+        )
 
     if missing:
 
@@ -749,21 +742,83 @@ def _rate_cooldowns(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
 
         stars = max(1, stars - len(missing) // 2)
 
-    if wasted:
+    #
+    # Wo die grösste Lücke lag - die einzige Auskunft, die man sich
+    # für den nächsten Pull vornehmen kann. "3 von 5" sagt nur, dass
+    # etwas fehlte.
+    #
 
-        details.append(f"{wasted} Einsätze verschenkt")
+    gap = _widest_cooldown_gap(snapshot, rows)
+
+    if gap is not None:
+
+        ability, moment, seconds = gap
+
+        details.append(
+            f"längste ungenutzte Bereitschaft: {ability}, "
+            f"{seconds / 60:.0f} min ab {_clock(moment)}"
+        )
 
     return SkillRating(
         category=CATEGORY_COOLDOWNS,
         stars=stars,
         detail=" · ".join(details),
         metric_text=f"{efficiency * 100:.0f} % genutzt",
-        at_seconds=(
-            snapshot.heroism_windows[0].start
-            if snapshot.heroism_windows and stars <= 3
-            else -1.0
-        ),
+        #
+        # Der Sprung in die Wiedergabe zeigt jetzt die Lücke selbst
+        # und nicht mehr pauschal den Heldentum-Anfang: an einem
+        # Fenster, das man getroffen hat, ist nichts zu sehen.
+        #
+        at_seconds=gap[1] if gap is not None else -1.0,
     )
+
+
+def _widest_cooldown_gap(
+    snapshot: RaidSnapshot,
+    rows: list,
+) -> tuple[str, float, float] | None:
+    """
+    Die längste Strecke, auf der einer dieser Cooldowns bereit war
+    und nicht kam - als (Fähigkeit, Anfang, Sekunden).
+
+    None heisst: es gab keine nennenswerte Lücke (oder keine
+    Abklingzeit, aus der sich eine berechnen liesse).
+    """
+
+    duration = snapshot.pull_seconds
+
+    if duration <= 0:
+        return None
+
+    found: tuple[str, float, float] | None = None
+
+    for entry in rows:
+
+        for gap in cd_math.ready_gaps(
+            entry.cast_times,
+            entry.cooldown,
+            duration,
+        ):
+
+            if found is None or gap.seconds > found[2]:
+                found = (entry.ability, gap.start, gap.seconds)
+
+    #
+    # Unter einer vollen Abklingzeit ist eine Lücke keine verpasste
+    # Nutzung, sondern der übliche Abstand zwischen zwei Einsätzen.
+    #
+
+    if found is not None and found[2] < cd_math.MIN_GAP_SECONDS * 2:
+        return None
+
+    return found
+
+
+def _clock(seconds: float) -> str:
+
+    seconds = max(0.0, seconds)
+
+    return f"{int(seconds) // 60:02d}:{int(seconds) % 60:02d}"
 
 
 #
@@ -775,14 +830,23 @@ def _rate_cooldowns(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
 
 def _rate_movement(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
     """
-    Vermeidbare Treffer zuerst, Laufweg nur als Nebenbedingung.
+    Vermeidbare Treffer durch Bewegung und Position - und sonst
+    nichts mehr.
 
-    Der Laufweg allein taugt nicht als Bewertung: Nahkämpfer, Kiter
-    und Soaker müssen mehr laufen als ein Zauberer, und wer eine
-    Mechanik ignoriert und stehen bleibt, hätte den kürzesten Weg.
-    Was den Raid tatsächlich Leben kostet, sind die Treffer - deshalb
-    wiegen sie dreifach, und der Laufweg zählt nur, wenn er
-    **deutlich** über dem Rollenschnitt liegt.
+    Bis 3.6.0 wog hier ein zweiter Teil mit: der Laufweg in Metern,
+    gegen den Rollenschnitt gehalten. Der ist ersatzlos weg, und zwar
+    aus einem Grund, der auch für jede künftige Kennzahl gilt:
+    **WarcraftLogs kennt keine Distanzmetrik.** Die Meterzahl entstand
+    daraus, dass der Bot die Abstände zwischen den Positionsangaben
+    aufeinanderfolgender Ereignisse als Gerade aufsummiert - sie
+    unterschätzt echtes Ausweichen systematisch, und wer zwischendurch
+    keine Ereignisse erzeugt, fehlt in der Summe ganz. Eine Bewertung
+    darf sich nicht auf eine Zahl stützen, die sie nicht belegen kann;
+    das ist dieselbe Regel wie `stars == 0`, nur eine Ebene früher.
+
+    Was bleibt, ist die Auskunft, die der Log wirklich hergibt: ein
+    Treffer, den man hätte vermeiden können, ist ein Ereignis mit
+    Zeitpunkt. Der Bereich heisst deshalb, was er misst.
     """
 
     mistakes = _mechanics_of(
@@ -791,73 +855,37 @@ def _rate_movement(snapshot: RaidSnapshot, actor: Actor) -> SkillRating:
         (MECHANIC_MOVEMENT, MECHANIC_POSITIONING),
     )
 
-    entry = snapshot.movement_of(actor.name)
-
-    if entry is None and not snapshot.has_data:
+    if not snapshot.has_data:
 
         return _no_data(
             CATEGORY_MOVEMENT,
             "Noch keine Kampfdaten.",
         )
 
-    parts = [(_stars_from_mistakes(mistakes), 3)]
+    #
+    # Meldet die Quelle überhaupt keine Mechanikfehler, ist "null
+    # vermeidbare Treffer" keine Leistung, sondern eine Datenlücke -
+    # dieselbe Unterscheidung wie überall sonst.
+    #
 
-    details = [
-        f"{mistakes} vermeidbare Treffer durch Bewegung oder Position"
-        if mistakes
-        else "Keine vermeidbaren Treffer durch Positionierung."
-    ]
+    if not snapshot.mechanics:
 
-    if entry is not None:
-
-        meters = {row.actor_name: row.meters for row in snapshot.movement}
-
-        #
-        # Nur vergleichen, wenn es jemanden zum Vergleichen gibt: ist
-        # man der einzige Spieler seiner Rolle mit Laufweg, wäre der
-        # "Rollenschnitt" der eigene Wert und das Verhältnis immer
-        # genau 1,0. Dieselbe Falle wie bei "Überleben" und
-        # "Leistung".
-        #
-
-        average = (
-            _role_average(snapshot, actor, meters)
-            if any(
-                name in meters
-                for name in _role_peers(snapshot, actor)
-                if name != actor.name
-            )
-            else None
+        return _no_data(
+            CATEGORY_MOVEMENT,
+            "Die Datenquelle meldet für diesen Kampf keine "
+            "vermeidbaren Treffer - weder für dich noch für "
+            "jemand anderen.",
         )
-
-        if average and average > 0:
-
-            parts.append((
-                _stars_from_excess(
-                    entry.meters / average,
-                    MOVEMENT_TOLERANCE,
-                ),
-                1,
-            ))
-
-            details.append(
-                f"{entry.meters:.0f} m gelaufen (Rollenschnitt "
-                f"{average:.0f} m, Schätzung)"
-            )
-
-        else:
-
-            details.append(f"{entry.meters:.0f} m gelaufen (Schätzung)")
 
     return SkillRating(
         category=CATEGORY_MOVEMENT,
-        stars=_combine(tuple(parts)),
-        detail=" · ".join(details),
-        metric_text=(
-            f"{entry.meters:.0f} m"
-            if entry is not None
-            else ""
+        stars=_stars_from_mistakes(mistakes),
+        detail=(
+            f"{mistakes} vermeidbare Treffer durch Bewegung oder Position"
+            if mistakes
+            else "Keine vermeidbaren Treffer durch Positionierung."
         ),
+        metric_text=f"{mistakes}×" if mistakes else "0",
         at_seconds=_first_mechanic_moment(
             snapshot,
             actor,

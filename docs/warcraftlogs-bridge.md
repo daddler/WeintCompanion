@@ -531,7 +531,18 @@ Zwei Dinge, die im Vertrag festgehalten sein sollen, weil sie die
 Aussagekraft begrenzen: zwischen zwei Ereignissen wird der Weg als
 Gerade angenommen, echtes Ausweichen wird also **unterschätzt**; und
 ohne Ereignisse gibt es keine Position, wer währenddessen läuft taucht
-nicht auf. Die App beschriftet den Wert deshalb überall als Schätzung.
+nicht auf.
+
+**Seit Companion 3.6.0 wird das Feld nicht mehr ausgewertet.** Genau
+die beiden Einschränkungen oben waren der Grund: eine Zahl, die echtes
+Ausweichen systematisch unterschätzt und ganze Spieler auslässt, sieht
+in einer Auswertung trotzdem wie eine Messung aus. Die App zeigt sie
+nirgends mehr an, bewertet nicht mehr danach und reicht sie auch nicht
+mehr ins Addon weiter (`docs/systems/weinttv-academy.md`, *Why the
+metres are gone*). Der Bot darf das Feld weiter schicken — der Vertrag
+bleibt unverändert, `analyzer/analysis/movement.py` liest es weiter,
+und falls WarcraftLogs je eine echte Distanzmetrik bekommt, ist der Weg
+zurück ein kurzer.
 
 Quelle: `events(dataType: Casts)` bzw. `DamageTaken`, Felder `x`/`y`.
 
@@ -633,7 +644,26 @@ nicht gebraucht wurde.
 
 **Möglich-Zahl und Burst-Ausrichtung rechnet die App selbst** aus
 Kampfdauer, Abklingzeit und den Heldentum-Fenstern. Der Bot liefert
-nur die Tatsachen.
+nur die Tatsachen. Seit 3.6.0 steht diese Rechnung an genau **einer**
+Stelle (`analyzer/analysis/cooldowns.py`); vorher gab es sie dreimal
+und mit drei verschiedenen Ergebnissen. Zwei Festlegungen daraus, die
+den Vertrag betreffen:
+
+- Ein möglicher Einsatz zählt nur, wenn er noch mindestens zehn
+  Sekunden vor Kampfende gelegen hätte. Ohne diese Karenz erzeugte
+  jede Kampfdauer knapp über einem Vielfachen der Abklingzeit genau
+  einen erfundenen verschenkten Einsatz.
+- Die Ausrichtung aufs Heldentum wird nur für Cooldowns ab zwei
+  Minuten geprüft, und gezählt werden **Gelegenheiten**, nicht
+  Einsätze. Ein kurzer Cooldown gehört auf Abklingzeit; ihn am Anteil
+  seiner Einsätze im Fenster zu messen bestrafte genau die richtige
+  Spielweise.
+
+`category` ist damit deutlich wichtiger geworden, als sie war: sie
+entscheidet, ob eine Zeile überhaupt eine Quote bekommt. Fehlt sie,
+schlägt die App Spell-ID, englischen **und** deutschen Namen in der
+Spec-Tabelle nach — die kurze englische Namensliste, die das früher
+tat, kannte keinen einzigen Defensivcooldown.
 
 Nicht zu verwechseln mit `raid_cooldowns`/`heal_cooldowns`: die
 beschreiben den Live-Countdown, diese Liste die Rückschau über den
@@ -851,8 +881,7 @@ Deshalb kommt die vollständige Aufschlüsselung aus `aggregate`.
 
 Quellen: rohe `events(dataType: DamageDone|Healing|DamageTaken|Casts)`
 für Reihen *und* Ereignislisten. Bewusst nicht `graph()`: dieselben
-Ereignisse liefern zugleich den Verlauf, die Positionsangaben für die
-Laufwege und die Einzeltreffer — ein zweiter Abruf mit einem zweiten
+Ereignisse liefern zugleich den Verlauf und die Einzeltreffer — ein zweiter Abruf mit einem zweiten
 Antwortformat wäre eine zusätzliche Fehlerquelle ohne zusätzlichen
 Nutzen. Es ist der teuerste Abruf der ganzen Brücke und passiert genau
 einmal je Druck auf „Wiedergabe", nicht im Poll-Takt.
@@ -1098,12 +1127,16 @@ nur eben für einen bestimmten statt den letzten Kampf.
 | `analyzer/replay/reconstruct.py` | `snapshot_at()`: aus der Zeitleiste der Stand einer Sekunde |
 | `analyzer/data/avoidable.py` | Einordnung „vermeidbar / unvermeidbar / unbekannt" je Boss |
 | `analyzer/analysis/damage.py` | Aufteilung des erhaltenen Schadens, Ableitung und Zusammenführung der Mechanikfehler |
-| `analyzer/analysis/movement.py` | Karteneinheiten → Meter, eine einzige Konstante |
+| `analyzer/analysis/cooldowns.py` | Mögliche Einsätze, Einordnung, Burst-Gelegenheiten, ungenutzte Bereitschaft — eine Rechnung je Frage |
+| `analyzer/analysis/movement.py` | Karteneinheiten → Meter; seit 3.6.0 von nichts mehr gelesen |
 | `analyzer/academy/checks.py` | Auflösung der Metriknamen für den automatischen Trainingsplan |
 | `core/raid_data_service.py` | Registrierung der Quelle, Live/Archiv/Wiedergabe-Zustandsmaschine |
 | `gui/widgets/tv/archive_picker.py` | Live/Archiv-Umschalter und Wiedergabe-Start (WeintTV + Academy) |
 | `gui/widgets/tv/replay_bar.py` | Steuerung der Wiedergabe |
 | `gui/widgets/tv/analysis_gap.py` | Begründung, wenn die Quelle keine Tiefenauswertung liefert (WeintTV + Academy) |
+| `gui/widgets/tv/cooldown_timeline.py` | Der Cooldown-Zeitstrahl: Einsätze, Deckung, ungenutzte Bereitschaft, Heldentum-Fenster |
+| `core/loading_progress.py` | Schätzung und Fortschrittstext beim Holen eines Pulls |
+| `gui/widgets/tv/loading_card.py` | Die Wartekarte auf WeintTV, Academy und Archiv |
 | `gui/pages/settings_sections/modules.py` | Auswahl der Live-Quelle und Statusanzeige |
 | `tests/test_warcraftlogs_payload.py` | Mapping und Robustheit, auch der v2-Blöcke |
 | `tests/test_warcraftlogs_provider.py` | Lebenszyklus und Fehlerfälle (Live) |

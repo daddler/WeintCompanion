@@ -180,16 +180,21 @@ def build_weinttv_report(
             for entry in snapshot.activity
         ],
 
-        "movement": [
-            {
-                "actor": entry.actor_name,
-                "meters": entry.meters,
-                "mps": entry.meters_per_second,
-                "avoidableHits": entry.avoidable_hits,
-                "estimated": entry.estimated,
-            }
-            for entry in snapshot.movement
-        ],
+        #
+        # Seit 3.6.0 **keine** Laufwege mehr.
+        #
+        # WarcraftLogs kennt keine Distanzmetrik; die Meterzahl entstand
+        # daraus, dass der Bot die Abstände zwischen Positionsangaben
+        # aufeinanderfolgender Ereignisse als Gerade aufsummiert. Sie
+        # unterschätzt echtes Ausweichen systematisch, und wer
+        # zwischendurch keine Ereignisse erzeugt, fehlt in der Summe
+        # ganz. Die Companion hat die Zahl aus ihrer eigenen Anzeige und
+        # Bewertung entfernt - sie ins Spiel weiterzureichen hiesse,
+        # dort weiter als Messung auszugeben, was der Desktop gerade als
+        # nicht belegbar eingestuft hat. Was von Bewegung bleibt, steckt
+        # in `mechanics` (Kategorie `movement`/`positioning`): ein
+        # vermeidbarer Treffer ist ein Ereignis, keine Schätzung.
+        #
 
         "cooldowns": [
             {

@@ -935,8 +935,10 @@ class ArchiveBrowser(QWidget):
             #
 
             text = (
-                "Pull wird geladen … Der Bot liest dafür den ganzen "
-                "Kampf; bei langen Pulls dauert das eine Weile."
+                index.loading_text(state)
+                + " Das Fenster schliesst sich von selbst, sobald er "
+                "da ist - auf der Seite darunter läuft ein "
+                "Fortschritt mit."
             )
 
         elif state.fights_loading:

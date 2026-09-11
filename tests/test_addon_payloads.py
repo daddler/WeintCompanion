@@ -41,7 +41,6 @@ from analyzer.models import (
     DamageTakenEntry,
     EncounterInfo,
     MechanicIssue,
-    MovementEntry,
     RaidSnapshot,
     SupportEvent,
     UptimeEntry,
@@ -121,14 +120,6 @@ def _snapshot() -> RaidSnapshot:
                 longest_gap=4.2,
             ),
         ),
-        movement=(
-            MovementEntry(
-                actor_name="Testchar",
-                meters=312.5,
-                meters_per_second=1.7,
-                avoidable_hits=3,
-            ),
-        ),
         cooldown_usage=(
             CooldownUsage(
                 actor_name="Testchar",
@@ -195,6 +186,25 @@ def test_report_carries_the_fight_context():
     # Der Zeitstempel muss eine ganze Zahl sein: das Addon gibt ihn
     # unverändert an date() weiter.
     assert isinstance(report["capturedAt"], int)
+
+
+def test_report_no_longer_carries_estimated_metres():
+    """
+    Seit 3.6.0 reist der Laufweg nicht mehr ins Spiel: WarcraftLogs
+    kennt keine Distanzmetrik, und eine Zahl, die der Desktop gerade
+    als nicht belegbar aus seiner eigenen Anzeige genommen hat, darf
+    ingame nicht als Messung weiterleben. Was von Bewegung bleibt,
+    steckt in `mechanics`.
+    """
+
+    report = build_weinttv_report(_snapshot(), "Testchar")
+
+    assert "movement" not in report
+
+    assert any(
+        row["category"] == "movement"
+        for row in report["mechanics"]
+    )
 
 
 def test_report_keeps_the_ability_verdict_and_advice():

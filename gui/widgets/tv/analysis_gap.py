@@ -80,8 +80,7 @@ def analysis_gap_text(snapshot: RaidSnapshot) -> str:
             "Es wird gerade kein Raid ausgewertet. Sobald ein Pull "
             "läuft - oder oben im Archiv ein Bericht und ein Pull "
             "gewählt sind - erscheinen hier erhaltener Schaden, "
-            "Wirkungsdauern, Laufwege, Aktivzeit und "
-            "Cooldown-Nutzung."
+            "Wirkungsdauern, Aktivzeit und Cooldown-Nutzung."
         )
 
     if gap == NO_PULL:
@@ -95,7 +94,7 @@ def analysis_gap_text(snapshot: RaidSnapshot) -> str:
     return (
         _sums_only_cause(snapshot)
         + " Erhaltener Schaden je Fähigkeit, Wirkungsdauern, "
-        "Laufwege, Aktivzeit und Cooldown-Nutzung kommen mit der "
+        "Aktivzeit und Cooldown-Nutzung kommen mit der "
         "erweiterten Auswertung des WeintCodex-Bots dazu - bis dahin "
         "bleiben die Live-Werte unverändert nutzbar."
     )
@@ -121,8 +120,6 @@ def analysis_gap_text(snapshot: RaidSnapshot) -> str:
 # andere Tiefenfelder desselben Kampfes angekommen sind.
 #
 
-BLOCK_MOVEMENT = "movement"
-
 BLOCK_COOLDOWN_USAGE = "cooldown_usage"
 
 BLOCK_RAID_COOLDOWNS = "raid_cooldowns"
@@ -137,7 +134,6 @@ BLOCK_HEAL_COOLDOWNS = "heal_cooldowns"
 #
 
 BLOCK_FIELDS: dict[str, tuple[str, str]] = {
-    BLOCK_MOVEMENT: ("movement", "Laufwege"),
     BLOCK_COOLDOWN_USAGE: ("cooldown_usage", "Cooldown-Nutzung"),
     BLOCK_RAID_COOLDOWNS: ("raid_cooldowns", "Raid-Cooldowns"),
     BLOCK_HEAL_COOLDOWNS: ("heal_cooldowns", "Heil-Cooldowns"),
@@ -239,13 +235,26 @@ ACTION_NONE = ""
 ACTION_ARCHIVE = "archive"
 
 
-def academy_empty_text(snapshot: RaidSnapshot) -> str:
+def academy_empty_text(
+    snapshot: RaidSnapshot,
+    loading: bool = False,
+) -> str:
     """
     Warum die Academy gerade nichts zu zeigen hat.
 
     Leerer Text heißt: es gibt einen ausgewerteten Kampf, die Seite
     zeigt echte Zahlen, und dieser Hinweis gehört weg.
+
+    `loading` heißt: ein Pull wird gerade geholt. Dann ist "für
+    diesen Charakter liegt kein ausgewerteter Kampf vor" zwar
+    wörtlich wahr, aber als Auskunft falsch - er ist unterwegs. Die
+    Wartekarte darüber sagt es besser, und zwei Karten übereinander,
+    von denen die eine zum Warten und die andere zum Auswählen
+    auffordert, sind genau die Verwechslung, die gemeldet wurde.
     """
+
+    if loading:
+        return ""
 
     if snapshot.has_data:
         return ""

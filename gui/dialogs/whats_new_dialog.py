@@ -240,7 +240,7 @@ TOUR_PAGES: tuple[TourPage, ...] = (
         "Die Tiefenanalyse eines Pulls: Bosslebenspunkte, Schaden und "
         "Heilung im Vergleich, Tode und Kampfwiederbelebungen, "
         "vermeidbarer Schaden mit der Gegenmaßnahme dazu, Wirkungsdauern "
-        "deiner Effekte, Laufwege in Metern, Cooldown-Nutzung, "
+        "deiner Effekte, Aktivzeit, Cooldown-Nutzung samt Zeitstrahl, "
         "Verbrauchsgüter und Mechanikfehler.\n\n"
         "Alles davon liest **einen** Datenstand — ein vollständiges Bild "
         "eines Augenblicks. Kein Fenster rechnet selbst etwas aus. Genau "

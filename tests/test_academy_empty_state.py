@@ -307,3 +307,17 @@ def test_no_lessons_is_said_in_words_not_as_zero_of_zero(page, pull):
     _tiles(page, pull, pull.top_damage[3].name)
 
     assert "von" in page.progress_label.text()
+
+
+def test_while_a_pull_is_being_fetched_the_empty_card_holds_still(nothing):
+    """
+    "Für diesen Charakter liegt kein ausgewerteter Kampf vor" ist
+    während eines laufenden Abrufs zwar wörtlich wahr, aber als
+    Auskunft falsch - einer ist unterwegs. Zwei Karten übereinander,
+    von denen die eine zum Warten und die andere zum Auswählen
+    auffordert, sind genau die Verwechslung, die gemeldet wurde.
+    """
+
+    assert academy_empty_text(nothing, loading=True) == ""
+
+    assert academy_empty_text(nothing, loading=False)

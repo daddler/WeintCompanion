@@ -456,6 +456,31 @@ def selection_text(state) -> str:
     return " · ".join(parts)
 
 
+def loading_text(state) -> str:
+    """
+    Der Kurzstand während eines laufenden Abrufs - eine Zeile, mit
+    einer Zahl, die sich bewegt.
+
+    Die ausführliche Auskunft (Balken, Schätzung, was danach
+    passiert) steht in der Wartekarte; diese Zeile ist der Platz
+    daneben, an dem bis 3.6.0 "bei großen Pulls dauert das etwas"
+    stand - ein Satz ohne Gegenstand und ohne Zahl.
+
+    Formuliert wird sie hier und nicht in den beiden Widgets, aus
+    demselben Grund wie `selection_text()`: zwei Formulierungen
+    desselben Zustands laufen auseinander.
+    """
+
+    fight = _selected_fight(state)
+
+    name = getattr(fight, "encounter_name", "") if fight is not None else ""
+
+    return (
+        f"{name or 'Der Pull'} wird gelesen … "
+        "das dauert, weil der Bot den ganzen Kampf liest."
+    )
+
+
 def _selected_report(state):
 
     code = getattr(state, "selected_report", "")

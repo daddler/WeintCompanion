@@ -14,15 +14,14 @@ lässt es sich hier ohne laufende Oberfläche prüfen.
 
 from analyzer.models import (
     ActivityEntry,
+    CooldownUsage,
     EncounterInfo,
-    MovementEntry,
     RaidSnapshot,
 )
 
 from gui.widgets.tv.analysis_gap import (
     BLOCK_COOLDOWN_USAGE,
     BLOCK_HEAL_COOLDOWNS,
-    BLOCK_MOVEMENT,
     BLOCK_RAID_COOLDOWNS,
     NO_PULL,
     NO_RAID,
@@ -154,7 +153,7 @@ def test_a_snapshot_with_deep_values_needs_no_explanation():
 def _partial() -> RaidSnapshot:
     """
     Ein laufender Pull, für den die Quelle Aktivzeit liefert - aber
-    weder Laufwege noch Cooldowns.
+    keine Cooldowns.
     """
 
     return RaidSnapshot(
@@ -179,7 +178,6 @@ def test_a_block_the_source_did_not_send_says_so():
     assert snapshot.has_analysis
 
     for block in (
-        BLOCK_MOVEMENT,
         BLOCK_COOLDOWN_USAGE,
         BLOCK_RAID_COOLDOWNS,
         BLOCK_HEAL_COOLDOWNS,
@@ -190,7 +188,6 @@ def test_a_block_the_source_did_not_send_says_so():
         assert "WarcraftLogs (Bot)" in text
         assert "nicht übertragen" in text
 
-    assert "Laufwege" in block_gap_text(snapshot, BLOCK_MOVEMENT)
     assert "Heil-Cooldowns" in block_gap_text(snapshot, BLOCK_HEAL_COOLDOWNS)
 
 
@@ -201,12 +198,18 @@ def test_a_block_with_rows_needs_no_explanation():
         encounter=_encounter(),
         in_combat=True,
         pull_seconds=60.0,
-        movement=(
-            MovementEntry(actor_name="Njiah", meters=400.0),
+        cooldown_usage=(
+            CooldownUsage(
+                actor_name="Njiah",
+                ability="Berserkerwut",
+                cast_times=(12.0,),
+                cooldown=180.0,
+                possible=1,
+            ),
         ),
     )
 
-    assert block_gap_text(snapshot, BLOCK_MOVEMENT) == ""
+    assert block_gap_text(snapshot, BLOCK_COOLDOWN_USAGE) == ""
 
 
 def test_without_any_deep_analysis_the_area_text_explains_it_alone():
@@ -225,7 +228,6 @@ def test_without_any_deep_analysis_the_area_text_explains_it_alone():
     assert not snapshot.has_analysis
 
     for block in (
-        BLOCK_MOVEMENT,
         BLOCK_COOLDOWN_USAGE,
         BLOCK_RAID_COOLDOWNS,
         BLOCK_HEAL_COOLDOWNS,

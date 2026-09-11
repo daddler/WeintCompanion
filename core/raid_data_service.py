@@ -26,12 +26,14 @@ zugestellt - der Service wird deshalb im Hauptthread erzeugt
 from __future__ import annotations
 
 import threading
+import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from analyzer.combatlog.locator import CombatLogLocation, find_combat_log
+from core import loading_progress
 from analyzer.models import PullSummary, RaidSnapshot
 from analyzer.providers.base import RaidDataProvider
 from analyzer.providers.mock import MockRaidDataProvider
@@ -256,6 +258,38 @@ class ArchiveState:
 
     fight_error: str = ""
 
+    #
+    # Seit 3.6.0: woran die Oberfläche einen Fortschritt zeigen kann.
+    #
+    # `fight_started_at` ist eine Monotonzeit (`time.monotonic()`), 0.0
+    # heisst "läuft gerade keiner" - keine Uhrzeit, weil eine
+    # Systemuhr während des Wartens gestellt werden kann und der
+    # Balken dann rückwärts liefe. `fight_expected` ist die Schätzung
+    # aus core/loading_progress.py; 0.0 heisst dort ausdrücklich
+    # "nicht abschätzbar" und nie "sofort fertig". `fight_label`
+    # benennt, worauf gewartet wird - ohne ihn steht auf der Seite ein
+    # Balken ohne Gegenstand.
+    #
+
+    fight_started_at: float = 0.0
+
+    fight_expected: float = 0.0
+
+    fight_label: str = ""
+
+    # --------------------------------------------------
+
+    def elapsed(self, now: float) -> float:
+        """
+        Wie lange der laufende Abruf schon dauert. 0.0, wenn keiner
+        läuft.
+        """
+
+        if not self.fight_loading or self.fight_started_at <= 0:
+            return 0.0
+
+        return max(0.0, now - self.fight_started_at)
+
     # --------------------------------------------------
 
     @property
@@ -466,6 +500,17 @@ class RaidDataService(QObject):
         self._archive = ArchiveState()
 
         self._archive_client = None
+
+        #
+        # Die zuletzt gemessenen Abrufdauern dieser Sitzung. Sie
+        # machen aus "bei großen Pulls dauert das etwas" eine Zahl,
+        # die zum eigenen Bot passt (siehe core/loading_progress.py).
+        # Bewusst nur im Speicher: was der Bot gestern gebraucht hat,
+        # sagt über heute wenig, und eine weitere Datei auf der
+        # Platte wäre für eine Schätzung zu viel Aufwand.
+        #
+
+        self._fetch_durations: tuple[float, ...] = ()
 
         #
         # Der zuletzt aus dem Archiv geladene Snapshot. Er wird
@@ -1195,6 +1240,20 @@ class RaidDataService(QObject):
 
         with self._lock:
 
+            #
+            # Woran der Nutzer den Fortschritt ablesen kann. Die
+            # Schätzung hängt an der Länge genau dieses Pulls und an
+            # den bisher gemessenen Abrufen dieser Sitzung - siehe
+            # core/loading_progress.py.
+            #
+
+            fight = self._archive_fight(report_code, fight_id)
+
+            expected = loading_progress.estimate(
+                fight.duration if fight is not None else 0.0,
+                self._fetch_durations,
+            )
+
             self._archive = replace(
                 self._archive,
                 mode=MODE_ARCHIVE,
@@ -1202,6 +1261,13 @@ class RaidDataService(QObject):
                 selected_fight=fight_id,
                 fight_loading=True,
                 fight_error="",
+                fight_started_at=time.monotonic(),
+                fight_expected=expected,
+                fight_label=(
+                    fight.encounter_name
+                    if fight is not None and fight.encounter_name
+                    else "Der Pull"
+                ),
             )
 
             label = self._archive_report_label(report_code)
@@ -1220,6 +1286,29 @@ class RaidDataService(QObject):
         # NACHDEM der Pull da ist - siehe das Ende von
         # _fetch_fight_worker().
         #
+
+    def _archive_fight(
+        self,
+        report_code: str,
+        fight_id: int,
+    ) -> FightSummary | None:
+        """
+        Der Eintrag der Pull-Liste zu dieser Auswahl, oder None.
+
+        Nur unter gehaltenem Lock aufrufen. None heisst "die Liste
+        kennt ihn nicht" - dann gibt es keine Kampflänge und damit
+        keine Schätzung, und die Oberfläche sagt genau das.
+        """
+
+        if self._archive.selected_report not in ("", report_code):
+            return None
+
+        for fight in self._archive.fights:
+
+            if fight.fight_id == fight_id:
+                return fight
+
+        return None
 
     def _archive_report_label(self, report_code: str) -> str:
         """
@@ -1276,6 +1365,7 @@ class RaidDataService(QObject):
                     self._archive,
                     fight_loading=False,
                     fight_error=result.reason,
+                    fight_started_at=0.0,
                 )
 
             self.archiveChanged.emit()
@@ -1292,10 +1382,24 @@ class RaidDataService(QObject):
 
         with self._lock:
 
+            #
+            # Die gemessene Dauer geht in die Schätzung des nächsten
+            # Abrufs ein: der eigene Bot auf der eigenen Leitung weiss
+            # es besser als jede Konstante.
+            #
+
+            if self._archive.fight_started_at > 0:
+
+                self._fetch_durations = loading_progress.blend(
+                    self._fetch_durations,
+                    time.monotonic() - self._archive.fight_started_at,
+                )
+
             self._archive = replace(
                 self._archive,
                 fight_loading=False,
                 fight_error="",
+                fight_started_at=0.0,
             )
 
             #

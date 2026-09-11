@@ -208,32 +208,6 @@ def _cooldown_wasted(snapshot, actor, check):
     return float(sum(usage.wasted for usage in rows))
 
 
-def _movement_meters(snapshot, actor, check):
-
-    entry = snapshot.movement_of(actor.name)
-
-    return entry.meters if entry else None
-
-
-def _movement_ratio(snapshot, actor, check):
-    """
-    Laufweg im Verhältnis zum Raidschnitt, in Prozent.
-
-    100 heißt "genau Durchschnitt". Absolute Meter zu bewerten wäre
-    unsinnig: ein Nahkämpfer läuft zwangsläufig weiter als ein
-    Zauberer.
-    """
-
-    entry = snapshot.movement_of(actor.name)
-
-    average = snapshot.movement_average
-
-    if entry is None or average <= 0:
-        return None
-
-    return entry.meters / average * 100.0
-
-
 def _damage_taken(snapshot, actor, check):
 
     entry = snapshot.damage_taken_of(actor.name)
@@ -373,9 +347,6 @@ METRIC_RESOLVERS = {
     "cooldown_usage": _cooldown_usage,
     "cooldown_alignment": _cooldown_alignment,
     "cooldown_wasted": _cooldown_wasted,
-
-    "movement_meters": _movement_meters,
-    "movement_ratio": _movement_ratio,
 
     "damage_taken": _damage_taken,
     "avoidable_damage": _avoidable_damage,

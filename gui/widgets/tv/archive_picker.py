@@ -253,7 +253,15 @@ class ArchivePicker(QWidget):
             return
 
         if state.fight_loading:
-            text = "Pull wird geladen … (bei großen Pulls dauert das etwas)"
+
+            #
+            # Nur der Kurzstand. Wie lange es noch dauert und was
+            # danach passiert, steht in der Wartekarte darunter
+            # (gui/widgets/tv/loading_card.py) - hier stünde es ein
+            # zweites Mal und in elf Punkt.
+            #
+
+            text = index.loading_text(state)
 
         elif state.mode == MODE_LIVE:
 

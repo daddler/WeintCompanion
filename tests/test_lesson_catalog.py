@@ -234,7 +234,7 @@ def test_every_specialisation_has_lessons_of_its_own():
 def test_every_specialisation_covers_rotation_and_cooldowns():
     """
     Die beiden Bereiche, in denen sich Spezialisierungen tatsächlich
-    unterscheiden - Laufwege und der Platz im Ranking tun das nicht
+    unterscheiden - Bewegung und der Platz im Ranking tun das nicht
     und dürfen deshalb auf die Rollenebene fallen.
     """
 

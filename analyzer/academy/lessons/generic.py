@@ -172,30 +172,6 @@ GENERIC_LESSONS: tuple[Lesson, ...] = (
         ),
     ),
 
-    Lesson(
-        lesson_id="generic.movement.economy",
-        title="Nur so weit laufen wie nötig",
-        category=CATEGORY_MOVEMENT,
-        summary=(
-            "Jeder Meter über das Notwendige hinaus ist Zeit ohne "
-            "Schaden. Kurze, gezielte Wege schlagen große Bögen."
-        ),
-        steps=(
-            "Den eigenen Laufweg mit dem Rollenschnitt vergleichen.",
-            "Die Stellen suchen, an denen ohne Mechanik gelaufen wurde.",
-            "Nach jeder Mechanik sofort zurück auf die Ausgangsposition.",
-        ),
-        checks=(
-            LessonCheck(
-                metric="movement_ratio",
-                comparison=CHECK_AT_MOST,
-                target=125.0,
-                unit="%",
-                label="Laufweg gegenüber dem Raidschnitt",
-            ),
-        ),
-    ),
-
     #
     # --------------------------------------------------
     # Cooldowns

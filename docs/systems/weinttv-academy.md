@@ -102,7 +102,7 @@ through `spec_reference` and a broken match shows up as a duplicated row.
 ## The Academy: `analyzer/academy/`
 
 `evaluator.py` turns a snapshot into a `PlayerProfile` (star ratings for
-**six** areas — Rotation/Movement/Cooldowns/Mechaniken/Überleben/Leistung)
+**six** areas — Rotation/Bewegung/Cooldowns/Mechaniken/Überleben/Leistung)
 and a `TrainingPlan`, using the `MECHANIC_*` category on each
 `MechanicIssue` to attribute errors to a trainable area. Ratings are
 **relative to the player's own role** — for damage *taken* especially (a
@@ -124,9 +124,11 @@ Three rules, each reversing an earlier mistake:
   Überleben (which asks about the outcome), or the same incident would be
   charged twice.
 - **No comparison group, no rating.** Being the only player of your role
-  means the ratio is always 1.0. `Leistung`, the movement average and
-  Überleben all require at least one other player of the same role with
-  data, otherwise "keine Daten".
+  means the ratio is always 1.0. `Leistung` and Überleben require at
+  least one other player of the same role with data, otherwise "keine
+  Daten". Bewegung used to be the third case, through the metre average;
+  since 3.6.0 it counts events instead and needs no group (see *Why the
+  metres are gone*).
 - **`stars = 0` means "no data", not "bad".** `PlayerProfile.rated`/
   `weakest` skip zero-star ratings, `_combine()` drops parts with no data
   instead of averaging them down. **Lesson results and the manual
@@ -245,9 +247,11 @@ language a report arrives in is an accident of who uploaded it, and
 and a cooldown under one spell ID.
 
 `analyzer/analysis/` holds derivations both the payload mapper and the
-replay need: `ranking.py`, `movement.py` (the single map-units-to-metres
-constant), `damage.py` (bucketing, mechanic issues, merging with the
-bot's).
+replay need: `ranking.py`, `damage.py` (bucketing, mechanic issues,
+merging with the bot's), and since 3.6.0 `cooldowns.py` — see *The
+cooldown maths* below. `movement.py` (the map-units-to-metres constant)
+is still there but nothing in the UI or the ratings reads it any more;
+see *Why the metres are gone*.
 
 ## Whether a hit was avoidable is a judgement, not a measurement
 
@@ -280,8 +284,109 @@ shared by both pages. `block_gap_text(snapshot, block)` closes the case
 where the source delivers *part* of the block and not the rest (silent
 when the block has rows or the deep analysis is entirely missing,
 otherwise names the source and states that block specifically wasn't
-delivered) — covers `movement`, `cooldown_usage`, `raid_cooldowns`,
-`heal_cooldowns`.
+delivered) — covers `cooldown_usage`, `raid_cooldowns`, `heal_cooldowns`.
+
+## The cooldown maths: one calculation, four bugs it removed (3.6.0)
+
+`analyzer/analysis/cooldowns.py` is the single place. Before it, the same
+question was answered independently in `warcraftlogs_payload.py`,
+`spec_reference.py` and `academy/evaluator.py`, and the three answers
+differed. All four reported defects were consequences:
+
+- **`int(duration // cooldown) + 1` counts one use too many.** Six
+  minutes, a three-minute cooldown: two uses were possible, three were
+  counted, and a perfect run read "2 von 3" plus "1 verschenkt".
+  `possible_uses()` counts the instants `0, cd, 2·cd …` that still lie
+  `MIN_TAIL_SECONDS` (10 s) before the end — a cooldown that comes back
+  up two seconds before the last hit is not a missed use.
+- **The payload guessed the category from a short English name list
+  that contained no defensive cooldown at all.** Every un-pressed Shield
+  Wall counted as wasted, worst for tanks; and being English, a German
+  report lost every raid cooldown too. `category_of()` asks
+  `class_abilities` (spell ID, English *and* German name), which knows
+  `CD_DEFENSIVE`. Spec-independently the first matching entry wins
+  (Tranquility is a heal cooldown for resto and a raid cooldown for the
+  rest) — irrelevant to the only question this file asks,
+  `counts_towards_usage()`, and `spec_reference` refines it per player.
+- **`possible` must be withdrawn, not only added.** The payload
+  categorises blind; only after `spec_reference` is it known that those
+  six possible uses belong to a defensive. Leaving the number would have
+  charged five wasted uses.
+- **Burst alignment was a share of all casts**, so using a one-minute
+  cooldown six times correctly scored 17 % — one star. `burst_alignment()`
+  counts **opportunities**: only cooldowns from `MAJOR_COOLDOWN_SECONDS`
+  (120 s), and only windows in which the cooldown was up, or would have
+  come up before the window ended. A cooldown that was down the whole
+  window is the price of an earlier correct use, not an error.
+
+`ready_gaps()` is the fourth answer, and it is the one that makes the
+rating actionable: *when* was the cooldown ready and unused. The rating
+names the longest such stretch and `at_seconds` jumps the replay there;
+`gui/widgets/tv/cooldown_timeline.py` draws all of them. The widget
+draws, it does not compute — a gap calculated twice is a gap that will
+eventually differ. Gaps are **hatched, not filled**: the default accent
+is amber, and a solid amber warning next to an amber cast bar was two
+yellow bars with no way to tell which was which.
+
+## Why the metres are gone (3.6.0)
+
+Reported as "everything the log can't actually answer can go". The
+movement distance was exactly that: **WarcraftLogs has no distance
+metric.** The number came from the bot summing straight lines between
+the positions attached to consecutive events — it underestimates real
+dodging systematically, and a player generating no events in between
+does not appear at all. A number that cannot be substantiated is worse
+than none in an evaluation, because it looks like a measurement.
+
+Removed end to end: WeintTV's *Laufwege* card, the metre half of
+`_rate_movement`, the `movement_ratio`/`movement_meters` lesson metrics
+and the one lesson built on them, the `movement` block in
+`addon_payloads.build_weinttv_report()` — and in Codex the *Laufweg*
+column and the "wer bin ich" row. The category stays, renamed
+**Bewegung**, rated on what the log does answer: avoidable hits with
+`MECHANIC_MOVEMENT`/`MECHANIC_POSITIONING`, each an event with a
+timestamp. If the source reports no mechanic issues *at all*, that is
+`stars == 0` — not five stars for a clean sheet nobody measured.
+
+`MovementEntry` and the bot's `movement_units` field stay in place
+(`analyzer/analysis/movement.py`, the bridge contract): the wire format
+is not this release's business, and nothing reads them. Deleting them
+would make the change hard to revisit if the bot ever gains a real
+distance metric.
+
+## Waiting for a pull is a state the UI has to show (3.6.0)
+
+Reported as: *"nowhere does it say you have to wait, how long it takes,
+or from when you can work with it"*. What stood there was "bei großen
+Pulls dauert das etwas" — no number, no movement, no statement about
+what happens afterwards. The failure mode is specific: after ten
+seconds people click the next pull, which restarts the fetch.
+
+- **`core/loading_progress.py`** is the calculating half, Qt-free like
+  `analysis_gap.py`. `estimate()` scales with *this* fight's length
+  (the bot reads the whole event stream) and blends in the durations
+  actually measured this session — `blend()` keeps the last
+  `MEMORY` (5), in memory only. `share()` never reaches 1.0: up to the
+  estimate it fills to 0.9, beyond it approaches asymptotically, so
+  "still running" and "taking longer than usual" are both readable off
+  the bar. `overdue()` and `progress_text()` say it in words too.
+- **`ArchiveState` carries `fight_started_at` / `fight_expected` /
+  `fight_label`.** `fight_started_at` is a `time.monotonic()` stamp, not
+  a wall clock: a clock adjusted mid-fetch would run the bar backwards.
+  `0.0` means "no fetch running", and `ArchiveState.elapsed(now)` is the
+  one accessor.
+- **`gui/widgets/tv/loading_card.py`** is on all three pages (WeintTV,
+  Academy, Archiv) and decides its own visibility — three pages with
+  their own visibility logic are three chances to leave it standing. Its
+  `QTimer` runs only while the card is visible *and* something is
+  loading; teardown is an event-free `_stop()` (see
+  `../architecture/qt-pitfalls.md`).
+- **`academy_empty_text(snapshot, loading=True)` returns `""`.** "No
+  analysed fight for this character" is literally true during a fetch
+  and useless as information — one is on its way. The Academy page
+  therefore also listens to `archiveChanged`; no snapshot changes while
+  a fetch runs, so without it the empty card would have sat next to the
+  waiting card for the whole wait.
 
 ## Who is "me"? (`analyzer/names.py` + `core/character_report_sync.py`)
 

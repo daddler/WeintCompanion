@@ -467,3 +467,162 @@ def test_survival_declines_to_rate_an_unclassified_boss():
 
     assert rating.has_data is False
     assert "Referenzdaten" in rating.detail
+
+
+# --------------------------------------------------
+# Was seit 3.6.0 nicht mehr bewertet wird
+# --------------------------------------------------
+
+
+def test_movement_is_rated_from_hits_and_never_from_metres():
+    """
+    Gemeldet als "alles, was der Log nicht hergibt, kann raus".
+
+    Der Laufweg in Metern war genau so ein Wert: WarcraftLogs kennt
+    keine Distanzmetrik, die Zahl entstand aus Geraden zwischen
+    Positionsangaben. Zwei Spieler mit identischen vermeidbaren
+    Treffern müssen dieselbe Bewertung bekommen, egal was in der
+    Laufwegliste steht.
+    """
+
+    from analyzer.models import MovementEntry
+
+    mechanics = (
+        MechanicIssue(
+            actor_name="Spitze",
+            mechanic="Im Feuer gestanden",
+            count=2,
+            category=MECHANIC_MOVEMENT,
+        ),
+        MechanicIssue(
+            actor_name="Mitte",
+            mechanic="Im Feuer gestanden",
+            count=2,
+            category=MECHANIC_MOVEMENT,
+        ),
+    )
+
+    snapshot = _snapshot(
+        mechanics=mechanics,
+        movement=(
+            MovementEntry(actor_name="Spitze", meters=2000.0),
+            MovementEntry(actor_name="Mitte", meters=200.0),
+        ),
+    )
+
+    laeufer = build_profile(snapshot, "Spitze").rating(CATEGORY_MOVEMENT)
+
+    steher = build_profile(snapshot, "Mitte").rating(CATEGORY_MOVEMENT)
+
+    assert laeufer.stars == steher.stars
+
+    assert "m gelaufen" not in laeufer.detail
+
+    assert "Rollenschnitt" not in laeufer.detail
+
+
+def test_movement_without_reported_mechanics_is_no_data_not_five_stars():
+    """
+    Meldet die Quelle für niemanden vermeidbare Treffer, ist "null
+    Fehler" eine Datenlücke und keine Leistung.
+    """
+
+    rating = build_profile(_snapshot(), "Spitze").rating(CATEGORY_MOVEMENT)
+
+    assert rating.has_data is False
+
+
+# --------------------------------------------------
+# Cooldowns
+# --------------------------------------------------
+
+
+def _cooldown_snapshot(*rows, **overrides):
+
+    from analyzer.models import CooldownUsage
+
+    return _snapshot(cooldown_usage=tuple(rows), **overrides)
+
+
+def test_unused_defensives_are_not_counted_as_wasted_uses():
+    """
+    Der gemeldete Fehler im Bereich Cooldown-Nutzung. Ein Tank, der
+    seinen Schildwall nicht braucht, hat nichts verschenkt - und es
+    gibt für ihn dann auch keine Quote, also keine Bewertung.
+    """
+
+    from analyzer.models import CD_DEFENSIVE, CooldownUsage
+
+    snapshot = _cooldown_snapshot(
+        CooldownUsage(
+            actor_name="Panzer",
+            ability="Schildwall",
+            cast_times=(),
+            cooldown=300.0,
+            possible=2,
+            category=CD_DEFENSIVE,
+        ),
+        pull_seconds=400.0,
+    )
+
+    rating = build_profile(snapshot, "Panzer").rating(CATEGORY_COOLDOWNS)
+
+    assert rating.has_data is False
+
+
+def test_the_usage_quota_counts_only_abilities_that_go_on_cooldown():
+
+    from analyzer.models import CD_DEFENSIVE, CD_PERSONAL, CooldownUsage
+
+    snapshot = _cooldown_snapshot(
+        CooldownUsage(
+            actor_name="Spitze",
+            ability="Berserkerwut",
+            cast_times=(0.0, 190.0),
+            cooldown=180.0,
+            possible=2,
+            category=CD_PERSONAL,
+        ),
+        CooldownUsage(
+            actor_name="Spitze",
+            ability="Eisblock",
+            cast_times=(),
+            cooldown=300.0,
+            possible=0,
+            category=CD_DEFENSIVE,
+        ),
+        pull_seconds=400.0,
+    )
+
+    rating = build_profile(snapshot, "Spitze").rating(CATEGORY_COOLDOWNS)
+
+    assert rating.stars == MAX_STARS
+
+    assert "2 von 2" in rating.detail
+
+
+def test_a_long_unused_readiness_is_named_with_its_moment():
+    """
+    "3 von 6" sagt nicht, wann die Lücke war - und nur das kann man
+    sich für den nächsten Pull vornehmen.
+    """
+
+    from analyzer.models import CD_PERSONAL, CooldownUsage
+
+    snapshot = _cooldown_snapshot(
+        CooldownUsage(
+            actor_name="Spitze",
+            ability="Berserkerwut",
+            cast_times=(0.0,),
+            cooldown=60.0,
+            possible=6,
+            category=CD_PERSONAL,
+        ),
+        pull_seconds=400.0,
+    )
+
+    rating = build_profile(snapshot, "Spitze").rating(CATEGORY_COOLDOWNS)
+
+    assert "ungenutzte Bereitschaft" in rating.detail
+
+    assert rating.at_seconds >= 60.0
