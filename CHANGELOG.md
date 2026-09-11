@@ -2,6 +2,79 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 3.6.0
+
+**Beim Laden eines Pulls siehst du jetzt, wie lange es dauert.** Bisher
+stand neben dem Knopf „Pull wird geladen … (bei großen Pulls dauert das
+etwas)" — ohne Zahl, ohne Bewegung, ohne Ansage, ab wann man
+weiterarbeiten kann. Wer das liest, klickt nach zehn Sekunden den
+nächsten Pull an (was den Abruf von vorn beginnen lässt) und hält die
+Anwendung danach für kaputt.
+
+Jetzt steht auf WeintTV, in der Academy und im Archiv dieselbe
+Wartekarte:
+
+> **Garrosh Höllschrei wird ausgewertet**
+> Der Kampf wird gelesen … 34 s von etwa 55 s.
+> Der Bot liest dafür den vollständigen Ereignisstrom des Kampfes bei
+> WarcraftLogs. Sobald er da ist, füllen sich WeintTV und die Academy
+> von selbst — du musst nichts erneut anklicken.
+
+Die Schätzung hängt an der Länge genau dieses Pulls — ein
+Zwölf-Minuten-Garrosh kostet den Bot ein Vielfaches eines
+Zwei-Minuten-Wipes — und lernt aus den Abrufen dazu, die du in dieser
+Sitzung schon gemacht hast. Dauert es länger als geschätzt, sagt die
+Karte das ausdrücklich, statt bei 100 % stehenzubleiben. Die
+Academy-Karte „noch keine Auswertung" hält solange still: es liegt
+keiner vor, aber einer ist unterwegs, und das sind zwei verschiedene
+Dinge.
+
+**Cooldown-Nutzung: vier Fehler, die alle in dieselbe Richtung gingen.**
+Die Bewertung wurde an drei Stellen unabhängig voneinander gerechnet,
+und die drei Rechnungen waren nicht dieselbe. Was daraus folgte:
+
+- **Ein möglicher Einsatz zu viel.** Sechs Minuten Kampf, ein
+  Drei-Minuten-Cooldown: möglich sind zwei Einsätze, gezählt wurden
+  drei. Wer alles richtig gemacht hatte, las „2 von 3 möglichen
+  Einsätzen" und „1 Einsatz verschenkt".
+- **Defensivcooldowns in der Nutzungsquote.** Die Einordnung kam aus
+  einer kurzen englischen Namensliste, die keinen einzigen
+  Defensivcooldown kannte — jeder nicht gedrückte Schildwall galt als
+  verschenkt. Getroffen hat das ausgerechnet Tanks, die die meisten
+  davon haben. Und weil die Liste englisch war, fiel bei einem
+  deutschen Bericht zusätzlich jeder Raid-Cooldown durch.
+- **Häufige Cooldowns wurden fürs Heldentum bestraft.** Gezählt wurde
+  der Anteil der Einsätze im Fenster. Ein Ein-Minuten-Cooldown,
+  sechsmal korrekt gedrückt und einmal davon im Heldentum, ergab 17 %
+  und damit einen Stern — für perfektes Spiel. Gezählt werden jetzt
+  **Gelegenheiten**, und nur bei Cooldowns ab zwei Minuten: ein kurzer
+  gehört auf Abklingzeit, nicht ins Fenster.
+- **Kein Zeitbezug.** „4 von 6" sagt nicht, wann die Lücke war. Die
+  Bewertung nennt jetzt die längste ungenutzte Bereitschaft mit ihrem
+  Zeitpunkt, und der Sprung in die Wiedergabe landet genau dort.
+
+**Neu: der Cooldown-Zeitstrahl.** In WeintTV steht über der Tabelle ein
+Bild statt einer Reihe von Uhrzeiten: eine Zeile je Fähigkeit, ein
+Balken je Einsatz, so breit wie die Abklingzeit lang ist. Gelb, wo der
+Cooldown bereit war und nicht kam; blau hinterlegt das
+Heldentum-Fenster. Die Frage „hätte der große Cooldown dorthin
+gehört" beantwortet sich damit von selbst.
+
+**Laufwege sind raus — überall.** WarcraftLogs kennt keine
+Distanzmetrik. Die Meterzahl entstand daraus, dass der Bot die Abstände
+zwischen den Positionsangaben aufeinanderfolgender Ereignisse als
+Gerade aufsummiert: echtes Ausweichen wurde systematisch unterschätzt,
+und wer zwischendurch keine Ereignisse erzeugt, tauchte gar nicht auf.
+Eine Zahl, die sich nicht belegen lässt, ist in einer Auswertung
+schlechter als keine — sie sieht aus wie eine Messung.
+
+Deshalb sind die Karte „Laufwege" in WeintTV, die Meterzahl in der
+Academy-Bewertung, die Lektion „Nur so weit laufen wie nötig" und die
+Laufweg-Spalte im Spiel ersatzlos weg. Der Bereich heißt jetzt
+**Bewegung** und misst, was der Log wirklich hergibt: vermeidbare
+Treffer durch Bewegung oder Position. Meldet die Quelle dazu gar
+nichts, steht dort „keine Daten" — und nicht fünf Sterne.
+
 ## 3.5.0
 
 **Charakterzuordnung: du wählst den Raid.** Stehen im Discord zwei

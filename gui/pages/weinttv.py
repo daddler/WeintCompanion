@@ -34,9 +34,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from analyzer.analysis.movement import format_meters
+from analyzer.analysis import cooldowns as cd_math
 from analyzer.analysis.spec_reference import cooldown_hint, reference_hint
 from analyzer.models import (
+    CD_DEFENSIVE,
+    CD_HEAL,
+    CD_PERSONAL,
+    CD_RAID,
     MECHANIC_SOURCE_LOCAL,
     SUPPORT_INTERRUPT,
     UPTIME_BUFF,
@@ -56,12 +60,16 @@ from gui.widgets.segmented_control import SegmentedControl
 from gui.widgets.tv.analysis_gap import (
     BLOCK_COOLDOWN_USAGE,
     BLOCK_HEAL_COOLDOWNS,
-    BLOCK_MOVEMENT,
     BLOCK_RAID_COOLDOWNS,
     analysis_gap_text,
     block_gap_text,
 )
 from gui.widgets.tv.archive_picker import ArchivePicker
+from gui.widgets.tv.cooldown_timeline import (
+    CooldownTimeline,
+    TimelineRow,
+    clock as timeline_clock,
+)
 from gui.widgets.tv.data_table import (
     DataTable,
     TableCell,
@@ -74,6 +82,7 @@ from gui.widgets.tv.meter_row_list import MeterRowData, MeterRowList
 from gui.widgets.tv.metric_tile import MetricTile
 from gui.widgets.bar_table import BarTable, format_per_second
 from gui.widgets.tv.live_header import LiveHeader
+from gui.widgets.tv.loading_card import LoadingCard
 from gui.widgets.tv.replay_bar import ReplayBar
 from gui.widgets.tv.source_strip import SourceStrip
 from gui.widgets.tv.timer_chip import TimerChip
@@ -147,7 +156,7 @@ TAB_HINTS = {
 
     TAB_ANALYSIS: (
         "Die Tiefenauswertung des gezeigten Pulls - Schaden erlitten, "
-        "Laufwege, Wirkzeiten, Cooldown-Nutzung."
+        "Wirkzeiten, Aktivzeit, Cooldown-Nutzung mit Zeitstrahl."
     ),
 
     TAB_HISTORY: (
@@ -334,6 +343,19 @@ class WeintTvPage(QWidget):
         #
 
         root.addWidget(ReplayBar(self.service))
+
+        #
+        # --------------------------------------------------
+        # Warten auf einen Pull
+        # --------------------------------------------------
+        #
+        # Über dem Bereichsumschalter und nicht in einem der Reiter:
+        # während ein Pull geholt wird, sind **alle** Reiter leer, und
+        # die Auskunft gilt für alle drei. Die Karte blendet sich
+        # selbst ein und aus (siehe gui/widgets/tv/loading_card.py).
+        #
+
+        root.addWidget(LoadingCard(self.service))
 
         #
         # --------------------------------------------------
@@ -926,27 +948,23 @@ class WeintTvPage(QWidget):
         deep.addLayout(uptimes)
 
         #
-        # Laufwege und Aktivzeit
+        # Aktivzeit
         #
-
-        movement_row = QHBoxLayout()
-
-        movement_row.setSpacing(16)
-
-        self.movement_card = SectionCard(
-            Resources.companion(),
-            "Laufwege",
-            "Schätzung aus Positionsdaten.",
-        )
-
-        self.movement_list = MeterRowList(
-            capacity=25,
-            placeholder="Keine Angaben zu Laufwegen.",
-        )
-
-        self.movement_card.addWidget(self.movement_list)
-
-        movement_row.addWidget(self.movement_card, 1)
+        # Daneben stand bis 3.6.0 eine Karte "Laufwege" mit einer
+        # Meterzahl je Spieler. Sie ist ersatzlos weg, und das ist
+        # keine Aufräumaktion: WarcraftLogs kennt keine
+        # Distanzmetrik. Die Zahl entstand daraus, dass der Bot die
+        # Abstände zwischen den Positionsangaben aufeinanderfolgender
+        # Ereignisse als Gerade aufsummiert - wer zwischen zwei
+        # Ereignissen einen Bogen läuft, wird unterschätzt, und wer
+        # gar keine Ereignisse erzeugt, taucht überhaupt nicht auf.
+        # Eine Zahl, die sich nicht belegen lässt, ist in einer
+        # Auswertung schlechter als keine: sie sieht aus wie eine
+        # Messung. Was der Log über Bewegung wirklich hergibt, steht
+        # in der Karte "Vermeidbarer Schaden" - ein Treffer, den man
+        # hätte vermeiden können, ist ein Ereignis und keine
+        # Schätzung.
+        #
 
         activity_card = SectionCard(
             Resources.dashboard(),
@@ -961,9 +979,7 @@ class WeintTvPage(QWidget):
 
         activity_card.addWidget(self.activity_list)
 
-        movement_row.addWidget(activity_card, 1)
-
-        deep.addLayout(movement_row)
+        deep.addWidget(activity_card)
 
         #
         # Cooldown-Nutzung
@@ -977,6 +993,7 @@ class WeintTvPage(QWidget):
             columns=(
                 TableColumn("Fähigkeit", weight=3),
                 TableColumn("Spieler", weight=2),
+                TableColumn("Art", weight=2),
                 TableColumn("Einsätze", weight=2, align="right", mono=True),
                 TableColumn("Im Heldentum", weight=2, align="right", mono=True),
                 TableColumn("Zeitpunkte", weight=3, mono=True),
@@ -992,8 +1009,36 @@ class WeintTvPage(QWidget):
         cooldown_usage_card = SectionCard(
             Resources.companion(),
             "Cooldown-Nutzung",
-            "Genutzte gegen mögliche Einsätze über den ganzen Kampf.",
+            "Wann ein Cooldown kam, wie lange er danach unten war - "
+            "und wo er bereit war und nicht kam.",
         )
+
+        #
+        # Der Zeitstrahl steht **über** der Tabelle, weil er die
+        # Frage beantwortet, die man zuerst hat: wann war die Lücke.
+        # Die Tabelle bleibt darunter für die Zahlen dahinter.
+        #
+        # Er zeigt einen Spieler, nicht fünfundzwanzig: bei 25
+        # Spielern mit je sechs Cooldowns wären es 150 Zeilen, und
+        # der Strahl lebt davon, dass man die Zeilen untereinander
+        # vergleichen kann. Welcher Spieler das ist, entscheidet der
+        # Filter über der Seite (sonst: der eigene Charakter).
+        #
+
+        self.cooldown_timeline = CooldownTimeline()
+
+        cooldown_usage_card.addWidget(self.cooldown_timeline)
+
+        self.cooldown_legend = QLabel("")
+
+        self.cooldown_legend.setWordWrap(True)
+
+        self.cooldown_legend.setStyleSheet(
+            f"font-size:11px;color:{Colors.TEXT_MUTED};"
+            "background:transparent;border:none;"
+        )
+
+        cooldown_usage_card.addWidget(self.cooldown_legend)
 
         cooldown_usage_card.addWidget(self.cooldown_table)
 
@@ -1774,7 +1819,7 @@ class WeintTvPage(QWidget):
 
         self._apply_uptimes(snapshot)
 
-        self._apply_movement(snapshot)
+        self._apply_activity(snapshot)
 
         self._apply_cooldown_usage(snapshot)
 
@@ -1989,60 +2034,12 @@ class WeintTvPage(QWidget):
                 if self._keep(entry.actor_name)
             )
 
-    def _apply_movement(self, snapshot: RaidSnapshot):
-
-        average = snapshot.movement_average
-
-        #
-        # Der Untertitel nennt den Raidschnitt und sagt ausdrücklich,
-        # dass es eine Schätzung ist. WarcraftLogs kennt keine
-        # Distanzmetrik - der Wert entsteht aus Positionsangaben
-        # zwischen Ereignissen und unterschätzt echtes Ausweichen.
-        #
-
-        self.movement_card.setSubtitle(
-            f"Schätzung aus Positionsdaten · Raidschnitt "
-            f"{format_meters(average)}"
-            if average > 0
-            else "Schätzung aus Positionsdaten."
-        )
-
-        longest = max(
-            (entry.meters for entry in snapshot.movement),
-            default=0.0,
-        )
-
-        self.movement_list.setPlaceholder(
-            block_gap_text(snapshot, BLOCK_MOVEMENT)
-            or "Keine Angaben zu Laufwegen."
-        )
-
-        self.movement_list.setRows(
-            MeterRowData(
-                title=entry.actor_name,
-                detail=(
-                    f"{entry.meters_per_second:.1f} m/s"
-                    + (
-                        f" · {entry.avoidable_hits} vermeidbare Treffer"
-                        if entry.avoidable_hits
-                        else ""
-                    )
-                ),
-                value=format_meters(entry.meters),
-                ratio=(
-                    entry.meters / longest
-                    if longest > 0
-                    else 0.0
-                ),
-                color=(
-                    Colors.WARNING
-                    if average > 0 and entry.meters > average * 1.25
-                    else Colors.PRIMARY
-                ),
-            )
-            for entry in snapshot.movement
-            if self._keep(entry.actor_name)
-        )
+    def _apply_activity(self, snapshot: RaidSnapshot):
+        """
+        Aktivzeit - die eine der beiden früheren Karten, die auf
+        Ereignissen beruht und nicht auf geschätzten Metern (siehe
+        den Aufbau der Karte weiter oben).
+        """
 
         self.activity_list.setRows(
             MeterRowData(
@@ -2075,6 +2072,19 @@ class WeintTvPage(QWidget):
             if self._keep(entry.actor_name)
         )
 
+    #
+    # Wie eine Cooldown-Kategorie in der Tabelle heisst. Aus dem
+    # Modell und nicht aus der Zeile: "personal" ist der Schlüssel,
+    # "auf Abklingzeit" die Aussage.
+    #
+
+    CATEGORY_TEXT = {
+        CD_PERSONAL: "auf Abklingzeit",
+        CD_DEFENSIVE: "defensiv",
+        CD_RAID: "Raid",
+        CD_HEAL: "Heilung",
+    }
+
     def _apply_cooldown_usage(self, snapshot: RaidSnapshot):
 
         hint = cooldown_hint(self._focused_actor(snapshot))
@@ -2090,7 +2100,7 @@ class WeintTvPage(QWidget):
 
         gap = block_gap_text(snapshot, BLOCK_COOLDOWN_USAGE)
 
-        self.cooldown_table.setPlaceholder(
+        placeholder = (
             (gap or "Keine Angaben zur Cooldown-Nutzung.")
             + (
                 f" Erwartet für diese Spezialisierung: {hint}."
@@ -2099,14 +2109,26 @@ class WeintTvPage(QWidget):
             )
         )
 
+        self.cooldown_table.setPlaceholder(placeholder)
+
         rows = sorted(
             (
                 usage
                 for usage in snapshot.cooldown_usage
                 if self._keep(usage.actor_name)
             ),
-            key=lambda usage: usage.efficiency,
+            #
+            # Zuerst, was auf Abklingzeit gehört und am wenigsten kam
+            # - dort liegt der Handlungsbedarf. Defensives danach: es
+            # ist eine Auskunft, kein Befund.
+            #
+            key=lambda usage: (
+                not cd_math.counts_towards_usage(usage.category),
+                usage.efficiency if usage.possible else 1.0,
+            ),
         )
+
+        self._apply_cooldown_timeline(snapshot, placeholder)
 
         self.cooldown_table.setRows(
             TableRowData(
@@ -2115,20 +2137,40 @@ class WeintTvPage(QWidget):
                     TableCell(usage.ability, Colors.TEXT),
                     TableCell(usage.actor_name),
                     TableCell(
+                        self.CATEGORY_TEXT.get(usage.category, "-"),
+                        Colors.TEXT_MUTED,
+                    ),
+                    #
+                    # Eine Quote gibt es nur, wo es eine Obergrenze
+                    # gibt. Bei einem Defensivcooldown steht die
+                    # Anzahl allein da - "3" und nicht "3 von 6", und
+                    # schon gar nicht gelb eingefärbt: er gehört
+                    # aufgehoben, nicht abgearbeitet.
+                    #
+                    TableCell(
                         f"{usage.uses}/{usage.possible}"
                         if usage.possible
                         else str(usage.uses),
                         (
-                            Colors.SUCCESS
-                            if usage.efficiency >= 0.85
-                            else Colors.WARNING
+                            (
+                                Colors.SUCCESS
+                                if usage.efficiency >= 0.85
+                                else Colors.WARNING
+                            )
+                            if usage.possible
+                            else Colors.TEXT_MUTED
                         ),
-                        ratio=usage.efficiency,
+                        ratio=usage.efficiency if usage.possible else 0.0,
                     ),
+                    #
+                    # Die Ausrichtung aufs Heldentum ist nur bei
+                    # grossen Cooldowns eine Frage. Bei einem
+                    # Ein-Minuten-Cooldown heisst "nicht im Fenster"
+                    # gar nichts, und eine graue Null dort las sich
+                    # wie ein Versäumnis.
+                    #
                     TableCell(
-                        str(usage.in_burst)
-                        if snapshot.heroism_windows
-                        else "-",
+                        self._burst_text(usage, snapshot),
                         (
                             Colors.SUCCESS
                             if usage.in_burst
@@ -2137,19 +2179,162 @@ class WeintTvPage(QWidget):
                     ),
                     TableCell(
                         ", ".join(
-                            f"{int(at) // 60:02d}:{int(at) % 60:02d}"
+                            timeline_clock(at)
                             for at in usage.cast_times
                         )
                         or "nicht genutzt",
                         (
                             Colors.TEXT_MUTED
-                            if usage.cast_times
+                            if usage.cast_times or not usage.possible
                             else Colors.ERROR
                         ),
                     ),
                 ),
             )
             for usage in rows
+        )
+
+    def _timeline_player(self, snapshot: RaidSnapshot) -> str:
+        """
+        Wessen Cooldowns der Zeitstrahl zeigt.
+
+        Der Filter entscheidet; ohne Filter der eigene Charakter, den
+        die Academy ohnehin schon kennt (dieselbe Quelle wie der
+        Hinweis "Ingame „Nur ich" zeigt: …" über der Seite - eine
+        zweite Auflösung desselben Namens liefe irgendwann anders
+        aus). Leerer String heisst "niemand", nicht "alle": ein Strahl
+        über fünfundzwanzig Spieler wären 150 Zeilen.
+        """
+
+        actor = self._focused_actor(snapshot)
+
+        if actor is not None:
+            return actor.name
+
+        academy = getattr(self.manager, "academy", None)
+
+        name = academy.player_name() if academy is not None else ""
+
+        return name if snapshot.actor_of(name) is not None else ""
+
+    def _burst_text(self, usage, snapshot: RaidSnapshot) -> str:
+
+        if not snapshot.heroism_windows:
+            return "-"
+
+        if not cd_math.is_major(usage.cooldown):
+            return "-"
+
+        return str(usage.in_burst)
+
+    def _apply_cooldown_timeline(
+        self,
+        snapshot: RaidSnapshot,
+        placeholder: str,
+    ):
+        """
+        Den Zeitstrahl für **einen** Spieler füllen.
+
+        Für welchen, entscheidet derselbe Filter, der auch die
+        Tabellen einschränkt; ohne Filter der eigene Charakter. Ein
+        Strahl über fünfundzwanzig Spieler wären 150 Zeilen, und
+        untereinander vergleichen kann man dann nichts mehr.
+        """
+
+        name = self._timeline_player(snapshot)
+
+        duration = snapshot.pull_seconds
+
+        rows = [
+            usage
+            for usage in snapshot.cooldown_usage
+            if usage.actor_name == name
+        ]
+
+        #
+        # Drei verschiedene Gründe für einen leeren Strahl, drei
+        # verschiedene Sätze - dieselbe Regel wie in
+        # `analysis_gap.py`: eine Datenlücke darf nicht wie ein Befund
+        # aussehen, und "hier ist niemand ausgewählt" ist ein dritter
+        # Fall.
+        #
+
+        if not name:
+
+            self.cooldown_timeline.setPlaceholder(
+                "Der Zeitstrahl zeigt einen Spieler. Wähle oben einen "
+                "aus - oder verknüpfe deinen Charakter, dann steht "
+                "hier deiner."
+            )
+
+        elif not snapshot.cooldown_usage:
+
+            self.cooldown_timeline.setPlaceholder(placeholder)
+
+        else:
+
+            self.cooldown_timeline.setPlaceholder(
+                f"Für {name} liegen in diesem Kampf keine "
+                "Einsatzzeitpunkte vor."
+            )
+
+        if not rows or duration <= 0:
+
+            self.cooldown_timeline.setTimeline((), 0.0, ())
+
+            self.cooldown_legend.setVisible(False)
+
+            return
+
+        self.cooldown_timeline.setTimeline(
+            [
+                TimelineRow(
+                    label=usage.ability,
+                    casts=usage.cast_times,
+                    cooldown=usage.cooldown,
+                    gaps=tuple(
+                        (gap.start, gap.until)
+                        for gap in cd_math.ready_gaps(
+                            usage.cast_times,
+                            usage.cooldown,
+                            duration,
+                        )
+                    ),
+                    value=(
+                        f"{usage.uses}/{usage.possible}"
+                        if usage.possible
+                        else f"{usage.uses}×"
+                    ),
+                    judged=cd_math.counts_towards_usage(usage.category),
+                    tone=(
+                        ""
+                        if cd_math.counts_towards_usage(usage.category)
+                        else "info"
+                    ),
+                )
+                for usage in sorted(
+                    rows,
+                    key=lambda usage: (
+                        not cd_math.counts_towards_usage(usage.category),
+                        -usage.cooldown,
+                    ),
+                )
+            ],
+            duration,
+            [
+                (window.start, window.end)
+                for window in snapshot.heroism_windows
+            ],
+        )
+
+        self.cooldown_legend.setVisible(True)
+
+        self.cooldown_legend.setText(
+            f"Zeitstrahl: {name} · Balken = Einsatz und die Zeit, die "
+            "der Cooldown danach unten war · gelb = bereit und nicht "
+            "genutzt · blau hinterlegt = Heldentum · blaue Balken "
+            "sind defensive oder Raid-Cooldowns und werden nicht auf "
+            "eine Quote gerechnet."
         )
 
     # --------------------------------------------------

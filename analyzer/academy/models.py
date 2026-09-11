@@ -64,7 +64,7 @@ CATEGORY_ORDER: tuple[str, ...] = (
 CATEGORY_LABELS: dict[str, str] = {
 
     CATEGORY_ROTATION: "Rotation",
-    CATEGORY_MOVEMENT: "Movement",
+    CATEGORY_MOVEMENT: "Bewegung",
     CATEGORY_COOLDOWNS: "Cooldowns",
     CATEGORY_MECHANICS: "Mechaniken",
     CATEGORY_SURVIVAL: "Überleben",
@@ -81,7 +81,7 @@ CATEGORY_LABELS: dict[str, str] = {
 CATEGORY_HINTS: dict[str, str] = {
 
     CATEGORY_ROTATION: "Aktivzeit, Wirkungsdauern, aktive Minderung",
-    CATEGORY_MOVEMENT: "Vermeidbare Treffer und Laufwege",
+    CATEGORY_MOVEMENT: "Vermeidbare Treffer durch Position",
     CATEGORY_COOLDOWNS: "Genutzte Einsätze und ihr Zeitpunkt",
     CATEGORY_MECHANICS: "Unterbrechungen und Bossmechaniken",
     CATEGORY_SURVIVAL: "Erhaltener Schaden und Tode",

@@ -23,15 +23,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from analyzer.analysis import cooldowns as cd_math
 from analyzer.analysis import damage as damage_analysis
 from analyzer.analysis.movement import build_movement
 from analyzer.analysis.ranking import build_ranking
 from analyzer.analysis.spec_reference import apply_spec_reference
 from analyzer.data import encounters, specs
 from analyzer.models import (
-    CD_HEAL,
-    CD_PERSONAL,
-    CD_RAID,
     MECHANIC_OTHER,
     ROLE_DPS,
     ROLE_HEALER,
@@ -165,12 +163,12 @@ def _format_report_date(iso_timestamp: str) -> str:
 
 def _format_report_time(iso_timestamp: str) -> str:
     """
-    Nur die Uhrzeit desselben Zeitstempels - fuer die Pull-Liste, wo
+    Nur die Uhrzeit desselben Zeitstempels - für die Pull-Liste, wo
     das Datum bereits ueber der Liste am Bericht steht und zwanzig Mal
-    zu wiederholen waere.
+    zu wiederholen wäre.
 
     Leerer String bei fehlendem oder unlesbarem Wert. Das ist hier
-    tragend und keine Vorsicht: "00:00" waere von einer echten Uhrzeit
+    tragend und keine Vorsicht: "00:00" wäre von einer echten Uhrzeit
     nicht zu unterscheiden, und ein Pull um Mitternacht ist an einem
     Raidabend nicht einmal abwegig.
     """
@@ -584,7 +582,7 @@ def build_cooldowns(rows: list) -> tuple[CooldownState, ...]:
     """
     Raid-/Heil-Cooldowns (siehe raid_cooldowns/heal_cooldowns in
     docs/warcraftlogs-bridge.md). Der Bot liefert hier keinen echten
-    Live-Countdown (fuer einen bereits beendeten WarcraftLogs-Pull
+    Live-Countdown (für einen bereits beendeten WarcraftLogs-Pull
     ergibt "noch X Sekunden" keinen Sinn) - "ready" ist deshalb immer
     wahr und eine etwaige Mehrfachnutzung steckt bereits lesbar im
     Namen (z.B. "Kaldrun (2×)").
@@ -861,45 +859,18 @@ def build_damage_taken(
 
 
 #
-# Wie ein Cooldown-Name auf eine Kategorie abgebildet wird, wenn der
-# Bot keine mitschickt. Die Listen sind bewusst dieselben, die der
-# Bot für raid_cooldowns/heal_cooldowns benutzt - so landet ein
-# Cooldown in beiden Ansichten in derselben Schublade.
+# Die Einordnung eines gemeldeten Cooldowns steht in
+# analyzer/analysis/cooldowns.py - zusammen mit der Rechnung, die auf
+# ihr aufbaut.
 #
-
-_RAID_COOLDOWN_NAMES = {
-    "rallying cry",
-    "anti-magic zone",
-    "spirit link totem",
-    "power word: barrier",
-    "smoke bomb",
-    "stampeding roar",
-    "devotion aura",
-}
-
-_HEAL_COOLDOWN_NAMES = {
-    "tranquility",
-    "divine hymn",
-    "healing tide totem",
-    "revival",
-    "aura mastery",
-}
-
-
-def _cooldown_category(name: str, given: str) -> str:
-
-    if given in (CD_RAID, CD_HEAL, CD_PERSONAL, "defensive"):
-        return given
-
-    lowered = name.lower()
-
-    if lowered in _RAID_COOLDOWN_NAMES:
-        return CD_RAID
-
-    if lowered in _HEAL_COOLDOWN_NAMES:
-        return CD_HEAL
-
-    return CD_PERSONAL
+# Hier standen bis 3.6.0 zwei kurze englische Namenslisten. Sie
+# kannten keinen einzigen Defensivcooldown, also galt jeder Schildwall
+# als "geht auf Abklingzeit" und jeder nicht gedrückte als
+# verschenkter Einsatz; und weil sie englisch waren, fiel bei einem
+# deutschen Bericht auch noch jeder Raid-Cooldown durch. Die
+# Fähigkeitstabelle kennt beides - Spell-ID, englischen und deutschen
+# Namen - und ist die einzige Stelle, die diese Frage beantwortet.
+#
 
 
 def build_cooldown_usage(
@@ -950,7 +921,24 @@ def build_cooldown_usage(
                 )
             )
 
+            category = cd_math.category_of(
+                ability,
+                spell_id,
+                _text(cooldown.get("category")),
+            )
+
             recharge = _number(cooldown.get("cooldown"))
+
+            if recharge <= 0:
+
+                #
+                # Die Quelle muss die Abklingzeit nicht mitschicken.
+                # Kennt die Fähigkeitstabelle sie, ist das keine
+                # Erfindung, sondern Nachschlagen - und ohne sie
+                # bliebe die Zeile ohne jede Obergrenze.
+                #
+
+                recharge = cd_math.known_cooldown_seconds(ability, spell_id)
 
             entries.append(
                 CooldownUsage(
@@ -958,37 +946,28 @@ def build_cooldown_usage(
                     ability=ability,
                     cast_times=cast_times,
                     cooldown=recharge,
-                    possible=_possible_uses(duration, recharge),
+                    #
+                    # Eine Obergrenze gibt es nur für Cooldowns, die
+                    # auf Abklingzeit gehoeren. Bei einem
+                    # Defensivcooldown wäre sie eine Behauptung: dass
+                    # er hätte gedrueckt werden *müssen*.
+                    #
+                    possible=(
+                        cd_math.possible_uses(duration, recharge)
+                        if cd_math.counts_towards_usage(category)
+                        else 0
+                    ),
                     in_burst=sum(
                         1
                         for at in cast_times
                         if any(window.contains(at) for window in windows)
                     ),
-                    category=_cooldown_category(
-                        ability,
-                        _text(cooldown.get("category")),
-                    ),
+                    category=category,
                     spell_id=spell_id,
                 )
             )
 
     return tuple(entries)
-
-
-def _possible_uses(duration: float, cooldown: float) -> int:
-    """
-    Wie oft ein Cooldown im Kampf hätte genutzt werden können.
-
-    Der erste Einsatz zählt immer mit (Kampfbeginn), danach je
-    vollständig abgelaufener Abklingzeit einer mehr. Ohne bekannte
-    Abklingzeit gibt es keine Obergrenze - dann 0, damit daraus keine
-    erfundene Quote entsteht.
-    """
-
-    if cooldown <= 0 or duration <= 0:
-        return 0
-
-    return int(duration // cooldown) + 1
 
 
 def build_heroism_windows(rows: list) -> tuple[HeroismWindow, ...]:

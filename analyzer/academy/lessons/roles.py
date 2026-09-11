@@ -299,16 +299,15 @@ ROLE_LESSONS: dict[str, tuple[Lesson, ...]] = {
                 "Nach der Mechanik sofort zurück in die Mitte.",
                 "Beim Laufen die Sofortzauber weiterspielen.",
             ),
+            #
+            # Ohne Prüfung: der Laufweg in Metern war die einzige
+            # messbare Seite dieser Lektion, und die Quelle kann ihn
+            # nicht belegen (siehe evaluator._rate_movement). Ein
+            # Ratschlag ohne Beleg ist zulässig - eine Prüfung, die
+            # eine geschätzte Zahl als bestanden oder durchgefallen
+            # meldet, nicht.
+            #
             roles=(ROLE_HEALER,),
-            checks=(
-                LessonCheck(
-                    metric="movement_ratio",
-                    comparison=CHECK_AT_MOST,
-                    target=140.0,
-                    unit="%",
-                    label="Laufweg gegenüber dem Raidschnitt",
-                ),
-            ),
         ),
 
         Lesson(

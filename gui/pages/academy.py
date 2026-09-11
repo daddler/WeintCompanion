@@ -77,6 +77,7 @@ from gui.widgets.tv.analysis_gap import (
     rating_gap_text,
 )
 from gui.widgets.tv.archive_picker import ArchivePicker
+from gui.widgets.tv.loading_card import LoadingCard
 from gui.widgets.tv.encounter_meta import encounter_meta
 from gui.widgets.tv.entry_list import EntryData, EntryList
 from gui.widgets.tv.meter_bar import MeterBar
@@ -301,6 +302,20 @@ class AcademyPage(QWidget):
 
         #
         # --------------------------------------------------
+        # Warten auf einen Pull
+        # --------------------------------------------------
+        #
+        # Dieselbe Karte wie in WeintTV und im Archiv. Sie steht hier
+        # oben und nicht in der Übersicht, weil die Leerzustandskarte
+        # darunter sonst gleichzeitig "kein ausgewerteter Kampf"
+        # behauptete, während einer geholt wird - genau die
+        # Verwechslung, die gemeldet wurde.
+        #
+
+        root.addWidget(LoadingCard(self.service))
+
+        #
+        # --------------------------------------------------
         # Hinweis bei deaktiviertem Modul
         # --------------------------------------------------
         #
@@ -367,6 +382,17 @@ class AcademyPage(QWidget):
         #
         # Signale
         #
+
+        #
+        # Während ein Pull geholt wird, ändert sich kein Snapshot -
+        # die Leerzustandskarte erführe sonst erst davon, wenn der
+        # Pull längst da ist, und stünde die ganze Wartezeit über mit
+        # "kein ausgewerteter Kampf" neben der Wartekarte.
+        #
+
+        self.service.archiveChanged.connect(
+            self._on_archive_changed
+        )
 
         self.service.replayChanged.connect(
             self._on_replay_changed
@@ -1548,6 +1574,15 @@ class AcademyPage(QWidget):
 
     # --------------------------------------------------
 
+    def _on_archive_changed(self):
+        """
+        Nur der Leerzustand wird nachgezogen - alles andere hängt am
+        Snapshot und wäre hier eine zweite Quelle für dieselbe
+        Anzeige.
+        """
+
+        self._apply_empty_state(self.service.current())
+
     def _apply_empty_state(self, snapshot: RaidSnapshot):
         """
         Die Karte über der Seite: was fehlt, und was dagegen hilft.
@@ -1562,7 +1597,10 @@ class AcademyPage(QWidget):
         Knopf daneben legte eine Handlung nahe, die niemand braucht.
         """
 
-        text = academy_empty_text(snapshot)
+        text = academy_empty_text(
+            snapshot,
+            loading=self.service.archive_state().fight_loading,
+        )
 
         self.empty_card.setVisible(bool(text))
 

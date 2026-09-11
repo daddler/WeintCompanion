@@ -1756,6 +1756,36 @@ def display_name(name: str = "", spell_id: int = 0) -> str:
     return getattr(found, "german", "") or name
 
 
+def cooldown_info(
+    name: str = "",
+    spell_id: int = 0,
+) -> TrackedCooldown | None:
+    """
+    Der Cooldown-Eintrag zu einem gemeldeten Namen oder einer
+    Spell-ID - **spec-unabhängig**, wie `aura_kind()`.
+
+    Der Grund, dass es diese Frage ohne Spezialisierung geben muss:
+    eine Quelle meldet Cooldown-Einsätze für jeden im Raid, kennt die
+    Spezialisierung des Wirkers aber nicht immer. Ohne diesen Weg
+    landete ein Schildwall dann in der Schublade "geht auf
+    Abklingzeit" - und der Tank bekam für jeden nicht gedrückten
+    Schildwall einen verschenkten Einsatz angerechnet.
+    """
+
+    found = None
+
+    if spell_id:
+        found = _BY_ID.get(spell_id)
+
+    if found is None:
+        found = _BY_NAME_ANY.get(_key(name))
+
+    if isinstance(found, TrackedCooldown):
+        return found
+
+    return None
+
+
 def translations() -> dict[str, tuple[str, ...]]:
     """
     Englischer Name -> deutsche Schreibweisen, über alle Specs.

@@ -54,6 +54,7 @@ from gui.theme.fonts import font
 from gui.theme.restyle import restyle
 from gui.widgets.hero_banner import HeroButton
 from gui.widgets.tv.archive_picker import ArchivePicker
+from gui.widgets.tv.loading_card import LoadingCard
 from gui.widgets.tv.replay_bar import ReplayBar
 from gui.widgets.tv.source_strip import SourceStrip
 from gui.widgets.wrapped_label import enable_wrap
@@ -89,6 +90,15 @@ class ArchivePage(Page):
         self.picker = ArchivePicker(self.service, browse=False)
 
         self.addWidget(self.picker)
+
+        #
+        # Die Wartekarte - dieselbe wie in WeintTV und der Academy.
+        # Hier ist sie am wichtigsten: hier wird der Pull angeklickt,
+        # und hier stand bisher nur "Pull wird geladen …" in elf
+        # Punkt neben dem Knopf.
+        #
+
+        self.addWidget(LoadingCard(self.service))
 
         #
         # Die Auswahl selbst.

@@ -39,6 +39,25 @@ Charakter überhaupt im Pull war; `hasActor = false` zusammen mit
 `stars == 0` ist die korrekte, vollständige Auskunft „keine Daten", keine
 Lücke.
 
+**Keine Laufwege mehr ab Companion 3.6.0.** `weinttv_report` trug bis
+dahin ein `movement`-Feld (Meter je Spieler). WarcraftLogs kennt keine
+Distanzmetrik; die Zahl entstand aus Geraden zwischen den Positionen
+aufeinanderfolgender Ereignisse und unterschätzte echtes Ausweichen
+systematisch. Der Desktop hat sie aus Anzeige und Bewertung entfernt
+(`docs/systems/weinttv-academy.md`, *Why the metres are gone*) — sie ins
+Spiel weiterzureichen hiesse, dort als Messung auszugeben, was hier
+gerade als nicht belegbar eingestuft wurde. Codex 3.3.0.0 zieht mit.
+Was von Bewegung bleibt, steckt unverändert in `mechanics[]` (Kategorie
+`movement`/`positioning`).
+
+**`cooldowns[].possible` ist seit Companion 3.6.0 nur noch bei
+Cooldowns gesetzt, die auf Abklingzeit gehören** (`category ==
+"personal"`). Bei einem Defensiv-, Raid- oder Heilcooldown steht dort
+`0`, und das heisst ausdrücklich **"keine Quote"** und nie "null
+mögliche Einsätze" — die Ingame-Tabelle zeigt dann die blosse Anzahl
+statt `x / y` und färbt sie nicht rot. Ein ungenutzter Schildwall ist
+kein verschenkter Einsatz.
+
 ## Codex → Companion: Academy-Rückweg (lokal, `academy`-State-Nachricht)
 
 Im Spiel angehakte/ausgeschlossene Lektionen kommen als

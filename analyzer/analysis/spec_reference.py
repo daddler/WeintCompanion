@@ -51,9 +51,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from analyzer.analysis import cooldowns as cd_math
 from analyzer.data import class_abilities, player_abilities
 from analyzer.models import (
-    CD_PERSONAL,
     UPTIME_BUFF,
     UPTIME_DOT,
     UPTIME_HOT,
@@ -65,20 +65,6 @@ from analyzer.models import (
 
 
 UPTIME_KINDS = (UPTIME_DOT, UPTIME_HOT, UPTIME_BUFF)
-
-
-def _possible_uses(duration: float, cooldown: float) -> int:
-    """
-    Wie oft ein Cooldown in dieser Kampfdauer hätte kommen können.
-
-    Dieselbe Rechnung wie in providers/warcraftlogs_payload.py - der
-    erste Einsatz kostet keine Abklingzeit, deshalb `+ 1`.
-    """
-
-    if cooldown <= 0 or duration <= 0:
-        return 0
-
-    return int(duration // cooldown) + 1
 
 
 def _match(abilities, name: str, spell_id: int = 0, prefer: str = ""):
@@ -381,22 +367,36 @@ def _apply_cooldowns(
             category = tracked.category
 
         #
-        # Eine fehlende Obergrenze wird nur für Cooldowns nachgetragen,
-        # die auf Abklingzeit gehören. Eine Quelle, die bei einem
-        # Defensivcooldown bewusst keine angibt, sagt damit "hier gibt
-        # es nichts zu verschenken" - das darf hier nicht überschrieben
-        # werden.
+        # Die Obergrenze gilt ausschliesslich für Cooldowns, die auf
+        # Abklingzeit gehören - und sie wird hier nicht nur ergänzt,
+        # sondern auch **zurückgenommen**. Der Grund steht in
+        # analyzer/analysis/cooldowns.py: die Quelle ordnet einen
+        # Cooldown ohne Kategorieangabe blind ein, und erst hier ist
+        # bekannt, dass die eben gezählten sechs möglichen Einsätze zu
+        # einem Defensivcooldown gehören. Bliebe die Zahl stehen,
+        # hätte der Spieler fünf davon "verschenkt".
         #
 
-        if possible <= 0 and cooldown > 0 and category == CD_PERSONAL:
-            possible = _possible_uses(snapshot.pull_seconds, cooldown)
+        if not cd_math.counts_towards_usage(category):
+
+            possible = 0
+
+        elif possible <= 0 and cooldown > 0:
+
+            possible = cd_math.possible_uses(snapshot.pull_seconds, cooldown)
 
         rows.append(
             replace(
                 entry,
                 ability=_display_name(entry.ability, tracked),
                 cooldown=cooldown,
-                possible=max(possible, entry.uses),
+                #
+                # Mehr Einsätze als möglich kann es nicht geben: eine
+                # Abklingzeit, die kürzer ausfällt als die Tabelle
+                # sagt (Talent, Rüstungsbonus), darf keine Quote über
+                # 100 % erzeugen. Ohne Quote bleibt es bei 0.
+                #
+                possible=max(possible, entry.uses) if possible else 0,
                 category=category,
             )
         )
@@ -439,11 +439,11 @@ def _apply_cooldowns(
                     # ist kein verschenkter Einsatz.
                     #
                     possible=(
-                        _possible_uses(
+                        cd_math.possible_uses(
                             snapshot.pull_seconds,
                             cooldown.cooldown,
                         )
-                        if cooldown.category == CD_PERSONAL
+                        if cd_math.counts_towards_usage(cooldown.category)
                         else 0
                     ),
                     category=cooldown.category,
