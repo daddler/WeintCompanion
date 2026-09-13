@@ -405,3 +405,30 @@ def test_a_focus_row_offers_no_button_that_hits_nothing(page, pull):
 
         if not row._lesson_id:
             assert not row.lesson_button.isVisibleTo(row)
+
+
+def test_a_focus_row_claims_the_height_its_text_really_needs(page, pull):
+    """
+    Die Begründung darin bricht um. `enable_wrap()` meldet das am
+    Label an - aber nur am Label; ohne dieselbe Ankündigung an der
+    Zeile verteilt das Layout der Karte die Höhe nach einer
+    `sizeHint()`, die eine Textzeile annimmt. Sichtbar war das als
+    Knopfreihe, die unten aus ihrer eigenen Zeile lief.
+    """
+
+    card = page.focus_card
+
+    _tiles(page, pull, pull.top_damage[3].name)
+
+    card.resize(1160, card.sizeHint().height())
+
+    card.layout().activate()
+
+    for row in card.rows:
+
+        if not row.isVisibleTo(card):
+            continue
+
+        assert row.hasHeightForWidth()
+
+        assert row.height() >= row.heightForWidth(row.width())

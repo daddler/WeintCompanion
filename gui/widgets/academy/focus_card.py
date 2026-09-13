@@ -37,7 +37,13 @@ Drei Regeln, die nicht Geschmack sind:
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QSizePolicy,
+    QVBoxLayout,
+)
 
 from gui.theme import tokens
 from gui.theme.fonts import font
@@ -110,6 +116,25 @@ class FocusRow(QFrame):
             }}
             """,
         )
+
+        #
+        # **Die Höhe hängt an der Breite.** Die Begründung darin ist
+        # umbrechender Text ("4 von 6 möglichen Einsätzen · 0 von 1
+        # grossen Cooldowns im Heldentum · …"), und `enable_wrap()`
+        # meldet das am Label an - aber nur am Label. Ohne dieselbe
+        # Ankündigung an der Zeile fragt das Layout der Karte nie
+        # `heightForWidth()` und verteilt die Höhe nach einer
+        # `sizeHint()`, die eine Textzeile annimmt. Sichtbar war das
+        # als Knopfreihe, die unten aus ihrer eigenen Zeile lief.
+        #
+
+        policy = self.sizePolicy()
+
+        policy.setHeightForWidth(True)
+
+        policy.setVerticalPolicy(QSizePolicy.Minimum)
+
+        self.setSizePolicy(policy)
 
         self._lesson_id = ""
 
@@ -235,6 +260,26 @@ class FocusRow(QFrame):
         root.addLayout(column, 1)
 
     # --------------------------------------------------
+
+    def hasHeightForWidth(self) -> bool:
+
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        """
+        Die Höhe, die diese Zeile bei dieser Breite wirklich braucht.
+
+        Über das eigene Layout gefragt und nicht geschätzt: es kennt
+        die umbrechenden Labels darin und rechnet dieselbe Antwort, die
+        beim Zeichnen gilt. `super()` wäre hier die Ein-Zeilen-Annahme.
+        """
+
+        return max(
+            self.layout().heightForWidth(width),
+            self.layout().minimumSize().height(),
+        )
+
+    # --------------------------------------------------
     # Nutzeraktionen
     # --------------------------------------------------
 
@@ -302,6 +347,14 @@ class FocusRow(QFrame):
             if self._seconds >= 0
             else "Moment ansehen"
         )
+
+        #
+        # Neuer Text, neue Höhe. Ohne diesen Anstoss behielte die Zeile
+        # die Höhe des vorigen Befundes - beim Wechsel des Charakters
+        # ist das regelmässig eine Zeile zu wenig.
+        #
+
+        self.updateGeometry()
 
 
 class FocusCard(Card):
