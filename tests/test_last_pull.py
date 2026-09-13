@@ -11,10 +11,12 @@ also immer.
 from datetime import datetime, time, timedelta
 
 from core.last_pull import (
+    LastPull,
     WEEKDAYS,
     from_fights,
     from_history,
     parse_last_pull,
+    record_key,
     result_text,
     source_text,
     when_text,
@@ -293,3 +295,116 @@ def test_a_report_without_a_start_gets_no_label():
     assert when_text(pull) == ""
 
     assert source_text(pull) == "Ohne Datum"
+
+
+# --------------------------------------------------
+# Die Aufzeichnungskennung (4.0)
+# --------------------------------------------------
+#
+# Sie beantwortet auf der Übersicht genau eine Frage: ist die Bewertung,
+# die dort als "dein Fokus" stünde, die **dieses** Pulls? Der zuletzt
+# ausgewertete und der zuletzt gespielte Pull sind an einem Raidabend
+# regelmässig zwei verschiedene Kämpfe, und eine Bewertung unter dem
+# falschen Kampf ist eine falsche Aussage, nicht eine ungenaue.
+
+
+def test_an_archived_pull_has_the_same_key_as_its_recording():
+    """
+    Dieselbe Form wie `progression.pull_key()` mit `origin` - sonst
+    findet die Übersicht den Datensatz nie, den der Manager unter
+    genau dieser Kennung geschrieben hat.
+    """
+
+    from analyzer.academy.progression import pull_key
+
+    pull = parse_last_pull(CACHE)
+
+    assert pull.report_code
+
+    class _Snapshot:
+
+        encounter_name = "Immerseus"
+
+        pull_number = 1
+
+    expected = pull_key(
+        _Snapshot(),
+        origin=f"{pull.report_code}#{pull.fight_id}",
+    )
+
+    assert record_key(pull) == expected
+
+
+def test_a_session_pull_needs_the_day_to_be_identifiable():
+    """
+    Der Live-Feed nennt keinen Bericht; die Kennung entsteht dann aus
+    Tag, Boss und Pullnummer. Ohne Tag ist sie nicht bestimmbar - und
+    dann zeigt die Karte keinen Fokus, statt den erstbesten zu nehmen.
+    """
+
+    pull = LastPull(known=True, live=True, boss="Garrosh", pull_number=17)
+
+    assert record_key(pull) == ""
+
+    assert record_key(pull, day="2026-09-10") == "live:2026-09-10:Garrosh:17"
+
+
+def test_without_a_pull_there_is_no_key():
+
+    assert record_key(None) == ""
+
+    assert record_key(LastPull()) == ""
+
+
+# --------------------------------------------------
+# Der schwächste Bereich eines aufgezeichneten Pulls
+# --------------------------------------------------
+
+
+def test_the_weakest_area_skips_unrated_ones():
+    """
+    Null Sterne heissen "keine Daten", nicht "schlecht" - ein
+    unbewerteter Bereich als grösste Baustelle wäre genau die
+    Verwechslung, gegen die der Analyzer geschrieben ist.
+    """
+
+    from analyzer.academy.progression import PullRecord, weakest_of
+
+    record = PullRecord(
+        ratings=(
+            ("rotation", 0),
+            ("movement", 2),
+            ("cooldowns", 4),
+        )
+    )
+
+    assert weakest_of(record) == ("movement", 2)
+
+
+def test_a_record_without_a_single_rating_has_no_weakest_area():
+
+    from analyzer.academy.progression import PullRecord, weakest_of
+
+    assert weakest_of(PullRecord()) is None
+
+    assert weakest_of(PullRecord(ratings=(("rotation", 0),))) is None
+
+    assert weakest_of(None) is None
+
+
+def test_a_tie_is_broken_by_the_fixed_category_order():
+    """
+    Sonst sortierte sich die Antwort zwischen zwei Aufrufen um -
+    dieselbe Regel wie bei `PlayerProfile.weakest`.
+    """
+
+    from analyzer.academy.models import CATEGORY_ORDER
+    from analyzer.academy.progression import PullRecord, weakest_of
+
+    first, second = CATEGORY_ORDER[0], CATEGORY_ORDER[1]
+
+    forwards = PullRecord(ratings=((first, 3), (second, 3)))
+
+    backwards = PullRecord(ratings=((second, 3), (first, 3)))
+
+    assert weakest_of(forwards) == weakest_of(backwards) == (first, 3)

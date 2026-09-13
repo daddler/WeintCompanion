@@ -226,8 +226,8 @@ REPLAY_TICK_MS = 250
 @dataclass(frozen=True)
 class ArchiveState:
     """
-    Zustand der Archiv-Auswahl - ein Wert, den `ArchivePicker` in
-    beiden Seiten unverändert übernehmen kann.
+    Zustand der Archiv-Auswahl - ein Wert, den die Quellenansicht und
+    der Kopfblock des Raid Centers unverändert übernehmen.
 
     Getrennte *_loading/*_error-Felder pro Schritt (Reports laden,
     Fights eines Reports laden, einen Fight laden), weil jeder Schritt
@@ -407,7 +407,7 @@ class RaidDataService(QObject):
     # Wird bei jeder Änderung der Archiv-Auswahl emittiert (Modus,
     # Report-/Fight-Liste, Auswahl, Lade-/Fehlerzustand) - `object`
     # aus demselben Grund wie bei snapshotChanged. Ohne konkreten
-    # Payload, weil ArchivePicker ohnehin archive_state() neu abruft;
+    # Payload, weil die Leser ohnehin archive_state() neu abrufen;
     # ein eigener Payload würde nur zu einer zweiten Quelle für
     # denselben Zustand führen.
     #
@@ -997,7 +997,7 @@ class RaidDataService(QObject):
     # Archiv: vergangene Reports/Fights ansehen
     # --------------------------------------------------
     #
-    # Ablauf, das ArchivePicker-Widget bildet ihn direkt ab:
+    # Ablauf, die Quellenansicht bildet ihn direkt ab:
     #
     #   enter_archive_mode()               -> Reportliste lädt
     #   select_archive_report(code)        -> Fightliste dieses Reports lädt
@@ -1061,6 +1061,37 @@ class RaidDataService(QObject):
             self._publish(RaidSnapshot.empty("Archiv"), track=False)
 
         self.archiveChanged.emit()
+
+        if need_reports:
+
+            self.refresh_reports()
+
+    def ensure_reports(self):
+        """
+        Die Berichtsliste nachladen, falls sie noch fehlt - **ohne** den
+        Modus anzutasten.
+
+        Das ist der Unterschied zu `enter_archive_mode()`, und er ist
+        seit 4.0 nötig: die Liste der Raidabende ist eine der vier
+        Perspektiven des Raid Centers, und wer sie nur aufschlägt, will
+        noch keinen Live-Feed verlassen. Bis 3.6.0 war das dasselbe,
+        weil die Liste in einem Fenster steckte, das man ausdrücklich
+        öffnete - jetzt liegt sie einen Klick neben *Live*, und ein
+        Klick dorthin darf die laufenden Zahlen nicht anhalten.
+
+        Den Modus setzen weiterhin die beiden Auswahlschritte selbst
+        (`select_archive_report()`/`select_archive_fight()`), und zwar
+        genau dann, wenn wirklich etwas anderes als der Live-Feed
+        gezeigt werden soll.
+        """
+
+        with self._lock:
+
+            need_reports = (
+                not self._archive.reports
+                and not self._archive.reports_loading
+                and not self._archive.reports_error
+            )
 
         if need_reports:
 

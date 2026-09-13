@@ -13,11 +13,18 @@ wurde das als "es ist ziemlich kompliziert, archivierte Logs zu
 finden", und das ist die richtige Beschreibung: die Daten waren alle
 da, gefunden hat man damit trotzdem nichts.
 
-Also ein eigenes Fenster mit zwei Spalten - links die Abende, rechts
-die Pulls nach Boss gebündelt - plus ein Suchfeld und ein Schalter für
-"nur Kills". Ein Dialog und keine Seite: einen Pull wählt man, wenn
-man einen ansehen will, und ist danach wieder woanders; dieselbe
-Überlegung wie bei der Änderungsansicht.
+Also zwei Spalten - links die Abende, rechts die Pulls nach Boss
+gebündelt - plus ein Suchfeld und ein Schalter für "nur Kills".
+
+**Seit 4.0 ist das kein Fenster mehr.** Es war bis dahin ein Dialog
+(`ArchiveDialog`), den WeintTV und die Academy über einen Knopf "Log
+wählen …" öffneten, und ausserdem eingebettet auf der Seite *Archiv*.
+Damit gab es zwei Wege zur selben Liste, und der eine legte sich über
+den anderen. Der Dialog ist entfallen: die Liste ist eine der vier
+Perspektiven des Raid Centers (*Quelle*), also ein Ort und kein
+Vorhang - und die Wahl eines Pulls wechselt anschliessend von selbst
+auf die Analyse, statt ein Fenster zu schliessen und den Nutzer vor
+einer Seite stehen zu lassen, die sich "irgendwo" geändert hat.
 
 **Entschieden wird hier nichts.** Welche Zeilen dastehen, wie sie
 gruppiert und beschriftet sind, beantwortet `core/archive_index.py` -
@@ -34,21 +41,20 @@ Zwei Dinge, die nicht Geschmack sind:
   hängt an `archiveChanged`, und das kommt während eines Ladevorgangs
   mehrfach - ein unbedingtes Neubauen setzte die Bildlaufposition
   zurück, während jemand darin liest, und verlöre die Auswahl unter
-  den Fingern. Dieselbe Falle wie beim `ArchivePicker` und der
+  den Fingern. Dieselbe Falle wie bei der
   WeakAura-Liste.
-- **Ein Klick auf einen Pull übernimmt ihn sofort**, das Fenster
-  bleibt aber offen, bis der Abruf durch ist. Der einzelne Pull kostet
-  den Bot Minuten, und ein Fenster, das sich beim Klick schliesst,
-  lässt den Nutzer vor einer Seite stehen, die sich aus unerfindlichen
+- **Ein Klick auf einen Pull übernimmt ihn sofort**, die Liste bleibt
+  aber stehen, bis der Abruf durch ist. Der einzelne Pull kostet den
+  Bot Minuten, und eine Ansicht, die beim Klick verschwindet, lässt den
+  Nutzer vor einem Bildschirm stehen, der sich aus unerfindlichen
   Gründen nicht ändert. Der Fortschritt steht deshalb hier, wo geklickt
-  wurde, und das Fenster geht von selbst zu, sobald der Pull da ist.
+  wurde; dass der Pull **da** ist, meldet `fightLoaded`.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -66,7 +72,6 @@ from gui.theme.restyle import restyle
 from gui.theme.theme_manager import theme
 from gui.widgets.chip import Chip
 from gui.widgets.eyebrow import eyebrow_label
-from gui.widgets.hero_banner import HeroButton
 from gui.widgets.toggle_switch import ToggleSwitch
 from gui.widgets.wrapped_label import enable_wrap
 
@@ -233,37 +238,26 @@ class ArchiveBrowser(QWidget):
     """
     Zwei Spalten, ein Suchfeld, ein Schalter.
 
-    **Seit 3.5.0 ein Widget und kein Fenster mehr.** Der Browser
-    steckte bis dahin fest in einem Dialog, und die Seite *Archiv*
-    bestand damit aus einem Wähler und dem Satz "die Zahlen stehen in
-    WeintTV" - ein Bereich in der Navigationsspalte, der selbst nichts
-    zeigte. Wer "Archiv" anklickte, wollte aber genau das sehen, was
-    hier drinsteht: die Abende und ihre Pulls.
-
-    Es bleibt **eine** Ansicht: die Seite bettet dieses Widget ein
-    (`embedded=True`, ohne eigenen Kopf und ohne Schliessen-Knopf),
-    und `ArchiveDialog` weiter unten legt dasselbe Widget in ein
-    modales Fenster - für WeintTV und die Academy, wo man einen Pull
-    wählen will, ohne den Bereich zu verlassen. Zwei Nachbauten
-    derselben Liste würden ab der ersten Änderung verschieden
-    gruppieren.
+    **Kein eigener Kopf und kein Schliessen-Knopf.** Beides hatte der
+    Browser, solange er auch in einem Fenster steckte; seit 4.0 liegt
+    er ausschliesslich in der Quellenansicht des Raid Centers, die
+    ihren Kopf selbst trägt (den Kontextblock ganz oben) und nichts zu
+    schliessen hat. Ein zweiter Titel darunter wäre dieselbe
+    Überschrift zweimal.
     """
 
     #
-    # Der hier angeklickte Pull ist angekommen. Das Fenster schliesst
-    # sich daraufhin; die Seite bleibt stehen, wo sie ist - dort gibt
-    # es nichts zu schliessen.
+    # Der hier angeklickte Pull ist angekommen - das Raid Center
+    # schaltet daraufhin auf die Analyse um.
     #
 
     fightLoaded = Signal()
 
-    def __init__(self, service, parent=None, embedded: bool = False):
+    def __init__(self, service, parent=None):
 
         super().__init__(parent)
 
         self.service = service
-
-        self._embedded = bool(embedded)
 
         #
         # Womit die beiden Spalten zuletzt gefüllt wurden - siehe der
@@ -284,12 +278,12 @@ class ArchiveBrowser(QWidget):
         self._fight_rows: dict[int, _Row] = {}
 
         #
-        # Auf welchen Pull dieses Fenster wartet. Ohne diesen Merker
-        # schlösse es sich in der Sekunde, in der es aufgeht: beim
-        # Öffnen ist meist noch der Pull von vorhin gewählt und längst
-        # geladen, und "fertig geladen" allein ist damit kein Anlass,
-        # irgendetwas zuzumachen. Zugehen soll es nur für den Pull,
-        # den man gerade hier angeklickt hat.
+        # Auf welchen Pull diese Liste wartet. Ohne diesen Merker
+        # meldete sie in der Sekunde, in der sie erscheint, einen
+        # "geladenen" Pull: beim Betreten ist meist noch der von vorhin
+        # gewählt und längst geladen, und "fertig geladen" allein ist
+        # damit kein Anlass, irgendwohin zu wechseln. Gemeldet wird nur
+        # der Pull, den man gerade hier angeklickt hat.
         #
 
         self._awaiting: int | None = None
@@ -297,25 +291,13 @@ class ArchiveBrowser(QWidget):
         root = QVBoxLayout(self)
 
         #
-        # Eingebettet trägt die Seite die Ränder (§6.2), im Fenster
-        # dieses Widget selbst.
+        # Ohne eigene Ränder: die trägt die Ansicht, in der dieses
+        # Widget steckt (§6.2).
         #
 
-        if self._embedded:
-            root.setContentsMargins(0, 0, 0, 0)
-        else:
-            root.setContentsMargins(28, 24, 28, 20)
+        root.setContentsMargins(0, 0, 0, 0)
 
         root.setSpacing(14)
-
-        #
-        # Eingebettet trägt die Seite ihren eigenen Kopf (Rubrik und
-        # Titel). Ein zweiter darunter wäre dieselbe Überschrift
-        # zweimal.
-        #
-
-        if not self._embedded:
-            self._build_head(root)
 
         self._build_filters(root)
 
@@ -326,38 +308,27 @@ class ArchiveBrowser(QWidget):
         service.archiveChanged.connect(self._refresh)
 
         #
-        # Der Einstieg. `enter_archive_mode()` lädt die Berichtsliste
-        # nach, falls sie noch fehlt - genau das, was das Öffnen dieses
-        # Fensters bedeutet.
+        # Der Einstieg: die Berichtsliste nachladen, falls sie noch
+        # fehlt - **ohne** den Modus anzutasten.
+        #
+        # Bis 3.6.0 stand hier `enter_archive_mode()`, und das war
+        # richtig, solange diese Liste in einem Fenster steckte, das man
+        # ausdrücklich öffnete. Seit 4.0 liegt sie als Perspektive
+        # *Quelle* einen Klick neben *Live*: wer dort nachsieht, welche
+        # Abende es gibt, hat damit noch nicht entschieden, den
+        # laufenden Raid zu verlassen - und ein Modus-Wechsel hätte
+        # genau das getan (der Live-Poll verwirft seine Ergebnisse,
+        # sobald `browsing` gilt). In den Archivmodus führen die beiden
+        # Auswahlschritte selbst, sobald wirklich ein Pull gewählt wird.
         #
 
-        service.enter_archive_mode()
+        service.ensure_reports()
 
         self._refresh()
 
     # --------------------------------------------------
     # Aufbau
     # --------------------------------------------------
-
-    def _build_head(self, root: QVBoxLayout):
-
-        head = QVBoxLayout()
-
-        head.setContentsMargins(0, 0, 0, 0)
-
-        head.setSpacing(2)
-
-        head.addWidget(eyebrow_label("ARCHIV · VERGANGENE KÄMPFE"))
-
-        title = QLabel("Welchen Pull willst du ansehen?")
-
-        title.setFont(font("title"))
-
-        restyle(title, f"color:{tokens.WHITE};background:transparent;")
-
-        head.addWidget(title)
-
-        root.addLayout(head)
 
     def _build_filters(self, root: QVBoxLayout):
 
@@ -478,6 +449,17 @@ class ArchiveBrowser(QWidget):
 
         scroll.setFrameShape(QFrame.NoFrame)
 
+        #
+        # Senkrecht ja, waagerecht nie. Die linke Spalte ist 260 px
+        # breit und trägt Zeilen, die breiter sein können ("Belagerung
+        # von Orgrimmar · aBcDeF12"); mit waagerechtem Balken stünde
+        # unter der Liste ein Schieber, den niemand benutzt, und er
+        # kostete die untere Zeile. Die Zeilen brechen stattdessen um -
+        # sie tun es ohnehin schon (`enable_wrap`).
+        #
+
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
         restyle(scroll, "QScrollArea{background:transparent;border:none;}")
 
         scroll.setWidget(body)
@@ -500,29 +482,7 @@ class ArchiveBrowser(QWidget):
 
         footer.addWidget(self.status, 1)
 
-        if not self._embedded:
-
-            close_button = HeroButton("Schliessen", primary=False)
-
-            close_button.clicked.connect(self._close_requested)
-
-            footer.addWidget(close_button)
-
         root.addLayout(footer)
-
-    def _close_requested(self):
-        """
-        Den Rahmen schliessen lassen, ohne ihn zu kennen.
-
-        `self.reject()` gäbe es hier nicht mehr - dieses Widget ist
-        kein Dialog. Der Umweg über das Elternteil hält den Browser
-        frei von der Frage, worin er gerade steckt.
-        """
-
-        window = self.window()
-
-        if window is not None:
-            window.close()
 
     # --------------------------------------------------
     # Nutzeraktionen
@@ -936,9 +896,8 @@ class ArchiveBrowser(QWidget):
 
             text = (
                 index.loading_text(state)
-                + " Das Fenster schliesst sich von selbst, sobald er "
-                "da ist - auf der Seite darunter läuft ein "
-                "Fortschritt mit."
+                + " Sobald er da ist, springt die Ansicht von selbst "
+                "auf die Analyse - die Wartekarte oben zählt mit."
             )
 
         elif state.fights_loading:
@@ -948,7 +907,10 @@ class ArchiveBrowser(QWidget):
             text = "Berichte werden geladen …"
 
         else:
-            text = "Ein Klick auf einen Pull lädt ihn in WeintTV und die Academy."
+            text = (
+                "Ein Klick auf einen Pull lädt ihn - danach steht er "
+                "in allen vier Ansichten."
+            )
 
         self.status.setText(text)
 
@@ -997,47 +959,3 @@ class ArchiveBrowser(QWidget):
         )
 
         self._insert(body, label)
-
-
-class ArchiveDialog(QDialog):
-    """
-    Der Browser als modales Fenster.
-
-    Nur noch der Rahmen: Titel, Größe, Hintergrund - und die eine
-    Regel, die ein Fenster hat und eine Seite nicht, nämlich sich zu
-    schliessen, sobald der angeklickte Pull geladen ist. Der Inhalt
-    kommt unverändert von `ArchiveBrowser`.
-    """
-
-    def __init__(self, service, parent=None):
-
-        super().__init__(parent)
-
-        self.setWindowTitle("Log auswählen")
-
-        self.setModal(True)
-
-        self.resize(940, 660)
-
-        self.setAttribute(Qt.WA_StyledBackground, True)
-
-        restyle(
-            self,
-            f"""
-            QDialog{{
-                background:{tokens.SURFACE["base"]};
-                border:1px solid {tokens.BORDER["base"]};
-                border-radius:{tokens.RADIUS["lg"]}px;
-            }}
-            """,
-        )
-
-        root = QVBoxLayout(self)
-
-        root.setContentsMargins(0, 0, 0, 0)
-
-        self.browser = ArchiveBrowser(service, self)
-
-        self.browser.fightLoaded.connect(self.accept)
-
-        root.addWidget(self.browser)

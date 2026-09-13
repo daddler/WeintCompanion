@@ -1406,7 +1406,7 @@ class WeakAurasPage(Page):
         `refresh()` läuft bei jeder Zustandsmeldung des Managers, also
         etwa im Sync-Takt. Ein unbedingtes Neuaufbauen setzte dabei die
         Bildlaufposition zurück, während jemand die Liste durchsieht -
-        dieselbe Falle, wegen der `ArchivePicker` seine Auswahlkästen
+        dieselbe Falle, wegen der der Archivbrowser seine Spalten
         erst vergleicht (siehe `gui/widgets/select.py`).
         """
 

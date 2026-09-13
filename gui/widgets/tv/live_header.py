@@ -46,6 +46,16 @@ from gui.widgets.eyebrow import eyebrow_label
 
 HEADER_HEIGHT = 96
 
+
+#
+# Ohne die Titelzeile (im Raid Center, wo Boss und Pull im Kopfblock
+# stehen) bleibt eine Chipzeile statt einer Titelzeile - 20 px weniger,
+# und die gehen an die Ranglisten darunter, wo jede Zeile eine Person
+# mehr bedeutet.
+#
+
+COMPACT_HEIGHT = 84
+
 BOSS_BAR_HEIGHT = 16
 
 CLOCK_WIDTH = 148
@@ -149,11 +159,31 @@ class LiveHeader(QFrame):
     Der ganze Kopfblock.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, titles: bool = True):
+        """
+        `titles=False` lässt Bossname, Zone/Schwierigkeit und den
+        Pull-Chip weg.
+
+        Für das Raid Center: dort stehen genau diese drei Angaben im
+        Kopfblock darüber, der beim Wechsel der Perspektive stehen
+        bleibt (siehe `gui/widgets/raid/context_header.py`). Zwei
+        Bossnamen übereinander waren die auffälligste Doppelung des
+        alten Aufbaus - und die beiden konnten sich sogar kurz
+        widersprechen, weil der eine aus dem Snapshot kam und der
+        andere aus der Archivauswahl.
+
+        Was bleibt, ist die andere Frage: nicht *welcher* Kampf, sondern
+        *wie er gerade steht* - Bossbalken, Pull-Uhr, Tode, Rezz-Ladungen,
+        Heldentum.
+        """
 
         super().__init__(parent)
 
-        self.setFixedHeight(HEADER_HEIGHT)
+        self._titles = bool(titles)
+
+        self.setFixedHeight(
+            HEADER_HEIGHT if self._titles else COMPACT_HEIGHT
+        )
 
         root = QHBoxLayout(self)
 
@@ -196,6 +226,10 @@ class LiveHeader(QFrame):
 
         title_row.addWidget(self.context)
 
+        self.boss_name.setVisible(self._titles)
+
+        self.context.setVisible(self._titles)
+
         title_row.addStretch(1)
 
         #
@@ -215,6 +249,8 @@ class LiveHeader(QFrame):
         title_row.addWidget(self.chip_heroism)
 
         self.pull_chip = Chip("PULL 1", "accent")
+
+        self.pull_chip.setVisible(self._titles)
 
         title_row.addWidget(self.pull_chip)
 
@@ -324,7 +360,16 @@ class LiveHeader(QFrame):
         # das Zeichen etwas, das nicht stimmt.
         #
 
-        self.live_chip.setVisible(bool(snapshot.live) and has_data)
+        #
+        # Ohne Titel gehört auch dieser Chip nicht hierher: der
+        # Kopfblock des Raid Centers trägt den Zustandschip
+        # (LIVE/ARCHIV/WIEDERGABE), und er ist die vollständigere
+        # Antwort - er unterscheidet drei Lagen statt einer.
+        #
+
+        self.live_chip.setVisible(
+            self._titles and bool(snapshot.live) and has_data
+        )
 
         #
         # Boss, Instanz und Schwierigkeit stehen in `encounter` und

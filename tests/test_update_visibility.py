@@ -530,11 +530,20 @@ def test_no_page_refresh_starts_a_network_round():
     import ast
     import pathlib
 
-    pages = pathlib.Path(__file__).resolve().parent.parent / "gui" / "pages"
+    gui = pathlib.Path(__file__).resolve().parent.parent / "gui"
 
     offenders = []
 
-    for path in sorted(pages.rglob("*.py")):
+    #
+    # Seiten **und** Widgets. Seit 4.0 hat der Kopfblock des Raid
+    # Centers ein eigenes `refresh()`, das die Seite aus ihrem eigenen
+    # durchruft - ein Netzaufruf darin schliesst denselben Kreis eine
+    # Ebene tiefer, und die Ebene ist dem Fehler gleichgültig.
+    #
+
+    for path in sorted(
+        [*(gui / "pages").rglob("*.py"), *(gui / "widgets").rglob("*.py")]
+    ):
 
         tree = ast.parse(path.read_text(encoding="utf-8"))
 

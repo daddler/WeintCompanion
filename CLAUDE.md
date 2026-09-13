@@ -52,6 +52,12 @@ WeintCodex Bot (Discord bot backend)  ←─────────────
   `QCloseEvent` into a `hideEvent` handler) — segfaults with no Python
   traceback. Shared teardown goes in a plain, event-free, idempotent
   method. Detail: `docs/architecture/qt-pitfalls.md`.
+- **A raid/pull is the central object; Live, Analyse, Lernen and Quelle
+  are four perspectives on it, never four places.** The context header
+  lives outside the view stack so it survives a perspective change, and
+  `core/raid_context.py` is a *projection* over `RaidDataService` — never
+  a second store for mode, archive selection or replay. Detail:
+  `docs/systems/raid-center.md`.
 - **A sim result is one run, not two imports.** `stat_weights` and
   `target_gear` stay two contracts, two stores and two channels — but
   they carry the same run id, and the UI shows one run. Never re-split
@@ -110,8 +116,9 @@ Linux/Windows/AppImage build commands.
 | Task touches… | Read |
 |---|---|
 | Theme/accent, signals, animations, lambda leaks | `docs/architecture/theming.md` |
-| Page registry, `PageId`, page lifecycle | `docs/architecture/navigation.md` |
+| Page registry, `PageId`, `RaidView`/`RaidLink`, page lifecycle | `docs/architecture/navigation.md` |
 | Qt segfaults, startup ordering, platform paths | `docs/architecture/qt-pitfalls.md` |
+| Raid Center (Informationsarchitektur, vier Ansichten, RaidContext, Tiefenverweise) | `docs/systems/raid-center.md` |
 | WeintTV/Academy (live), ratings, lesson catalog, "wer bin ich", Datenquelle/Quellenzeile/Wegweiser | `docs/systems/weinttv-academy.md` |
 | Archiv-Modus, Wiedergabe/Replay | `docs/systems/archive-and-replay.md` |
 | Addon-/Companion-Updates, Storage-Warnung, Changelog-Anzeige | `docs/systems/update-system.md` |

@@ -42,7 +42,12 @@ from gui.widgets.nav_column import NavColumn
 from gui.widgets.toast import ToastHost
 from gui.widgets.title_bar import TitleBar
 
-from gui.navigation import PageId, build_page_specs
+from gui.navigation import (
+    RAID_VIEW_LEARN as _RAID_VIEW_LEARN,
+    PageId,
+    RaidLink,
+    build_page_specs,
+)
 
 
 class MainWindow(QMainWindow):
@@ -527,6 +532,17 @@ class MainWindow(QMainWindow):
 
             page.playerRequested.connect(self.open_academy_for)
 
+        #
+        # Tiefenverweise auf einen Pull. Sie tragen mehr als eine
+        # Seitennummer (welcher Pull, welche Perspektive, welcher
+        # Charakter, welche Sekunde) und deshalb einen `RaidLink` statt
+        # eines `int` - siehe gui/navigation.py.
+        #
+
+        if hasattr(page, "openRaidCenter"):
+
+            page.openRaidCenter.connect(self.open_raid_center)
+
         if hasattr(page, "openSettingsSection"):
 
             page.openSettingsSection.connect(self.open_settings_section)
@@ -608,7 +624,7 @@ class MainWindow(QMainWindow):
 
         #
         # Die meisten Seiten stecken in einem QScrollArea-Wrapper
-        # (siehe wrap_page) - Übersicht, WeintTV und Archiv bewusst
+        # (siehe wrap_page) - Übersicht und Raid Center bewusst
         # nicht (siehe scroll=False in der Registry).
         #
 
@@ -1300,23 +1316,48 @@ class MainWindow(QMainWindow):
 
     def open_academy_for(self, player_name: str):
         """
-        Aus WeintTVs Analyse heraus einen Spieler in der Academy
-        öffnen.
+        Einen Spieler in der Lernansicht öffnen.
 
-        Die Reihenfolge ist entscheidend: erst den Charakter setzen,
-        dann die Seite wechseln. `change_page()` löst `on_enter()` und
-        `refresh()` aus, die aus dem aktuellen Snapshot neu zeichnen -
-        andersherum stünde für einen Moment der falsche Charakter auf
-        der Seite.
+        Seit 4.0 ist das kein Seitenwechsel mehr, sondern ein
+        Perspektivwechsel innerhalb des Raid Centers: derselbe Pull,
+        anderer Blick, und der Charakter wechselt mit. Der Weg bleibt
+        als eigene Methode bestehen, weil das Signal `playerRequested`
+        duck-getypt an jeder Seite hängen kann.
         """
 
-        academy = self._ensure_page(PageId.ACADEMY)
+        self.open_raid_center(
+            RaidLink(
+                view=_RAID_VIEW_LEARN,
+                player=player_name,
+            )
+        )
 
-        if hasattr(academy, "show_player"):
+    def open_raid_center(self, link=None):
+        """
+        Das Raid Center öffnen und dort einen Tiefenverweis auflösen.
 
-            academy.show_player(player_name)
+        Die Reihenfolge ist entscheidend und dieselbe wie früher bei
+        `open_academy_for()`: erst die Seite bauen und den Verweis
+        auflösen, dann wechseln. `change_page()` löst `on_enter()` und
+        `refresh()` aus, die aus dem aktuellen Snapshot neu zeichnen -
+        andersherum stünde für einen Moment der falsche Pull oder der
+        falsche Charakter da.
 
-        self.change_page(PageId.ACADEMY)
+        `link` darf `None` sein: dann ist es der gewöhnliche
+        Seitenwechsel, und das Raid Center behält die Perspektive, in
+        der es zuletzt stand.
+        """
+
+        page = self._ensure_page(PageId.RAID_CENTER)
+
+        if page is None:
+            return
+
+        if link is not None and hasattr(page, "open"):
+
+            page.open(link)
+
+        self.change_page(PageId.RAID_CENTER)
 
     # --------------------------------------------------
     # System-Tray

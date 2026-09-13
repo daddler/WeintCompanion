@@ -11,6 +11,8 @@ etwas geholt wird.
 
 import os
 
+import time
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -178,6 +180,25 @@ def _state(**overrides):
     return ArchiveState(**base)
 
 
+def _started(seconds_ago: float) -> float:
+    """
+    Eine Monotonzeit, die `seconds_ago` Sekunden zurückliegt - und
+    dabei **positiv** bleibt.
+
+    `time.monotonic() - 200.0` tut das nicht überall: in einem Container
+    zählt die Uhr ab dessen Start, und in den ersten Minuten seines
+    Lebens ist die Differenz negativ. `ArchiveState.elapsed()` liest ein
+    `fight_started_at <= 0` als "läuft gerade keiner" und antwortet mit
+    0,0 - richtig so (0.0 heisst dort ausdrücklich "kein Abruf"), aber
+    der Test prüfte damit den falschen Fall und schlug je nach Uptime
+    des Rechners fehl.
+    """
+
+    now = time.monotonic()
+
+    return max(1.0, now - seconds_ago)
+
+
 def test_the_waiting_card_stays_invisible_while_nothing_is_loading():
 
     _app()
@@ -202,7 +223,7 @@ def test_the_waiting_card_names_the_pull_and_shows_a_number():
     service = _Service(
         _state(
             fight_loading=True,
-            fight_started_at=time.monotonic() - 20.0,
+            fight_started_at=_started(20.0),
             fight_expected=60.0,
             fight_label="Garrosh Höllschrei",
         )
@@ -235,7 +256,7 @@ def test_the_waiting_card_says_when_it_takes_longer_than_usual():
         _Service(
             _state(
                 fight_loading=True,
-                fight_started_at=time.monotonic() - 200.0,
+                fight_started_at=_started(200.0),
                 fight_expected=60.0,
                 fight_label="Garrosh Höllschrei",
             )

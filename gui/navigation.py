@@ -26,6 +26,25 @@ Neu in 2.0: die Bereiche sind **gruppiert** (RAID / CHARAKTER /
 SYSTEM). Die Gruppe steht am `PageSpec` und nicht in der
 Navigationsspalte, damit auch sie aus derselben einen Liste entsteht -
 sonst gäbe es wieder zwei Reihenfolgen, die zusammenpassen müssen.
+
+Neu in 4.0: **RAID hat zwei Einträge statt vier.** WeintTV, die
+Academy und das Archiv waren drei gleichwertige Hauptbereiche, die
+sich unsichtbar eine Datenquelle, einen Snapshot und eine
+Archivauswahl teilten - der Nutzer musste selbst wissen, wann er
+welchen öffnet, und um von einem analysierten Pull zur passenden
+Lektion zu kommen, ging er über die Seitenleiste und wählte dort
+Charakter und Pull erneut. Die drei sind zu **vier Perspektiven eines
+Bereichs** geworden (Live, Analyse, Lernen, Quelle), die sich einen
+Kopfblock und damit einen Pull teilen: `gui/pages/raid_center.py`. Die
+Namen WeintTV und WeintAcademy bleiben als Module bestehen (sie
+stehen in den Einstellungen, im Addon und auf dem Discord), nur sind
+sie keine Orte mehr, an die man gehen muss.
+
+`RaidView` und `RaidLink` weiter unten gehören mit dazu: ein
+Tiefenverweis auf einen Pull ist ein Navigationsziel wie eine Seite,
+und er gehört deshalb in dieselbe Datei wie `PageId` - nicht als
+Sammlung von Schlüsselwortargumenten, die jede rufende Seite selbst
+zusammensetzt.
 """
 
 from __future__ import annotations
@@ -47,30 +66,31 @@ class PageId(IntEnum):
     #
     # RAID
     #
+    # Zwei Einträge, nicht vier: WeintTV, Academy und Archiv sind
+    # Perspektiven des Raid Centers und keine eigenen Orte mehr.
+    #
 
     OVERVIEW = 0
-    WEINTTV = 1
-    ACADEMY = 2
-    ARCHIVE = 3
+    RAID_CENTER = 1
 
     #
     # CHARAKTER
     #
 
-    CHARACTERS = 4
-    PREPARATION = 5
-    SIM = 6
-    WEAKAURAS = 7
-    CHARACTER_LINKS = 8
+    CHARACTERS = 2
+    PREPARATION = 3
+    SIM = 4
+    WEAKAURAS = 5
+    CHARACTER_LINKS = 6
 
     #
     # SYSTEM
     #
 
-    ADDON = 9
-    CONNECTIONS = 10
-    SETTINGS = 11
-    LOGS = 12
+    ADDON = 7
+    CONNECTIONS = 8
+    SETTINGS = 9
+    LOGS = 10
 
 
 #
@@ -83,6 +103,132 @@ GROUP_RAID = "RAID"
 GROUP_CHARACTER = "CHARAKTER"
 
 GROUP_SYSTEM = "SYSTEM"
+
+
+#
+# ==========================================================
+# Die vier Perspektiven des Raid Centers
+# ==========================================================
+#
+# Sie sind **keine** PageIds: ein Perspektivwechsel ist kein
+# Seitenwechsel. Der Unterschied ist der ganze Punkt des Umbaus - der
+# Kopfblock mit Boss, Pull und Ausgang bleibt stehen, es wechselt nur
+# der Blick darauf. Wären sie vier Seiten, wäre auch der Kopfblock
+# viermal da, und dann wäre er viermal etwas anderes.
+#
+# Die Schlüssel sind Zeichenketten und keine Zahlen: sie stehen in
+# Tiefenverweisen ("öffne die Analyse dieses Pulls"), und eine 2 in
+# einem Signal ist beim nächsten Umbau eine andere Ansicht als vorher.
+#
+
+RAID_VIEW_LIVE = "live"
+
+RAID_VIEW_ANALYSIS = "analysis"
+
+RAID_VIEW_LEARN = "learn"
+
+RAID_VIEW_SOURCE = "source"
+
+
+#
+# Reihenfolge und Beschriftung der Umschaltleiste. Sie steht hier und
+# nicht in der Seite, aus demselben Grund wie `PageSpec`: die Leiste
+# und die Reiter des Stapels entstehen beide daraus und können nicht
+# auseinanderlaufen.
+#
+# Die Beschriftungen benennen **Aufgaben** und nicht Module. "WeintTV"
+# und "Academy" sagen, welches Teil der Anwendung antwortet; "Live"
+# und "Lernen" sagen, welche Frage man stellt - und nur die zweite
+# Auskunft hilft jemandem, der die Anwendung nicht gebaut hat.
+#
+
+RAID_VIEWS: tuple[tuple[str, str, str], ...] = (
+
+    (
+        RAID_VIEW_LIVE,
+        "Live",
+        "Was gerade passiert: Bossleben, Pulldauer, Schaden und "
+        "Heilung je Spieler, Tode, Cooldowns.",
+    ),
+
+    (
+        RAID_VIEW_ANALYSIS,
+        "Analyse",
+        "Die Tiefenauswertung dieses Pulls - Schaden erlitten, "
+        "Wirkzeiten, Aktivzeit, Cooldown-Nutzung mit Zeitstrahl.",
+    ),
+
+    (
+        RAID_VIEW_LEARN,
+        "Lernen",
+        "Was du als Nächstes verbessern solltest - aus genau diesem "
+        "Pull abgeleitet, mit der Lektion dazu.",
+    ),
+
+    (
+        RAID_VIEW_SOURCE,
+        "Quelle",
+        "Welchen vergangenen Kampf willst du ansehen? Raidabend, "
+        "Boss und Pull - oder zurück zum laufenden Raid.",
+    ),
+
+)
+
+
+RAID_VIEW_KEYS = tuple(key for key, _label, _hint in RAID_VIEWS)
+
+RAID_VIEW_LABELS = {key: label for key, label, _hint in RAID_VIEWS}
+
+RAID_VIEW_HINTS = {key: hint for key, _label, hint in RAID_VIEWS}
+
+
+@dataclass(frozen=True)
+class RaidLink:
+    """
+    Ein Tiefenverweis auf einen Pull - "zeig mir *das* dort".
+
+    Jedes Feld ist ein Wunsch und keine Vorgabe: was leer bleibt,
+    lässt den bestehenden Kontext unberührt. Das ist die
+    Voraussetzung dafür, dass ein Wechsel der Perspektive den Pull
+    nicht verliert - `RaidLink(view=RAID_VIEW_LEARN)` heisst "derselbe
+    Kampf, anderer Blick" und nicht "irgendein Kampf".
+
+    `seconds` ist der Sprung in die Wiedergabe: die Academy weiss, dass
+    ein vermeidbarer Treffer bei 03:41 lag, und der Verweis trägt genau
+    diese Sekunde mit. `None` heisst "nicht springen" und nicht
+    "Sekunde 0" - dieselbe Linie wie bei `at == -1` im Analyzer.
+    """
+
+    view: str = ""
+
+    #
+    # Welcher Pull. Beide zusammen oder keiner - eine halbe Kennung
+    # könnte nichts laden und würde die bestehende Auswahl trotzdem
+    # verwerfen.
+    #
+
+    report_code: str = ""
+
+    fight_id: int | None = None
+
+    #
+    # Auf wen sich Bewertung und Analyse beziehen sollen.
+    #
+
+    player: str = ""
+
+    #
+    # Sekunde der Wiedergabe.
+    #
+
+    seconds: float | None = None
+
+    # --------------------------------------------------
+
+    @property
+    def has_pull(self) -> bool:
+
+        return bool(self.report_code) and self.fight_id is not None
 
 
 @dataclass(frozen=True)
@@ -140,19 +286,17 @@ def build_page_specs() -> tuple[PageSpec, ...]:
     Die vollständige Seitenliste, in Navigationsreihenfolge.
     """
 
-    from gui.pages.academy import AcademyPage
     from gui.pages.addon import AddonPage
-    from gui.pages.archive import ArchivePage
     from gui.pages.character_links import CharacterLinksPage
     from gui.pages.characters import CharactersPage
     from gui.pages.connections import ConnectionsPage
     from gui.pages.logs import LogsPage
     from gui.pages.overview import OverviewPage
     from gui.pages.preparation import PreparationPage
+    from gui.pages.raid_center import RaidCenterPage
     from gui.pages.settings import SettingsPage
     from gui.pages.sim import SimPage
     from gui.pages.weakauras import WeakAurasPage
-    from gui.pages.weinttv import WeintTvPage
 
     return (
 
@@ -176,45 +320,32 @@ def build_page_specs() -> tuple[PageSpec, ...]:
             attribute="overview",
         ),
 
+        #
+        # Das Raid Center - ein Bereich, vier Perspektiven.
+        #
+        # `scroll=False` ist hier nicht Feinheit, sondern die Bedingung
+        # des ganzen Umbaus: der Kopfblock mit Boss, Pull und Ausgang
+        # muss stehen bleiben, wenn man zwischen Live, Analyse, Lernen
+        # und Quelle wechselt. In einem Scrollbereich der ganzen Seite
+        # würde er beim ersten Rollen verschwinden - und dann wäre er
+        # wieder vier verschiedene Kopfzeilen. Gescrollt wird deshalb
+        # **innerhalb** jeder Ansicht (siehe gui/pages/raid_center.py),
+        # was zugleich die Bedingung aus §8 erfüllt, dass die Live-
+        # Ranglisten 25 Zeilen ohne Scrollen der Seite tragen.
+        #
+        # `force_collapsed_nav`, weil die dichteste der vier Ansichten
+        # die Breite braucht - das war schon für WeintTV und das Archiv
+        # so und gilt für ihren gemeinsamen Nachfolger unverändert.
+        #
+
         PageSpec(
-            page_id=PageId.WEINTTV,
-            label="WeintTV",
+            page_id=PageId.RAID_CENTER,
+            label="Raid Center",
             group=GROUP_RAID,
             icon="weinttv",
-            page_factory=WeintTvPage,
-            #
-            # Der Entwurf verlangt für WeintTV `scroll=False`: 25
-            # Zeilen sollen bei 1440 x 900 ohne Scrollen passen, und
-            # das geht nur, wenn die Seite die volle Höhe bekommt
-            # statt eines Scrollbereichs. Solange die Seite noch die
-            # Anordnung aus 1.7 trägt (Zeilenhöhen und feste Höhen aus
-            # einer Zeit, in der jede Schrift versehentlich 14 px war),
-            # würde das ihren unteren Teil abschneiden. Der Wechsel auf
-            # False gehört mit dem Umbau der Seite zusammen, nicht
-            # davor.
-            #
-            scroll=True,
-            attribute="weinttv",
-            force_collapsed_nav=True,
-        ),
-
-        PageSpec(
-            page_id=PageId.ACADEMY,
-            label="Academy",
-            group=GROUP_RAID,
-            icon="academy",
-            page_factory=AcademyPage,
-            attribute="academy",
-        ),
-
-        PageSpec(
-            page_id=PageId.ARCHIVE,
-            label="Archiv",
-            group=GROUP_RAID,
-            icon="archiv",
-            page_factory=ArchivePage,
+            page_factory=RaidCenterPage,
             scroll=False,
-            attribute="archive",
+            attribute="raid_center",
             force_collapsed_nav=True,
         ),
 

@@ -110,6 +110,35 @@ minus `status`). `_parse_others()` reruns each entry through
 `parse_schedule()` rather than rebuilding it. `others_text()` renders the
 one line the Overview shows for a parallel raid.
 
+## "Dein letzter Pull" is a deep link, not a mention (4.0)
+
+The card had one button, *Lektion öffnen*, and it went to the Academy —
+where the work started over: pick a character, find the pull again, find
+the lesson. It now carries two buttons that **take the pull with them**
+(`raidCenterRequested` → the page's `openRaidCenter` → a `RaidLink`, see
+`raid-center.md`): *Pull ansehen* opens it under *Analyse*, *Daraus lernen*
+under *Lernen*. Report code and fight id ride along only when the pull has
+them — a session pull does not, and half an identity would discard the
+loaded archive selection without being able to load anything.
+
+**And the star row finally means something.** It sat there from 2.0 on and
+was never filled. It now comes from the **recorded** rating of exactly this
+pull: `OverviewPage._pull_focus()` builds the recording key with
+`last_pull.record_key()` (the same shape as `progression.pull_key()`), asks
+`AcademyService.record_for()` for that one record, and takes
+`progression.weakest_of()` from it. Two conditions, both load-bearing:
+
+- **The key has to match.** The last *evaluated* and the last *played*
+  pull are regularly two different fights on a raid night, and a rating
+  under the wrong fight is a false statement, not an imprecise one.
+- **Zero stars are not a focus.** `weakest_of()` skips them — `stars == 0`
+  means "no data", never "bad".
+
+Either one failing leaves the row empty and the card says how to get a
+rating, rather than estimating one. The Overview still evaluates nothing
+itself: `refresh()` may only draw, and re-analysing a pull costs the bot
+minutes.
+
 ## "Dein letzter Pull" survives a restart
 
 `RaidDataService.history()` only fills with pulls completed **in this
@@ -117,8 +146,8 @@ session** — the morning after a raid it said "Noch kein Pull", a wrong
 statement, not caution. `core/last_pull.py` (pure) + `core/last_pull_sync.py`
 (HTTP) add the newest WarcraftLogs report with a boss fight, every 20
 minutes, cached under `Paths.cache()`. The **session wins** over the
-archive; the **fight list is enough** (no rating estimated — the card
-says outright an archived pull carries none); the trend line holds only
+archive; the **fight list is enough** (no rating derived from it — the
+rating comes from the recording, see above, or not at all); the trend line holds only
 pulls of the **same** boss; `time.monotonic()` uses `None` for "never
 fetched" (a raw `0.0` would suppress the first fetch on a machine that
 just booted).

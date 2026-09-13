@@ -24,6 +24,13 @@ from __future__ import annotations
 
 from analyzer.models import RaidSnapshot
 
+from core.raid_context import (
+    OUTCOME_KILL,
+    OUTCOME_OPEN,
+    OUTCOME_WIPE,
+    outcome_of,
+)
+
 
 def encounter_meta(snapshot: RaidSnapshot, profile) -> str:
     """
@@ -68,6 +75,39 @@ def encounter_meta(snapshot: RaidSnapshot, profile) -> str:
     return " · ".join(parts)
 
 
+def average_text(profile) -> str:
+    """
+    Nur die Durchschnittsnote - "Ø 3,7/5", sonst leerer String.
+
+    Für den Kopf der Lernansicht. Sie nennt dort **nicht** noch einmal
+    Boss, Schwierigkeit, Pull und Ausgang: die vier stehen seit 4.0 im
+    Kontextblock des Raid Centers, der beim Perspektivwechsel stehen
+    bleibt, und ein zweites Mal darunter wären sie die Doppelung, die
+    dieser Umbau beseitigt. Was `encounter_meta()` hat und der
+    Kontextblock nicht, ist genau diese Note - also bleibt sie hier.
+
+    `encounter_meta()` selbst bleibt unverändert: sie geht als
+    `encounterText` ins Addon (siehe `addon/addon_payloads.py`), und
+    dort steht kein Kontextblock daneben.
+    """
+
+    if not getattr(profile, "sample_size", 0):
+        return ""
+
+    average = getattr(profile, "average_stars", 0.0)
+
+    #
+    # Die Note nur, wenn überhaupt etwas bewertet wurde. `average_stars`
+    # ist 0,0, sobald kein Bereich Daten trägt - "Ø 0,0/5" wäre dort
+    # die schlechteste Note statt "keine Daten".
+    #
+
+    if not getattr(profile, "rated", ()) or average <= 0:
+        return ""
+
+    return f"Ø {average:.1f}/5".replace(".", ",")
+
+
 def outcome_text(snapshot: RaidSnapshot) -> str:
     """
     Wie der Pull ausging.
@@ -76,17 +116,27 @@ def outcome_text(snapshot: RaidSnapshot) -> str:
     Ausgang **offen**, und ihn als Wipe bei der aktuellen Bossleiste
     auszugeben wäre eine Behauptung über einen Kampf, der noch läuft -
     in einer Wiedergabe sogar viermal je Sekunde eine andere.
+
+    Welcher der drei Fälle vorliegt, entscheidet `outcome_of()` in
+    `core/raid_context.py` - dieselbe Ableitung, aus der auch der
+    Kopfblock des Raid Centers seinen Ausgang liest. Hier steht nur die
+    Formulierung: zwei Ableitungen derselben drei Fälle wären zwei
+    Antworten, die beim nächsten Sonderfall auseinanderlaufen.
     """
 
-    if not snapshot.has_data:
-        return ""
+    outcome = outcome_of(
+        snapshot.has_data,
+        snapshot.in_combat,
+        snapshot.boss_health_percent,
+    )
 
-    if snapshot.in_combat:
+    if outcome == OUTCOME_OPEN:
         return "läuft"
 
-    health = snapshot.boss_health_percent
-
-    if health <= 0:
+    if outcome == OUTCOME_KILL:
         return "Kill"
 
-    return f"Wipe bei {health:.0f} %"
+    if outcome == OUTCOME_WIPE:
+        return f"Wipe bei {snapshot.boss_health_percent:.0f} %"
+
+    return ""

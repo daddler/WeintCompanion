@@ -10,10 +10,16 @@ Dashboard voller Zahlen sitzt und wissen will, warum sein Raid nicht
 darin vorkommt. Die häufigste Verwechslung war genau die: erfundene
 Beispieldaten für den eigenen Abend zu halten.
 
-Diese Zeile steht deshalb auf allen drei Seiten und sagt drei Dinge:
-welche Quelle eingestellt ist, was das bedeutet, und - direkt daneben -
-wie man sie wechselt. Dazu der Weg in den Wegweiser
-(`gui/dialogs/guide_dialog.py`).
+Diese Zeile steht deshalb da, wo man die Quelle auch wechselt - seit
+4.0 in der Ansicht *Quelle* des Raid Centers - und sagt drei Dinge:
+welche Quelle eingestellt ist, was das bedeutet, und direkt daneben,
+wie man sie wechselt.
+
+**Der Wegweiser-Knopf ist hier entfallen.** Er steht seit 4.0 in der
+Umschaltleiste des Raid Centers und ist damit aus jeder Perspektive
+erreichbar; zwei "Was ist das hier?" auf einem Bildschirm sind einer zu
+viel. Wo die Zahlen *gelesen* werden, nennt ausserdem ein Chip im
+Kopfblock die laufende Quelle und führt mit einem Klick hierher.
 
 Vier Dinge, die nicht Geschmack sind:
 
@@ -31,7 +37,7 @@ Vier Dinge, die nicht Geschmack sind:
   Einstellungen hier nicht als alter Stand stehen bleibt.
 - **Der Auswahlkasten wird beim Setzen stummgeschaltet.** Ohne das
   löste das Nachziehen des Standes einen weiteren Wechsel aus -
-  derselbe Kreis wie beim Moduswähler im `ArchivePicker`.
+  derselbe Kreis wie beim Moduswähler der Quellenansicht.
 """
 
 from __future__ import annotations
@@ -46,13 +52,11 @@ from core.raid_data_service import (
     is_demo_source,
 )
 
-from gui.dialogs.guide_dialog import GuideDialog
 from gui.theme import tokens
 from gui.theme.fonts import font
 from gui.theme.restyle import restyle
 from gui.widgets.card import Card
 from gui.widgets.eyebrow import eyebrow_label
-from gui.widgets.hero_banner import HeroButton
 from gui.widgets.select import Select
 from gui.widgets.wrapped_label import enable_wrap
 
@@ -123,12 +127,6 @@ class SourceStrip(Card):
 
         row.addWidget(self.picker)
 
-        self.guide_button = HeroButton("Was ist das hier?", primary=False)
-
-        self.guide_button.clicked.connect(self.open_guide)
-
-        row.addWidget(self.guide_button)
-
         self.addLayout(row)
 
         service.sourceChanged.connect(self._refresh)
@@ -138,15 +136,6 @@ class SourceStrip(Card):
     # --------------------------------------------------
     # Nutzeraktionen
     # --------------------------------------------------
-
-    def open_guide(self):
-        """
-        Der Wegweiser wird je Aufruf neu gebaut und mit `exec()`
-        angeschlossen - er ist eine Auskunft, kein Aufenthaltsort.
-        Dieselbe Überlegung wie beim Archivbrowser.
-        """
-
-        GuideDialog(self).exec()
 
     def _on_picked(self, index: int):
 

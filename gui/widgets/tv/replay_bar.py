@@ -2,16 +2,18 @@
 Steuerleiste der Wiedergabe, gemeinsam genutzt von WeintTV und der
 Academy.
 
-Wie der ArchivePicker kennt dieses Widget keine eigene Logik: es liest
+Wie der Archivbrowser kennt dieses Widget keine eigene Logik: es liest
 `RaidDataService.replay_state()` und ruft dessen Methoden auf. Weil
 beide Seiten denselben Service ansprechen, zeigen sie während einer
 Wiedergabe immer dieselbe Sekunde - dieselbe Begründung, aus der sie
 sich schon den Live-Snapshot teilen.
 
-Genau das ist der Sinn der `compact`-Variante in der Academy: dort
-soll man die Wiedergabe bedienen können, ohne dass die Seite zur
-Fernbedienung wird. Die Geschwindigkeitswahl bleibt WeintTV
-vorbehalten.
+**Seit 4.0 gibt es sie genau einmal.** Sie stand bis dahin zweimal
+(in WeintTV voll, in der Academy als `compact`-Variante ohne
+Geschwindigkeitswahl), weil beide Seiten sie brauchten. Im Raid Center
+hängt sie über dem Ansichtsstapel und gilt damit für alle vier
+Perspektiven zugleich - man kann beim Zusehen spulen, ohne die
+Perspektive zu wechseln.
 """
 
 from __future__ import annotations
@@ -38,13 +40,11 @@ SLIDER_STEPS_PER_SECOND = 10
 
 class ReplayBar(QWidget):
 
-    def __init__(self, service, compact: bool = False, parent=None):
+    def __init__(self, service, parent=None):
 
         super().__init__(parent)
 
         self.service = service
-
-        self._compact = compact
 
         #
         # Solange der Nutzer den Regler festhält, darf der Takt der
@@ -95,8 +95,6 @@ class ReplayBar(QWidget):
         self.speed_switch.valueChanged.connect(
             self.service.set_replay_speed
         )
-
-        self.speed_switch.setVisible(not compact)
 
         layout.addWidget(self.speed_switch)
 
@@ -201,7 +199,7 @@ class ReplayBar(QWidget):
         ):
             widget.setVisible(True)
 
-        self.speed_switch.setVisible(not self._compact)
+        self.speed_switch.setVisible(True)
 
         self.play_button.setText(
             "Pause"

@@ -67,8 +67,14 @@ from gui.widgets.hero_banner import HeroButton
 # Fassung der Tour. Steigt sie, bekommen ALLE die Einführung noch
 # einmal - siehe Modulkopf.
 #
+# **4 seit WeintCompanion 4.0.** Genau der Fall, für den es diese Zahl
+# gibt: die Navigation hat sich geändert (RAID hat zwei Einträge statt
+# vier, WeintTV/Academy/Archiv sind Ansichten des Raid Centers), und ein
+# Rundgang, der drei Bereiche erklärt, die es nicht mehr gibt, schickt
+# jeden an Orte, die er nicht findet.
+#
 
-TOUR_EDITION = 3
+TOUR_EDITION = 4
 
 REPO_URL = "https://github.com/daddler/WeintCodex"
 
@@ -128,13 +134,18 @@ TOUR_PAGES: tuple[TourPage, ...] = (
         "dashboard", "Erste Schritte",
         "So ist das Fenster aufgebaut",
         "Links steht die Navigationsspalte, in drei Gruppen: RAID "
-        "(Übersicht, WeintTV, Academy, Archiv), CHARAKTER (Meine "
+        "(Übersicht, Raid Center), CHARAKTER (Meine "
         "Charaktere, Vorbereitung, Simmen, WeakAuras, Charakterzuordnung) "
         "und SYSTEM (Addon & Updates, Verbindungen, Einstellungen, "
         "Protokoll).\n\n"
+        "RAID hat bewusst nur zwei Einträge. Alles, was mit einem Pull zu "
+        "tun hat — zusehen, auswerten, daraus lernen, einen älteren "
+        "wiederfinden — liegt im **Raid Center** als vier Ansichten "
+        "desselben Kampfes. Du musst also nicht wissen, welchen Bereich "
+        "du wann brauchst.\n\n"
         "Auf einem schmalen Fenster klappt die Spalte auf Symbole "
-        "zusammen; die Beschriftung wird dann zum Tooltip. WeintTV und "
-        "das Archiv klappen sie immer ein — beide brauchen die Breite.\n\n"
+        "zusammen; die Beschriftung wird dann zum Tooltip. Das Raid "
+        "Center klappt sie immer ein — es braucht die Breite.\n\n"
         "Das Aussehen bestimmst du selbst: unter Einstellungen → "
         "Erscheinungsbild wählst du die Akzentfarbe, die Dichte "
         "(komfortabel oder kompakt) und ob Bewegungen reduziert werden "
@@ -236,31 +247,47 @@ TOUR_PAGES: tuple[TourPage, ...] = (
 
     TourPage(
         "weinttv", "Raid & Analyse",
-        "WeintTV",
-        "Die Tiefenanalyse eines Pulls: Bosslebenspunkte, Schaden und "
-        "Heilung im Vergleich, Tode und Kampfwiederbelebungen, "
-        "vermeidbarer Schaden mit der Gegenmaßnahme dazu, Wirkungsdauern "
-        "deiner Effekte, Aktivzeit, Cooldown-Nutzung samt Zeitstrahl, "
-        "Verbrauchsgüter und Mechanikfehler.\n\n"
-        "Alles davon liest **einen** Datenstand — ein vollständiges Bild "
-        "eines Augenblicks. Kein Fenster rechnet selbst etwas aus. Genau "
-        "das verhindert, dass WeintTV und die Academy zwei verschiedene "
-        "Antworten auf dieselbe Frage geben.\n\n"
+        "Das Raid Center — ein Pull, vier Ansichten",
+        "Alles, was mit einem Raidkampf zu tun hat, liegt hier. Oben "
+        "steht **welcher Pull** das ist: Zone, Boss, Pullnummer, "
+        "Ausgang, Bossanteil, Dauer, Wochentag und Uhrzeit. Dieser Block "
+        "bleibt stehen, während du darunter die Ansicht wechselst — du "
+        "verlierst deinen Kampf also nie beim Umschalten.\n\n"
+        "**Live** zeigt, was gerade passiert: Bossleben, Pulluhr, "
+        "Schaden und Heilung je Spieler, Tanks, Tode, Kampf-Rezz, "
+        "Heldentum, Phasen.\n\n"
+        "**Analyse** wertet denselben Pull aus: erhaltener Schaden und "
+        "wie viel davon vermeidbar war — mit der Gegenmaßnahme dazu —, "
+        "Wirkungsdauern deiner Effekte, Aktivzeit, Cooldown-Nutzung samt "
+        "Zeitstrahl, Verbrauchsgüter, Unterbrechungen, Mechanikfehler.\n\n"
+        "**Lernen** sagt, was du daraus mitnimmst. **Quelle** holt einen "
+        "vergangenen Kampf zurück.\n\n"
+        "Alle vier lesen **einen** Datenstand — ein vollständiges Bild "
+        "eines Augenblicks. Keine Ansicht rechnet selbst etwas aus. Genau "
+        "das verhindert, dass zwei von ihnen verschiedene Antworten auf "
+        "dieselbe Frage geben.\n\n"
         "Bleibt eine Karte leer, sagt sie dazu, warum: kein Raid, kein "
         "laufender Pull, oder diese Datenquelle liefert die Zahlen "
         "schlicht nicht. Das sind drei völlig verschiedene Auskünfte, und "
         "nur bei der letzten ist nichts zu machen.\n\n"
-        "Ein Klick auf einen Spieler führt in die Academy zu genau "
-        "diesem Spieler.",
+        "Hinter *Analyse* und *Live* rechnet das Modul **WeintTV** — der "
+        "Name steht in den Einstellungen und im Addon, ist aber kein Ort "
+        "mehr, an den man gehen muss.",
     ),
 
     TourPage(
         "academy", "Raid & Analyse",
-        "Die Academy",
-        "Aus demselben Datenstand entsteht deine Bewertung: sechs "
-        "Bereiche mit Sternen — Rotation, Bewegung, Cooldowns, "
-        "Mechaniken, Überleben, Leistung — und daraus ein Trainingsplan "
-        "mit konkreten Lektionen.\n\n"
+        "Lernen — was du als Nächstes verbessern solltest",
+        "Die Ansicht *Lernen* beginnt mit der Frage, mit der du "
+        "hinsiehst: **deine größten Baustellen**. Zwei bis drei "
+        "Bereiche, jeder mit Sternen, der Begründung dazu, der passenden "
+        "Lektion — und den zwei Wegen, die man von dort will: *Moment* "
+        "springt an die Sekunde im Kampf, an der es passiert ist, "
+        "*Lektion starten* zur Übung.\n\n"
+        "Darunter steht der Beleg: alle sechs Bereiche mit Sternen — "
+        "Rotation, Bewegung, Cooldowns, Mechaniken, Überleben, Leistung "
+        "—, die Zahlen dahinter, der ganze Trainingsplan, deine Lernkurve "
+        "und der Lektionskatalog.\n\n"
         "Bewertet wird immer **gegen deine eigene Rolle**. Einen Tank am "
         "Schadensranking zu messen wäre auf Dauer ein Stern, und beim "
         "erlittenen Schaden erst recht: der meiste davon ist bei ihm die "
@@ -271,56 +298,72 @@ TOUR_PAGES: tuple[TourPage, ...] = (
         "dir eine Bestnote zu geben, die nichts misst. Dasselbe gilt für "
         "die sechs Zahlen darunter: ein Strich heißt dort „nicht "
         "geliefert“ und nie „null“.\n\n"
+        "Welcher Charakter bewertet wird, steht oben im Kopfblock — dort "
+        "wählst du ihn, oder lässt *Dem Spiel folgen* eingeschaltet. Ein "
+        "Klick auf eine Zeile in der Analyse setzt ihn ebenfalls und "
+        "wechselt hierher.\n\n"
         "Die Lernkurve zeichnet deine aufgezeichneten Pulls über die Zeit "
-        "und bestimmt mit, welcher Bereich im Plan oben steht. Aufgezeichnet "
+        "und bestimmt mit, welcher Bereich oben steht. Aufgezeichnet "
         "wird nur, was fertig ist: mittendrin bewegt sich jede Bewertung "
         "im Sekundentakt.\n\n"
         "Was du im Spiel abhakst, kommt hier an — und umgekehrt. Drei "
         "Tage in Folge mit einer gewerteten Übung an der Trainingspuppe "
-        "haken die Rotationslektion ab.",
+        "haken die Rotationslektion ab. Gerechnet wird das im Modul "
+        "**WeintAcademy**.",
     ),
 
     TourPage(
         "archiv", "Raid & Analyse",
-        "Archiv und Wiedergabe",
+        "Quelle und Wiedergabe",
         "Statt des laufenden Kampfes lässt sich auch ein längst "
-        "abgeschlossener ansehen. *Log wählen* öffnet dafür einen "
-        "Browser: links die Raidabende, rechts die Pulls des gewählten "
-        "Abends, nach Boss gebündelt — mit Suchfeld, einem Filter für "
-        "Kills und der Uhrzeit an jedem Pull. Gab es keinen Kill, ist "
-        "der beste Versuch markiert. WeintTV und die Academy zeigen den "
-        "gewählten Pull dann genauso wie einen laufenden.\n\n"
-        "Und mit dem Abspielknopf läuft er Sekunde für Sekunde ab. Weil "
-        "jede Bewertung nur den gezeigten Augenblick liest, bewertet die "
-        "Academy dabei automatisch mit: du siehst, an welcher Stelle es "
+        "abgeschlossener ansehen. Die Ansicht *Quelle* zeigt dafür das "
+        "**Archiv**: links die Raidabende, rechts die Pulls des "
+        "gewählten Abends, nach Boss gebündelt — mit Suchfeld, einem "
+        "Filter für Kills und der Uhrzeit an jedem Pull. Gab es keinen "
+        "Kill, ist der beste Versuch markiert.\n\n"
+        "Drei Fragen gehen schneller: **Letzter Raid**, **Letzter Kill** "
+        "und **Bester Versuch** sind je ein Klick. Ganz unten stehen "
+        "außerdem die Pulls, die mitgelaufen sind, seit die App offen "
+        "ist.\n\n"
+        "Sobald ein Pull geladen ist, wechselt das Raid Center von selbst "
+        "auf die Analyse — die Zahlen erscheinen also dort, wo du "
+        "hinsiehst. Zurück zum laufenden Raid führt ein Knopf oben im "
+        "Kopfblock.\n\n"
+        "Und mit *Wiedergabe* läuft der Pull Sekunde für Sekunde ab. Weil "
+        "jede Bewertung nur den gezeigten Augenblick liest, bewertet "
+        "*Lernen* dabei automatisch mit: du siehst, an welcher Stelle es "
         "gekippt ist.\n\n"
         "Zwei Dinge dazu: Trashgruppen tauchen nicht auf, sie sind keine "
         "Pulls. Und einen Pull zu holen dauert — der Bot liest dafür "
         "Zehntausende Einzelereignisse. Die App wartet geduldig und sagt, "
         "worauf sie wartet, statt vorzeitig aufzugeben.\n\n"
-        "Die Zeile über den Ansichten nennt durchgehend, welcher Pull "
-        "gerade **geladen** ist — nicht, was ausgewählt wurde. Der "
-        "Unterschied zählt genau dann, wenn ein Abruf schiefgeht.",
+        "Benannt wird durchgehend, welcher Pull gerade **geladen** ist — "
+        "nicht, was ausgewählt wurde. Der Unterschied zählt genau dann, "
+        "wenn ein Abruf schiefgeht.",
     ),
 
     TourPage(
         "sync", "Raid & Analyse",
         "Woher die Zahlen kommen",
-        "Unter Einstellungen → Module stellst du die Datenquelle ein.\n\n"
-        "**Simulation** ist die Vorgabe: ein vollständiger 25-Mann-Pull, "
-        "der immer gleich abläuft. Er ist da, damit sich WeintTV und die "
-        "Academy auch außerhalb der Raidzeit ansehen lassen — und er "
-        "zeigt alles, was die Ansichten können.\n\n"
-        "**WarcraftLogs** ist die echte Quelle. Gelesen wird sie über den "
-        "Bot und nicht von hier: so liegen die Zugangsdaten auf einem "
-        "Rechner statt auf fünfundzwanzig, und ihr teilt euch ein "
-        "Kontingent. Nötig ist nur, dass irgendwer im Raid hochlädt — "
-        "dein Rechner muss nichts mitschreiben.\n\n"
+        "Die Datenquelle gilt für alle vier Ansichten zugleich. Der Chip "
+        "oben im Kopfblock nennt sie immer; ein Klick darauf führt in die "
+        "Ansicht *Quelle*, wo du sie wechselst. Dieselbe Einstellung "
+        "steht auch unter Einstellungen → Module.\n\n"
+        "**WarcraftLogs** ist die echte Quelle und die Vorgabe. Gelesen "
+        "wird sie über den Bot und nicht von hier: so liegen die "
+        "Zugangsdaten auf einem Rechner statt auf fünfundzwanzig, und ihr "
+        "teilt euch ein Kontingent. Nötig ist nur, dass irgendwer im Raid "
+        "hochlädt — dein Rechner muss nichts mitschreiben.\n\n"
+        "**Simulation** ist ein vollständiger 25-Mann-Pull, der immer "
+        "gleich abläuft. Er ist da, damit sich alle Ansichten auch "
+        "außerhalb der Raidzeit ansehen lassen — und er zeigt alles, was "
+        "sie können. Weil seine Zahlen niemandem gehören, steht der Chip "
+        "oben dann in Warnfarbe.\n\n"
         "Simulation und echte Berichte landen nie in derselben Lernkurve. "
         "Die Karte sagt darunter, welche der beiden sie zeigt.\n\n"
-        "Umschalten kannst du jederzeit unter *Einstellungen → Module*. "
-        "Es geht dabei nichts verloren: beide Kurven bleiben liegen, du "
-        "siehst nur die zur gewählten Quelle.",
+        "Umschalten kannst du jederzeit. Es geht dabei nichts verloren: "
+        "beide Kurven bleiben liegen, du siehst nur die zur gewählten "
+        "Quelle.",
     ),
 
     # ------------------------------------------------------

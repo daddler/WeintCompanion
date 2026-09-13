@@ -398,6 +398,47 @@ def record_from_profile(
 #
 
 
+def weakest_of(record: PullRecord):
+    """
+    Der schwächste bewertete Bereich eines aufgezeichneten Pulls -
+    `(Kategorie, Sterne)` oder `None`.
+
+    **Null Sterne zählen nicht mit.** Sie heissen im ganzen Analyzer
+    "keine Daten", nicht "schlecht"; ein unbewerteter Bereich als
+    grösste Baustelle wäre genau die Verwechslung, gegen die das
+    geschrieben ist. Bei Gleichstand entscheidet `CATEGORY_ORDER`,
+    damit sich die Antwort zwischen zwei Aufrufen nicht umsortiert -
+    dieselbe Regel wie bei `PlayerProfile.weakest`.
+
+    Es gibt diese Funktion, weil die Übersicht den Fokus des letzten
+    Pulls nennen soll, ohne den ganzen Kampf neu auszuwerten: der
+    Pull ist aufgezeichnet, die Bewertung liegt vor, und ein zweites
+    Mal rechnen hiesse beim Bot Minuten Wartezeit für eine Zeile.
+    """
+
+    if record is None:
+        return None
+
+    rated = [
+        (category, stars)
+        for category, stars in getattr(record, "ratings", ())
+        if stars > 0
+    ]
+
+    if not rated:
+        return None
+
+    return min(
+        rated,
+        key=lambda entry: (
+            entry[1],
+            CATEGORY_ORDER.index(entry[0])
+            if entry[0] in CATEGORY_ORDER
+            else len(CATEGORY_ORDER),
+        ),
+    )
+
+
 def to_dict(record: PullRecord) -> dict:
 
     return {

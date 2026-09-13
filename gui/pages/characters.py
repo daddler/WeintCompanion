@@ -423,7 +423,7 @@ class CharactersPage(Page):
         # `refresh()` läuft bei jedem Seitenwechsel und bei jedem
         # `state_changed`. Ohne diesen Vergleich würde das Raster
         # jedes Mal abgerissen und neu gebaut, obwohl sich nichts
-        # geändert hat - dieselbe Regel wie beim ArchivePicker, dessen
+        # geändert hat - dieselbe Regel wie beim Archivbrowser, dessen
         # Auswahlfelder deshalb im Sekundentakt zuklappten.
         #
 

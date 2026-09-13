@@ -12,7 +12,7 @@ entscheidet, ob der Nutzer etwas tun kann:
 
 Der Text liegt hier und nicht in den beiden Seiten, aus demselben
 Grund, aus dem sich WeintTV und die Academy schon einen Snapshot und
-einen ArchivePicker teilen: zwei Formulierungen desselben Sachverhalts
+einen Archivbrowser teilen: zwei Formulierungen desselben Sachverhalts
 laufen früher oder später auseinander, und dann widersprechen sich die
 beiden Seiten gegenseitig.
 
@@ -285,6 +285,35 @@ def academy_empty_action(snapshot: RaidSnapshot) -> str:
         return ACTION_ARCHIVE
 
     return ACTION_NONE
+
+
+def focus_placeholder(has_data: bool, rated: bool) -> str:
+    """
+    Was in der Baustellenkarte steht, wenn keine Baustelle da ist.
+
+    Drei Fälle, drei Sätze, und sie bedeuten Verschiedenes:
+
+    * **Kein Kampf ausgewertet** - dann ist nichts bekannt, nicht
+      "nichts zu tun". Derselbe Satz wie bei der nächsten Lektion.
+    * **Ausgewertet, aber nichts Schwaches** - dann ist das eine
+      Auskunft über den Pull und ein Lob. Sie darf nicht aussehen wie
+      ein Mangel.
+
+    Die Karte zeigt deshalb **nur wirklich schwache Bereiche**
+    (`SkillRating.is_weak`, also bis drei Sterne). Einen Bereich mit
+    fünf Sternen unter der Überschrift "deine grössten Baustellen"
+    aufzuführen wäre das Gegenteil dessen, was dort steht - und genau
+    das passiert, wenn man blind die drei schwächsten nimmt.
+    """
+
+    if not has_data or not rated:
+        return next_lesson_placeholder(has_data)
+
+    return (
+        "In diesem Pull ist nichts auffällig - keiner der bewerteten "
+        "Bereiche liegt unter vier Sternen. Die vollständige Bewertung "
+        "darunter zeigt, wo du stehst."
+    )
 
 
 def next_lesson_placeholder(has_data: bool) -> str:

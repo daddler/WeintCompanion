@@ -1,21 +1,37 @@
 # Archive mode: reviewing a past report instead of the live feed
 
-Both WeintTV and the Academy can also show a single, long-finished
-WarcraftLogs fight instead of the live feed — pick a report, pick a pull
-inside it. This is deliberately **not** called "Verlauf" in the UI (that
-name is already taken by WeintTV's own completed-pulls-this-session tab,
-backed by `PullSummary`/`history()`); the second, unrelated "past report"
-concept is called **"Archiv"** everywhere in code and UI. It's also
-deliberately global on `RaidDataService`, not per-page state — switching
-to Archive on one page switches it on the other.
+The Raid Center can also show a single, long-finished WarcraftLogs fight
+instead of the live feed — pick a report, pick a pull inside it. Its
+*Quelle* perspective is where that happens (`gui/pages/raid/source_view.py`,
+see `raid-center.md`).
+
+The word **"Archiv"** means "a past report" everywhere in code and UI.
+Through 3.6.0 the other concept — *this session's* completed pulls,
+backed by `PullSummary`/`history()` — was called "Verlauf" in WeintTV's own
+tab, one word for two unrelated things in two different areas. Since 4.0
+both stand under each other in *Quelle* and are named what they are:
+**Raidabende** and **Diese Sitzung**.
+
+The state is deliberately global on `RaidDataService`, not per-view —
+every perspective reads the same selection, which is why switching from
+*Quelle* to *Analyse* shows the pull you just picked rather than asking
+again.
 
 `RaidDataService` grows a `MODE_LIVE`/`MODE_ARCHIVE` mode plus an
 `ArchiveState` (reports/fights lists, loading/error flags per step,
 current selection), exposed via `archive_state()` and mutated through
 `enter_archive_mode()` → `select_archive_report()` →
-`select_archive_fight()` → `show_live()`, each step notifying
-`gui/widgets/tv/archive_picker.py` (shared by both pages) through the
-`archiveChanged` signal. Each step's HTTP call runs in its own
+`select_archive_fight()` → `show_live()`, each step notifying its readers
+(the Raid Center's context header and *Quelle* view) through the
+`archiveChanged` signal.
+
+**`ensure_reports()` is the fifth entry point, added in 4.0**: it loads
+the report list *without* touching the mode. `ArchiveBrowser.__init__()`
+used to call `enter_archive_mode()`, which was right while the list lived
+in a dialog someone opened deliberately. As a perspective one click from
+*Live*, merely looking at which evenings exist must not stop the live feed
+(the poll discards its results as soon as `browsing` holds). The two
+selection steps still set the mode themselves. Each step's HTTP call runs in its own
 short-lived thread; a stale in-flight result is detected and dropped.
 Picking a fight publishes via `_publish(snapshot, track=False)` — same
 function the live poll uses, `track=False` just means it doesn't pollute
@@ -37,28 +53,33 @@ Through 2.8.0 the archive was two combo boxes — twenty identical-looking
 reports, sixty pulls, all shaped "Pull 14 · Garrosh · 42% · 06:31" in no
 order but the evening's. Reported as "quite complicated to find archived
 logs" — the data was all there and it found nothing.
-`gui/dialogs/archive_dialog.py` replaces it: evenings on the left, that
-evening's pulls grouped by boss on the right, a search field, a *Nur
+`gui/widgets/raid/archive_browser.py` replaces it: evenings on the left,
+that evening's pulls grouped by boss on the right, a search field, a *Nur
 Kills* switch, time of day on every pull.
 
-**Since 3.5.0 the browser is a widget, not a window.** `ArchiveBrowser`
-holds all of the above; `ArchiveDialog` is only the modal frame around
-it (for WeintTV and the Academy, where you pick a pull without leaving
-the page) and closes on the browser's `fightLoaded` signal. The
-**Archiv page embeds the same widget** (`embedded=True`: no head of its
-own, no close button) — until then that page was a picker plus the
-sentence "the numbers appear in WeintTV", i.e. a nav entry that showed
-nothing while the thing you go there for sat behind a button in a
-window. Two consequences that are not taste: the page passes
-`browse=False` to `ArchivePicker` so the *Log wählen …* button doesn't
-lay a window over the list already on screen, and there is still exactly
-**one** list — a second implementation would group differently from the
-first after the first change.
+**Since 4.0 there is no window around it at all.** It was a widget from
+3.5.0 on, but wrapped in `ArchiveDialog` for WeintTV and the Academy
+(reached through a *Log wählen …* button) *and* embedded on the Archiv
+page — two ways to the same list, one laying itself over the other. The
+dialog is gone; the list is the *Quelle* perspective, so it is a place and
+not a curtain. `fightLoaded` is what the closing used to be: the Raid
+Center switches to *Analyse* on it. The three rules that were about the
+window still hold for the signal — it fires only for the pull clicked *in
+the list* (`_awaiting`), never while the fetch is still running, and never
+on an error.
 
-The Archiv page's header and its action row (*In WeintTV ansehen* / *In
-der Academy auswerten*) read `index.selection_text(state)`: what is
-**loaded**, not what was clicked. Until 3.5.0 it read a `state.fight`
-attribute that `ArchiveState` never had, so the title never changed.
+Two things about the list that are not taste: there is exactly **one**
+implementation (a second would group differently after the first change),
+and the status line says what is **loaded**, not what was clicked —
+`archive_index.selection_text()` formats that sentence once for everyone
+who shows it.
+
+**The quick selection above it** (`Letzter Raid` / `Letzter Kill` /
+`Bester Versuch`) is `latest_report()`/`last_kill()`/`best_attempt()` in
+`core/archive_index.py`, decided there and not in the view for the same
+reason as `best_try()`. A button that would hit nothing is disabled, not
+hidden (*lock, don't hide*), and `best_attempt()` reuses `best_try()` so
+the button and the marking in the list can never point at different rows.
 
 `core/archive_index.py` is the pure half (grouping, search, best try,
 labels) — no Qt, no `httpx`. Six rules that are not taste:
@@ -72,32 +93,32 @@ labels) — no Qt, no `httpx`. Six rules that are not taste:
   end** — same line as `stars == 0`. A pull whose time the bot doesn't
   know shows no time rather than "00:00".
 - **The rows hand their click out as a Signal to a bound method** — a
-  callback closure holding the window builds a cycle the collector can't
-  see (see `../architecture/qt-pitfalls.md`). `tests/test_archive_dialog.py`
-  builds the window repeatedly and collects in between.
+  callback closure holding the widget builds a cycle the collector can't
+  see (see `../architecture/qt-pitfalls.md`). `tests/test_archive_browser.py`
+  builds the browser repeatedly and collects in between.
 - **Both columns compare a signature before rebuilding**
   (`archiveChanged` arrives several times per load).
-- **The window closes only for the pull clicked *in it*** (`_awaiting`).
-  An error closes nothing; a click doesn't close either (one archived
-  pull costs the bot minutes).
+- **`fightLoaded` fires only for the pull clicked *in the list***
+  (`_awaiting`). An error reports nothing; neither does the click itself
+  (one archived pull costs the bot minutes).
 
-`ArchivePicker` in the page itself is deliberately small: the mode
-switch, the button into the browser, one line saying **what is loaded**
-(not what is selected — the old combo boxes showed the selection, which
-after a failed fetch still named a pull the user did not have in front of
-them). `archive_index.selection_text()` formats that sentence once for
-both pages.
+The Live/Archive switch lives once, in *Quelle*, next to that line —
+through 3.6.0 it was an `ArchivePicker` on all three pages. The way
+*back* is a button in the context header rather than the other half of a
+switch: while something other than the live feed is shown, "back to the
+running raid" is the most common next intention, and it sat buried in a
+two-way control you had to find first.
 
 ## Replay: playing a finished pull back second by second
 
-The Play button in `ArchivePicker` starts a **replay**.
+The Play button in the context header starts a **replay**.
 `analyzer/replay/` is the one deliberate exception to "the `RaidSnapshot`
 is the only contract": a replay needs the whole fight, so `FightTimeline`
 describes the full course of one. It still never reaches a widget — the
 only reader is `snapshot_at(timeline, seconds)`, which returns an
-ordinary `RaidSnapshot`. For WeintTV and the Academy a replay is therefore
-indistinguishable from a live feed — the Academy rates whichever second
-is shown, with **no replay code on its side**.
+ordinary `RaidSnapshot`. For every perspective a replay is therefore
+indistinguishable from a live feed — *Lernen* rates whichever second is
+shown, with **no replay code on its side**.
 
 All timeline series are **cumulative** (seeking costs the same as
 playing; interpolation keeps the boss bar smooth at 8×). `snapshot_at()`
@@ -107,7 +128,10 @@ damage breakdown) stays **empty** rather than estimated, appearing only
 at the end from `FightTimeline.aggregate`.
 
 `RaidDataService` grows `MODE_REPLAY` as a third value of the **same**
-`ArchiveState.mode` field. `_poll_once()` checks `browsing` (not live)
+`ArchiveState.mode` field. The Play button sits in the Raid Center's
+context header, and the seek deep link (*Moment mm:ss* on a weakness under
+*Lernen*) goes through `RaidCenterPage.show_moment()` — see
+`raid-center.md`. `_poll_once()` checks `browsing` (not live)
 rather than naming the archive mode. The clock is a `QTimer` on the main
 thread (reconstruction is pure computation over ≤25 players); it ticks
 through `_advance_replay(delta)` so tests can step it without a real
@@ -144,7 +168,7 @@ state and the UI both claimed it was playing. The signal must carry no
   nicht erreichbar" timeouts. `ReplayState.starting` records a click
   during the fetch and honours it when the data lands (one fetch, not
   two); `loading` and `starting` are different questions —
-  `ArchivePicker` greys the button only for `starting`.
+  the context header greys the button only for `starting`.
 - **Every archive endpoint gets the timeout its work deserves** —
   `TIMEOUT` 40s for the two lists, `FIGHT_TIMEOUT` 180s, `TIMELINE_TIMEOUT`
   240s. `_get()` translates `httpx.TimeoutException` into a German
@@ -152,15 +176,18 @@ state and the UI both claimed it was playing. The signal must carry no
   message for non-200 answers.
 
 `SegmentedControl.setValue()` silently does nothing for an unknown value,
-so `ArchivePicker` must map `MODE_REPLAY` back onto the view it was
-started from, or the Live/Archive switch freezes on its old state.
+so *Quelle*'s mode switch must map `MODE_REPLAY` back onto `MODE_ARCHIVE`,
+or it freezes on its old state.
 
 ## Replay ticks at 4 Hz — three consequences that were once real defects
 
-- **`ArchivePicker` must not rebuild its combo boxes on every tick.**
-  `_fill_reports`/`_fill_fights` compare a content signature first — an
-  open dropdown used to snap shut four times a second during playback.
-- **A hidden page must not draw.** `_on_snapshot()` on both pages returns
-  unless `self._attached`; `on_enter()` draws once directly.
+- **`ArchiveBrowser` must not rebuild its columns on every tick.**
+  `_fill_days`/`_fill_fights` compare a content signature first — the
+  scroll position used to jump four times a second during playback, and
+  the old combo boxes' dropdowns used to snap shut.
+- **A hidden page must not draw.** `RaidCenterPage._on_snapshot()` returns
+  unless `self._attached`; `on_enter()` draws once directly. And only the
+  *visible* view is drawn — `_draw()` picks one, because a learn view that
+  nobody sees still builds a full profile and training plan per frame.
 - **`setStyleSheet()` is not a setter** — see `../architecture/theming.md`
   ("`setStyleSheet()` is not a setter").

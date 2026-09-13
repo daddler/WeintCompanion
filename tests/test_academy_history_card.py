@@ -182,7 +182,7 @@ def test_the_simulation_names_itself_under_the_curve():
     besteht.
     """
 
-    from gui.pages.academy import _source_note
+    from gui.pages.raid.learn_view import _source_note
 
     assert "Simulation" in _source_note("mock")
 

@@ -1,5 +1,13 @@
 # WeintTV and WeintAcademy: one service, one snapshot
 
+**Since 4.0 these are modules, not places.** WeintTV renders the fight
+(*Live*) and its deep analysis (*Analyse*), WeintAcademy rates your part
+in it (*Lernen*) — three of the four perspectives of one page,
+`gui/pages/raid_center.py`. The names survive because they are in the
+settings, in the addon and on the Discord; what changed is that nobody has
+to know which of them to open when. The information architecture is
+documented in `raid-center.md`; this file stays about the evaluation.
+
 Both modules read the **same** `RaidSnapshot` (`analyzer/models.py`) — an
 immutable, complete picture of one moment (boss health, pull timer,
 deaths, battle-res, heroism, DPS/HPS rankings, tanks, cooldowns,
@@ -13,58 +21,68 @@ third exists because a tank's active mitigation is neither: filed under
 HoTs it would only ever be read for healers, and left out entirely it
 took the whole tank contribution with it. `uptimes_of(name, kind)` is the
 single accessor, `players[].buffs[]` the (optional) bridge field, and
-WeintTV shows it as its own card next to the DoT and HoT cards.
+*Analyse* shows it as its own card next to the DoT and HoT cards.
 
 The one thing the snapshot carries *without* evaluating it is `events:
 tuple[CombatEvent, ...]` — phase changes, announced boss casts, adds.
 `CombatEvent.kind` is a free string on purpose: an unknown kind must land
-in WeintTV's event list unchanged rather than be dropped, so a new kind
+in the live view's event list unchanged rather than be dropped, so a new kind
 from the bot needs no Companion release. Everything the analyzer actually
 *reasons about* (deaths, resurrects, interrupts, dispels, mechanic
 issues) keeps its own typed field, because the Academy needs those
 separated — a dispel and a death train different areas. They are merged
-onto one time axis only in `WeintTvPage._event_rows()`, i.e. in the
+onto one time axis only in `LiveView._event_rows()`, i.e. in the
 presentation. `analyzer/replay/models.TimelineEvent` is an alias of
 `CombatEvent`, not a second class.
 
 ## Finding your way around: the guide and the source strip (3.5.0)
 
 Reported as: *"Viele wissen nicht, inwieweit man alles überhaupt
-bedienen muss/kann und wo man was findet."* Three nav entries share one
+bedienen muss/kann und wo man was findet."* Three nav entries shared one
 data source, one snapshot and one archive selection — invisibly. Someone
-who doesn't know that sees three pages, two of them saying "keine
-Daten", with no clue why.
+who didn't know that saw three pages, two of them saying "keine Daten",
+with no clue why. **4.0 removed the cause** (one area, four perspectives,
+one context header); the two devices below remain, because "which source
+is running" and "what is this for" are still questions.
 
 - **`core/analysis_guide.py`** holds the words (Qt-free, like
-  `analysis_gap.py`): an intro plus four sections, each answering the
-  *same three questions* — what it's for, what you do there, what it
-  needs. `gui/dialogs/guide_dialog.py` draws them; a *Was ist das hier?*
-  button on all three pages opens it. The onboarding tour explains each
+  `analysis_gap.py`): an intro plus one section per perspective plus two
+  on what sits behind them (the data source, the replay), each answering
+  the *same three questions* — what it's for, what you do there, what it
+  needs. `gui/dialogs/guide_dialog.py` draws them; the *Was ist das hier?*
+  button in the Raid Center's perspective row opens it, so it is reachable
+  from every view. The onboarding tour explains each
   area once, at first start — the right place for "what exists", the
   wrong one for "what do I do now", because a tour can't be found again
   when the question comes up.
-- **`gui/widgets/tv/source_strip.py`** is the one line on all three
-  pages: which source is set, what that means, a picker to change it,
-  and the way into the guide. It reads `active_source()` (what *runs*,
-  not what is configured — an unknown key falls back to the mock in
+- **`gui/widgets/tv/source_strip.py`** is the one line, since 4.0 in
+  *Quelle*: which source is set, what that means, a picker to change it,
+  and the way into the guide. It reads `active_source()` (what *runs*, not
+  what is configured — an unknown key falls back to the mock in
   `_create_provider()`), and warns in `STATE["warn"]` when
   `is_demo_source()` says the numbers belong to nobody. **A demo source
   being mistaken for the reader's own raid was the single most common
-  confusion in this area.**
+  confusion in this area.** Where the numbers are *read*, the context
+  header carries a chip off the same two accessors, which navigates here on
+  click — that is not the removed `source_chip` coming back: that one
+  answered from the snapshot's own label, so the two contradicted each
+  other while switching.
 - **Switching goes through `RaidDataService.set_source()`** — the one
   place that stores, tears the old provider down and logs. Four copies
   of that sequence (Settings plus three pages) would clean up
   differently after the first change. It emits `sourceChanged` so a
   switch made in Settings doesn't leave a stale strip behind.
-- **WeintTV's `source_chip` is gone.** It answered "where do the numbers
-  come from" a second time and from a different source (the snapshot's
-  label rather than the setting), so the two contradicted each other
-  briefly while switching. `feed_chip` stays — it answers the other
-  question, whether data is flowing at all.
-- **Every tab carries one explaining sentence** (`TAB_HINTS` in both
-  pages). *Verlauf* needs its own for a second reason: the word means
-  two different things in this app (this session's pulls here, any past
-  report in the Archiv).
+- **WeintTV's `source_chip` is gone**, and so is `feed_chip`: both
+  questions ("which source" and "is data flowing") are now answered once,
+  in the context header — the source chip from the setting, the mode chip
+  from `mode_label()`, which folds `LIVE`/`DATEN AKTIV`/`KEINE DATEN`
+  together with `ARCHIV` and `WIEDERGABE`. Kept apart they could
+  contradict: a "LIVE" beside an archived pull was possible.
+- **Every perspective carries one explaining sentence**
+  (`RAID_VIEW_HINTS` in `gui/navigation.py`). The old *Verlauf* tab needed
+  its own for a second reason — the word meant two different things in
+  this app — and that trap is gone with the tab: this session's pulls now
+  sit in *Quelle* under **Diese Sitzung**, next to **Raidabende**.
 - **The default source is `warcraftlogs` since 3.5.0**, with a one-time
   migration in `core/config.py` (`raid_data_source_migrated`) that moves
   an existing `mock` over exactly once. The simulation was the safe
@@ -100,6 +118,16 @@ hand-written ones stay English, so the simulation exercises both paths
 through `spec_reference` and a broken match shows up as a duplicated row.
 
 ## The Academy: `analyzer/academy/`
+
+The UI side is `gui/pages/raid/learn_view.py` — **one column**, not three
+tabs, in the order of the question: biggest weaknesses (`FocusCard`) → all
+six ratings → the numbers behind them → the training plan → progress and
+curve → the catalog (configuration, hence last). Through 3.6.0 the first
+question the page effectively asked was "which Academy page do I want",
+and the answer to *what should I improve* lay scattered across a
+highlighted rating tile, its small print, a lesson card one tab away, and
+a button on that card. The `FocusCard` rules are in `raid-center.md`; the
+evaluation below is unchanged.
 
 `evaluator.py` turns a snapshot into a `PlayerProfile` (star ratings for
 **six** areas — Rotation/Bewegung/Cooldowns/Mechaniken/Überleben/Leistung)
@@ -148,7 +176,14 @@ source for the same answer is provably different during a replay.
 
 `gui/widgets/tv/encounter_meta.py` says which fight is being rated —
 boss, difficulty, pull, outcome, average — Qt-free like
-`analysis_gap.py`. `addon/addon_payloads.py` ships the finished sentence
+`analysis_gap.py`. **Its three-valued `outcome_text()` only phrases;
+`core/raid_context.outcome_of()` decides** (since 4.0), so the rating line
+and the context header cannot disagree about what "Wipe" means. On screen
+`average_text()` is what the learn view shows: boss, difficulty, pull and
+outcome stand in the context header above it, and a second copy underneath
+was the loudest duplication of the old layout. The full sentence stays for
+the wire — `encounterText` in `addon/addon_payloads.py`, where no context
+header stands beside it. `addon/addon_payloads.py` ships the finished sentence
 as `encounterText` rather than letting the addon reassemble it. Its
 `outcome_text()` has **three** answers: while running, the outcome is
 *open*.
@@ -173,8 +208,9 @@ data, not cache). Six rules, each the `stars == 0` line in another guise:
   orders by raid day, then fight id, then recording time.
 - **Simulation and real reports never share a curve**, nor do two specs
   (`select()`).
-- **Recording happens in `CompanionManager`**, not on the Academy page —
-  the snapshot stream runs whenever *either* page is attached.
+- **Recording happens in `CompanionManager`**, not in the learn view —
+  the snapshot stream runs whenever the Raid Center is attached, whichever
+  perspective happens to be visible.
 
 `evaluator.plan_order()` reads that curve too: with a `focus` (from
 `progression.build_focus()`) an area with enough recorded points is judged
@@ -375,18 +411,20 @@ seconds people click the next pull, which restarts the fetch.
   a wall clock: a clock adjusted mid-fetch would run the bar backwards.
   `0.0` means "no fetch running", and `ArchiveState.elapsed(now)` is the
   one accessor.
-- **`gui/widgets/tv/loading_card.py`** is on all three pages (WeintTV,
-  Academy, Archiv) and decides its own visibility — three pages with
-  their own visibility logic are three chances to leave it standing. Its
+- **`gui/widgets/tv/loading_card.py`** decides its own visibility — three
+  pages with their own visibility logic were three chances to leave it
+  standing. Since 4.0 there is one instance, above the view stack: while a
+  pull is being fetched, all four perspectives are empty, so the notice
+  belongs to all four. Its
   `QTimer` runs only while the card is visible *and* something is
   loading; teardown is an event-free `_stop()` (see
   `../architecture/qt-pitfalls.md`).
 - **`academy_empty_text(snapshot, loading=True)` returns `""`.** "No
   analysed fight for this character" is literally true during a fetch
-  and useless as information — one is on its way. The Academy page
-  therefore also listens to `archiveChanged`; no snapshot changes while
-  a fetch runs, so without it the empty card would have sat next to the
-  waiting card for the whole wait.
+  and useless as information — one is on its way. The learn view therefore
+  has an `on_archive_changed()` that the Raid Center calls through; no
+  snapshot changes while a fetch runs, so without it the empty card would
+  have sat next to the waiting card for the whole wait.
 
 ## Who is "me"? (`analyzer/names.py` + `core/character_report_sync.py`)
 
@@ -421,8 +459,16 @@ combo box, `config["academy_player_name"]`, `PlayerProfile.name`,
   beats the game report for the character it was made on, and stops
   beating it the moment the game reports a different one**
   (`academy_manual_for`).
-- **The WeintTV player picker stays a display filter.** Its
+- **The analysis player picker stays a display filter.** Its
   `ALL_PLAYERS` value has no Academy equivalent. Explicit path:
-  `playerRequested` → `open_academy_for()` → `show_player()` →
-  `note_manual_choice()`. A muted line next to the picker names the
-  current Academy character.
+  `playerRequested` → `RaidCenterPage.show_player()` →
+  `RaidContextHeader.show_player()` → `note_manual_choice()`, which then
+  switches to *Lernen* with the pull unchanged. A muted line next to the
+  picker names the current Academy character.
+- **The character selector is part of the context, not of one view.** It
+  stood in the Academy's own head through 3.6.0 — i.e. on exactly one of
+  the three pages, although the analysis beside it means the same
+  character when it shows "just me". It now sits in the context header
+  with *Dem Spiel folgen* and the in-game line, which is also what makes
+  it survive a perspective change. `reconcile_selection()` still decides
+  *and* stores, from there.

@@ -292,6 +292,35 @@ def _parse_moment(value) -> datetime | None:
 # --------------------------------------------------
 
 
+def record_key(pull: LastPull | None, day: str = "") -> str:
+    """
+    Die Kennung, unter der dieser Pull in der Lernkurve aufgezeichnet
+    wäre - dieselbe wie `progression.pull_key()`.
+
+    Gebraucht wird sie für eine einzige Frage auf der Übersicht: ist die
+    Bewertung, die dort als "dein Fokus" stünde, **die dieses Pulls**?
+    Ohne diesen Abgleich stünde der Fokus des zuletzt *ausgewerteten*
+    Pulls neben dem zuletzt *gespielten*, und das sind an einem
+    Raidabend regelmässig zwei verschiedene Kämpfe. Eine Bewertung
+    unter dem falschen Kampf ist schlimmer als keine.
+
+    Leerer String heisst "nicht bestimmbar" - beim Live-Pull ohne
+    bekannten Tag etwa. Der Aufrufer zeigt dann keinen Fokus, statt den
+    erstbesten zu nehmen.
+    """
+
+    if pull is None or not pull.known:
+        return ""
+
+    if pull.report_code and pull.fight_id:
+        return f"fight:{pull.report_code}#{pull.fight_id}"
+
+    if not day:
+        return ""
+
+    return f"live:{day}:{pull.boss or '?'}:{pull.pull_number}"
+
+
 def result_text(pull: LastPull | None) -> str:
     """
     "Heroisch · Kill · 06:12 · Pull 7" - die Zeile unter dem Boss.

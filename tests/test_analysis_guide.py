@@ -1,15 +1,15 @@
 """
-Der Wegweiser durch WeintTV, Academy und Archiv.
+Der Wegweiser durch die vier Ansichten des Raid Centers.
 
 Gemeldet wurde: "Viele wissen nicht, inwieweit man alles ueberhaupt
 bedienen muss/kann und wo man was findet." Die Antwort darauf sind drei
 Dinge, und alle drei werden hier festgehalten:
 
 * die Texte selbst (`core/analysis_guide.py`, Qt-frei),
-* die Quellenzeile, die auf allen drei Seiten sagt, woher die Zahlen
-  kommen - und bei Beispieldaten warnt,
-* und die Archiv-Seite, die den Browser jetzt selbst traegt statt auf
-  WeintTV zu verweisen.
+* die Quellenzeile, die sagt, woher die Zahlen kommen - und bei
+  Beispieldaten warnt,
+* und der Kopfblock, der in jeder Ansicht nennt, welchen Pull man vor
+  sich hat.
 """
 
 import ast
@@ -47,15 +47,24 @@ def _app():
 # --------------------------------------------------
 
 
-def test_der_wegweiser_nennt_alle_drei_bereiche():
+def test_der_wegweiser_nennt_alle_vier_ansichten():
+    """
+    Und die beiden Modulnamen dazu: WeintTV und WeintAcademy stehen in
+    den Einstellungen, im Addon und auf dem Discord. Wer sie dort liest,
+    muss hier erfahren, welche Ansicht dahintersteckt - sonst hat der
+    Umbau nur ein Vokabular gegen ein anderes getauscht.
+    """
 
     text = GUIDE_INTRO + " ".join(
         f"{s.title} {s.purpose} {s.actions} {s.needs}"
         for s in GUIDE_SECTIONS
     )
 
-    for bereich in ("WeintTV", "Academy", "Archiv"):
-        assert bereich in text
+    for ansicht in ("Live", "Analyse", "Lernen", "Quelle"):
+        assert ansicht in text
+
+    for modul in ("WeintTV", "WeintAcademy", "Archiv"):
+        assert modul in text
 
 
 def test_jeder_abschnitt_beantwortet_alle_drei_fragen():
@@ -274,12 +283,19 @@ def test_die_zeile_schaltet_die_quelle_wirklich_um(strip_factory):
 
 
 # --------------------------------------------------
-# Die Archiv-Seite
+# Der Kopfblock des Raid Centers
 # --------------------------------------------------
+#
+# Er ist der Nachfolger von drei Dingen: dem Bossnamen in WeintTVs
+# Kopfblock, dem Satz `encounter_meta()` in der Academy und dem Titel
+# der Archiv-Seite. Drei Formulierungen desselben Sachverhalts, von
+# denen keine Datum und Uhrzeit nannte - und die beim Umschalten kurz
+# auseinanderliefen. Geprueft wird hier, dass die eine, die es noch
+# gibt, den geladenen Pull benennt.
 
 
 @pytest.fixture
-def archive_page():
+def context_header():
 
     from gui.theme.theme_manager import init_theme
 
@@ -297,6 +313,8 @@ def archive_page():
 
     init_theme(config)
 
+    from core.academy_service import AcademyService
+
     class _Manager:
 
         def __init__(self):
@@ -307,42 +325,14 @@ def archive_page():
 
             self.raid_data = _service("warcraftlogs")
 
-    from gui.pages.archive import ArchivePage
+            self.academy = AcademyService(self)
 
-    return ArchivePage(_Manager())
+    from gui.widgets.raid.context_header import RaidContextHeader
 
-
-def test_das_archiv_traegt_die_auswahl_selbst(archive_page):
-    """
-    Bis 3.5.0 bestand die Seite aus einem Waehler und dem Satz "die
-    Zahlen erscheinen in WeintTV" - ein Bereich, in dem es nichts zu
-    finden gab, obwohl man genau dort sucht.
-    """
-
-    assert archive_page.browser is not None
-
-    assert archive_page.browser.days_body is not None
-
-    assert archive_page.browser.fights_body is not None
+    return RaidContextHeader(_Manager())
 
 
-def test_kein_zweiter_weg_zur_selben_liste(archive_page):
-    """
-    Der Knopf "Log waehlen …" legte sonst ein Fenster ueber die Liste,
-    die schon dasteht.
-    """
-
-    assert not archive_page.picker.browse_button.isVisibleTo(
-        archive_page.picker
-    )
-
-
-def test_ohne_geladenen_pull_keine_knoepfe_ins_leere(archive_page):
-
-    assert not archive_page.actions.isVisibleTo(archive_page)
-
-
-def test_mit_geladenem_pull_steht_da_welcher(archive_page):
+def _load_a_pull(header):
 
     from dataclasses import replace
 
@@ -351,15 +341,19 @@ def test_mit_geladenem_pull_steht_da_welcher(archive_page):
         ReportSummary,
     )
 
-    service = archive_page.service
+    from core.raid_data_service import MODE_ARCHIVE
+
+    service = header.service
 
     service.state = replace(
         service.state,
+        mode=MODE_ARCHIVE,
         reports=(
             ReportSummary(
                 code="aBcDeF12",
                 title="Mittwochsraid",
-                start="2026-09-02T19:58:00",
+                zone="Belagerung von Orgrimmar",
+                start="2026-09-02T19:58:00+02:00",
             ),
         ),
         selected_report="aBcDeF12",
@@ -368,29 +362,120 @@ def test_mit_geladenem_pull_steht_da_welcher(archive_page):
                 fight_id=3,
                 encounter_id=1607,
                 encounter_name="Garrosh Höllschrei",
-                kill=True,
-                pull_number=7,
+                difficulty="25 Heroisch",
+                kill=False,
+                boss_percentage=42.0,
+                duration=391.0,
+                start="2026-09-02T21:43:00+02:00",
+                pull_number=17,
             ),
         ),
         selected_fight=3,
     )
 
-    archive_page._on_archive_changed()
+    header.refresh()
 
-    assert archive_page.actions.isVisibleTo(archive_page)
+
+def test_ohne_kampf_nennt_der_kopf_den_naechsten_schritt(context_header):
+    """
+    "Keine Daten" ist der Zustand, aus dem man nicht weiterkommt. Drei
+    verschiedene Lagen (laedt, niemand kaempft, nichts gewaehlt)
+    brauchen drei verschiedene Saetze.
+    """
+
+    assert context_header.boss.text() == "Kein laufender Kampf"
+
+    assert "Quelle" in context_header.when.text()
+
+
+def test_mit_geladenem_pull_steht_da_welcher(context_header):
+    """
+    Boss, Zone, Schwierigkeit, Pullnummer, Ausgang, Bossanteil, Dauer,
+    Wochentag, Datum, Uhrzeit - alle in **einem** Block, der beim
+    Wechsel der Ansicht stehen bleibt.
+    """
+
+    _load_a_pull(context_header)
+
+    assert context_header.boss.text() == "Garrosh Höllschrei"
+
+    assert "BELAGERUNG VON ORGRIMMAR" in context_header.instance.text()
+
+    facts = context_header.facts.text()
+
+    assert "Pull 17" in facts
+    assert "Wipe" in facts
+    assert "42 %" in facts
+    assert "06:31" in facts
 
     #
-    # Der Satz daneben wiederholt den Titel nicht, sondern nennt das,
-    # was man von hier aus nicht sieht: die Auswahl gilt auch in
-    # WeintTV und der Academy.
+    # Die Uhrzeit in der Zeitzone **dieses** Rechners: der Bot liefert
+    # UTC-Offsets, und ein festverdrahtetes "21:43" würde nur in einer
+    # Zeitzone gelten (siehe `day_label()` und `time_label`).
     #
 
-    assert "WeintTV" in archive_page.loaded_label.text()
+    from datetime import datetime
 
-    #
-    # Und im Kopf steht der Kampf statt der Aufforderung, einen zu
-    # waehlen. Bis 3.5.0 las die Seite dort ein Feld, das es an
-    # `ArchiveState` nie gab - der Titel aenderte sich nie.
-    #
+    local = datetime.fromisoformat("2026-09-02T21:43:00+02:00").astimezone()
 
-    assert "Garrosh" in archive_page.header.title.text()
+    when = context_header.when.text()
+
+    assert "Mittwoch" in when
+    assert local.strftime("%d.%m.") in when
+    assert local.strftime("%H:%M") in when
+
+
+def test_der_ausgang_steht_als_chip_daneben(context_header):
+
+    _load_a_pull(context_header)
+
+    assert context_header.outcome.label.text() == "WIPE"
+
+    assert context_header.mode.label.text() == "ARCHIV"
+
+
+def test_der_weg_zurueck_zum_raid_erscheint_nur_im_archiv(context_header):
+    """
+    Er lag bis 3.6.0 in einem Zweifachschalter auf drei Seiten, den man
+    erst finden musste. Im Live-Modus waere er ein Knopf ohne Wirkung.
+    """
+
+    context_header.show()
+
+    assert not context_header.live_button.isVisible()
+
+    _load_a_pull(context_header)
+
+    assert context_header.live_button.isVisible()
+
+    context_header.hide()
+
+
+def test_die_quelle_steht_als_chip_im_kopf(context_header):
+    """
+    Derselbe Zugang wie die Quellenzeile (`active_source()`) - der alte
+    Fehler war ein zweiter Chip aus **einer anderen** Quelle (dem Label
+    des Snapshots), der der Einstellung nach jedem Wechsel kurz
+    widersprach.
+    """
+
+    assert "WARCRAFTLOGS" in context_header.source_chip.label.text()
+
+    context_header.service.set_source(SOURCE_MOCK)
+
+    assert "SIMULATION" in context_header.source_chip.label.text()
+
+
+def test_eine_beispielquelle_wird_im_kopf_als_solche_benannt(context_header):
+    """
+    Eine Beispielquelle fuer den eigenen Abend zu halten war die
+    haeufigste Verwechslung in diesem Bereich.
+    """
+
+    from gui.theme import tokens
+
+    context_header.service.set_source(SOURCE_MOCK)
+
+    assert context_header.source_chip._variant == "warn"
+
+    assert tokens.STATE.get("warn")

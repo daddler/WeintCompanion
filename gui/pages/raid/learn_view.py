@@ -1,33 +1,49 @@
 """
-WeintAcademy - das Lernzentrum.
+LERNEN - was soll ich als Nächstes verbessern?
 
-Die Academy wertet dieselben Snapshots aus wie WeintTV. Sie holt
-sich Profil und Trainingsplan fertig vom AcademyService, der
-seinerseits die Auswertung im Analyzer aufruft. In dieser Datei
-steht deshalb ausschließlich Darstellung.
+Die dritte der vier Perspektiven des Raid Centers. Sie bewertet genau
+den Pull, den der Kopfblock darüber nennt, und zwar für genau den
+Charakter, der dort gewählt ist - beides kommt von aussen, diese
+Ansicht wählt nichts selbst aus.
 
-Drei Bereiche, umgeschaltet über denselben SegmentedControl wie in
-WeintTV, damit sich beide neuen Module gleich bedienen:
+**Was sich mit 4.0 geändert hat**, und es ist mehr als eine
+Umbenennung: die Academy war ein *Lernzentrum* mit drei Reitern
+(Übersicht, Trainingsplan, Katalog). Wer wissen wollte, woran er
+arbeiten soll, musste dafür die richtige Reiterseite finden - die
+Antwort lag verteilt über eine hervorgehobene Bewertungskachel, ihren
+Kleintext, eine Lektionskarte eine Seite weiter und einen Knopf darauf.
+Die erste Frage der Seite lautete faktisch "welche Academy-Seite
+möchte ich öffnen?".
 
-    Übersicht      Bewertung, nächste Lektion, Fortschritt
-    Trainingsplan  Die Lektionen der Reihe nach, abhakbar
-    Katalog        Alle verfügbaren Lektionen nach Bereich
+Jetzt ist es **eine Spalte** mit einer Reihenfolge, die der Frage
+folgt:
 
-Ein Detail zur Aktualisierung: die Sternebewertungen dürfen im
-Sekundentakt mitlaufen, die Lektionskarten nicht - sie werden nur
-neu gebaut, wenn sich der Plan tatsächlich ändert. Sonst entstünde
-bei jedem Snapshot eine komplett neue Kartenliste, was sichtbar
-flackern und jede Interaktion unterbrechen würde.
+    1. Deine größten Baustellen   (FocusCard - Bereich, Sterne,
+                                   Begründung, Lektion, der Moment im
+                                   Kampf)
+    2. Die vollständige Bewertung (sechs Bereiche - der Beleg)
+    3. Die Zahlen dahinter        (sechs Kennzahlen)
+    4. Der Trainingsplan          (die Lektionen der Reihe nach)
+    5. Fortschritt und Lernkurve
+    6. Der Katalog                (Konfiguration, deshalb zuletzt)
+
+Die **Bewertungslogik ist unverändert**: Profil und Trainingsplan holt
+diese Ansicht wie bisher fertig vom `AcademyService`, der seinerseits
+den Analyzer aufruft. In dieser Datei steht ausschließlich Darstellung.
+
+Ein Detail zur Aktualisierung, das bleibt: die Sternebewertungen dürfen
+im Sekundentakt mitlaufen, die Lektionskarten nicht - sie werden nur neu
+gebaut, wenn sich der Plan tatsächlich ändert. Sonst entstünde bei jedem
+Snapshot eine komplett neue Kartenliste, was sichtbar flackern und jede
+Interaktion unterbrechen würde.
 """
 
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
-    QComboBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -39,7 +55,6 @@ from analyzer.academy.models import (
     CATEGORY_HINTS,
     CATEGORY_LABELS,
     CATEGORY_ORDER,
-    MAX_STARS,
     STATUS_PASSED,
     STATUS_UNKNOWN,
     PlayerProfile,
@@ -54,12 +69,13 @@ from core.academy_dummy_sync import (
 from core.raid_data_service import SOURCE_MOCK
 from core.resources import Resources
 
-from gui.navigation import PageId
+from gui.navigation import RAID_VIEW_ANALYSIS, RAID_VIEW_SOURCE
 from gui.theme.colors import Colors
 from gui.theme.restyle import restyle
 from gui.theme.wow_colors import class_color, class_label, role_label
 
 from gui.widgets.academy.catalog_list import CatalogList, CatalogRowData
+from gui.widgets.academy.focus_card import FocusCard
 from gui.widgets.academy.history_card import HistoryCard
 from gui.widgets.academy.lesson_card import LessonCard
 from gui.widgets.academy.rating_grid import RatingGrid
@@ -67,71 +83,44 @@ from gui.widgets.card import Card
 from gui.widgets.eyebrow import eyebrow_label
 from gui.widgets.hero_banner import HeroButton
 from gui.widgets.section_card import SectionCard
-from gui.widgets.segmented_control import SegmentedControl
-from gui.widgets.toggle_switch import ToggleSwitch
 from gui.widgets.tv.analysis_gap import (
     ACTION_ARCHIVE,
     academy_empty_action,
     academy_empty_text,
-    next_lesson_placeholder,
+    focus_placeholder,
     rating_gap_text,
 )
-from gui.widgets.tv.archive_picker import ArchivePicker
-from gui.widgets.tv.loading_card import LoadingCard
-from gui.widgets.tv.encounter_meta import encounter_meta
-from gui.widgets.tv.entry_list import EntryData, EntryList
+from gui.widgets.tv.encounter_meta import average_text
 from gui.widgets.tv.meter_bar import MeterBar
 from gui.widgets.tv.metric_tile import MetricTile
-from gui.widgets.tv.replay_bar import ReplayBar
-from gui.widgets.tv.source_strip import SourceStrip
 
 
-TAB_OVERVIEW = "overview"
-TAB_PLAN = "plan"
-TAB_CATALOG = "catalog"
-
-
-#
-# Ein Satz je Reiter, unter dem Umschalter - dieselbe Überlegung wie
-# in WeintTV: "Übersicht", "Trainingsplan" und "Katalog" benennen, was
-# dahintersteckt, sagen aber nicht, welche Frage man dort stellt oder
-# was man selbst tun muss. Genau das war die Beschwerde.
-#
-
-TAB_HINTS = {
-
-    TAB_OVERVIEW: (
-        "Deine Bewertung im gezeigten Kampf: sechs Bereiche mit "
-        "Sternen, die Kennzahlen dahinter und die Kurve über mehrere "
-        "Pulls."
-    ),
-
-    TAB_PLAN: (
-        "Was du als Nächstes üben solltest - aus der Bewertung "
-        "abgeleitet. Abgehakt wird von Hand; die Prüfung daneben liest "
-        "der Log."
-    ),
-
-    TAB_CATALOG: (
-        "Alle Lektionen, die es für deine Spezialisierung gibt. Hier "
-        "schaltest du aus, was dich nicht betrifft."
-    ),
-
-}
-
-
-class AcademyPage(QWidget):
+class LearnView(QWidget):
+    """
+    Das Coaching zu diesem Pull. Eine Ansicht, kein Ort.
+    """
 
     #
-    # Sprung in einen anderen Hauptbereich - duck-getypt vom
-    # MainWindow verbunden, wie on_enter()/on_leave().
+    # Auf eine andere Perspektive desselben Pulls wechseln - der
+    # Kontext bleibt dabei stehen, das Raid Center schaltet nur den
+    # Stapel um.
     #
 
-    pageRequested = Signal(int)
+    viewRequested = Signal(str)
 
-    def __init__(self, manager):
+    #
+    # Eine Sekunde im Kampf ansehen. Das Raid Center startet die
+    # Wiedergabe, springt dorthin und zeigt die Live-Ansicht - diese
+    # Datei weiss von der Wiedergabe nichts (siehe
+    # docs/systems/archive-and-replay.md: die Academy hat nie eigenen
+    # Wiedergabecode gehabt, und das bleibt so).
+    #
 
-        super().__init__()
+    momentRequested = Signal(float)
+
+    def __init__(self, manager, parent=None):
+
+        super().__init__(parent)
 
         self.manager = manager
 
@@ -139,15 +128,11 @@ class AcademyPage(QWidget):
 
         self.academy = manager.academy
 
-        self._attached = False
-
         #
         # Merker, damit nur bei echten Änderungen neu gebaut wird.
         #
 
         self._plan_signature = None
-
-        self._roster_signature = None
 
         #
         # Die Kurve wird nur neu gezeichnet, wenn ein Pull dazugekommen
@@ -160,298 +145,21 @@ class AcademyPage(QWidget):
 
         self._plan = TrainingPlan()
 
-        #
-        # Vorgemerkter Sprung in die Wiedergabe. Er kann erst
-        # ausgeführt werden, wenn die Zeitleiste geladen ist - bis
-        # dahin wartet er hier.
-        #
-
-        self._pending_seek = None
-
         self.catalog_cards = {}
 
         root = QVBoxLayout(self)
 
-        root.setContentsMargins(32, 28, 32, 28)
+        root.setContentsMargins(0, 0, 0, 0)
 
-        root.setSpacing(20)
+        root.setSpacing(16)
 
-        #
-        # --------------------------------------------------
-        # Kopfzeile
-        # --------------------------------------------------
-        #
-
-        header = QHBoxLayout()
-
-        title_col = QVBoxLayout()
-
-        title_col.setSpacing(4)
-
-        eyebrow = QLabel("WEINTACADEMY · TRAINING")
-
-        eyebrow.setObjectName("eyebrow")
-
-        title_col.addWidget(eyebrow)
-
-        title = QLabel("Lernzentrum")
-
-        title.setObjectName("title")
-
-        title_col.addWidget(title)
-
-        header.addLayout(title_col)
-
-        header.addStretch()
-
-        character_label = QLabel("Charakter")
-
-        character_label.setStyleSheet(
-            f"font-size:12px;color:{Colors.TEXT_MUTED};"
-        )
-
-        header.addWidget(character_label)
-
-        self.character_box = QComboBox()
-
-        self.character_box.setMinimumWidth(180)
-
-        self.character_box.currentTextChanged.connect(
-            self._on_character_changed
-        )
-
-        header.addWidget(self.character_box)
-
-        #
-        # --------------------------------------------------
-        # "Dem Spiel folgen"
-        # --------------------------------------------------
-        #
-        # Seit WeintCodex 1.3.3.0 meldet das Addon beim Login, welcher
-        # Charakter angemeldet ist, und die Auswahl oben folgt ihm.
-        # Der Schalter muss sichtbar sein: sonst wäre die Automatik
-        # nur ein zweiter, unsichtbarer Akteur an der Auswahlbox -
-        # also genau die Beschwerde, die sie behebt.
-        #
-
-        self.follow_game = ToggleSwitch(
-            self.manager.config.data.get("academy_follow_game", True)
-        )
-
-        self.follow_game.toggled.connect(self._on_follow_game_toggled)
-
-        follow_label = QLabel("Dem Spiel folgen")
-
-        follow_label.setStyleSheet(
-            f"font-size:12px;color:{Colors.TEXT_MUTED};"
-        )
-
-        header.addSpacing(16)
-        header.addWidget(self.follow_game)
-        header.addWidget(follow_label)
-
-        root.addLayout(header)
-
-        #
-        # Welchen Charakter das Spiel zuletzt gemeldet hat. Ohne diese
-        # Zeile ist nicht zu erkennen, warum die Auswahl steht, wo sie
-        # steht - und ob die Verbindung zum Addon überhaupt lebt.
-        #
-
-        self.ingame_hint = QLabel("")
-
-        self.ingame_hint.setStyleSheet(
-            f"font-size:11px;color:{Colors.TEXT_FAINT};"
-        )
-
-        root.addWidget(self.ingame_hint)
-
-        #
-        # --------------------------------------------------
-        # Live/Archiv-Umschalter
-        # --------------------------------------------------
-        #
-        # Geteilt mit WeintTV über denselben RaidDataService - ein
-        # Wechsel hier wirkt auch dort, siehe
-        # gui/widgets/tv/archive_picker.py.
-        #
-
-        #
-        # Woher die Zahlen kommen - und wie man sie wechselt. Dieselbe
-        # Zeile wie in WeintTV und im Archiv. Sie steht ueber dem
-        # Archiv-Waehler, weil sie die groebere Frage beantwortet:
-        # welche Quelle ueberhaupt, und erst dann welcher Kampf daraus.
-        #
-
-        root.addWidget(SourceStrip(self.service))
-
-        self.archive_picker = ArchivePicker(self.service)
-
-        root.addWidget(self.archive_picker)
-
-        #
-        # Wiedergabe-Steuerung, schmale Fassung: hier soll man einen
-        # Moment ansehen können, ohne dass die Seite zur Fernbedienung
-        # wird. Die Geschwindigkeitswahl bleibt WeintTV vorbehalten.
-        #
-        # Weil beide Seiten denselben Service ansprechen, zeigen sie
-        # während einer Wiedergabe zwangsläufig dieselbe Sekunde.
-        #
-
-        root.addWidget(ReplayBar(self.service, compact=True))
-
-        #
-        # --------------------------------------------------
-        # Warten auf einen Pull
-        # --------------------------------------------------
-        #
-        # Dieselbe Karte wie in WeintTV und im Archiv. Sie steht hier
-        # oben und nicht in der Übersicht, weil die Leerzustandskarte
-        # darunter sonst gleichzeitig "kein ausgewerteter Kampf"
-        # behauptete, während einer geholt wird - genau die
-        # Verwechslung, die gemeldet wurde.
-        #
-
-        root.addWidget(LoadingCard(self.service))
-
-        #
-        # --------------------------------------------------
-        # Hinweis bei deaktiviertem Modul
-        # --------------------------------------------------
-        #
-
-        self.disabled_notice = self._build_disabled_notice()
-
-        root.addWidget(self.disabled_notice)
-
-        #
-        # --------------------------------------------------
-        # Bereichsumschalter
-        # --------------------------------------------------
-        #
-
-        self.tabs = SegmentedControl([
-            ("Übersicht", TAB_OVERVIEW),
-            ("Trainingsplan", TAB_PLAN),
-            ("Katalog", TAB_CATALOG),
-        ])
-
-        self.tabs.valueChanged.connect(
-            self._show_tab
-        )
-
-        root.addWidget(self.tabs)
-
-        self.tab_hint = QLabel("")
-
-        self.tab_hint.setWordWrap(True)
-
-        self.tab_hint.setStyleSheet(
-            f"font-size:12px;color:{Colors.TEXT_MUTED};"
-            "background:transparent;border:none;"
-        )
-
-        root.addWidget(self.tab_hint)
-
-        self.stack = QStackedWidget()
-
-        root.addWidget(self.stack, 1)
-
-        self._tab_index = {}
-
-        for key, builder in (
-            (TAB_OVERVIEW, self._build_overview),
-            (TAB_PLAN, self._build_plan),
-            (TAB_CATALOG, self._build_catalog),
-        ):
-
-            self._tab_index[key] = self.stack.count()
-
-            self.stack.addWidget(builder())
-
-        self.tabs.setValue(TAB_OVERVIEW)
-
-        #
-        # `setValue()` meldet nur eine *Aenderung*; der Anfangswert ist
-        # keine. Ohne diesen Aufruf bliebe der Erklaersatz auf dem
-        # zuerst sichtbaren Reiter leer.
-        #
-
-        self._show_tab(TAB_OVERVIEW)
-
-        #
-        # Signale
-        #
-
-        #
-        # Während ein Pull geholt wird, ändert sich kein Snapshot -
-        # die Leerzustandskarte erführe sonst erst davon, wenn der
-        # Pull längst da ist, und stünde die ganze Wartezeit über mit
-        # "kein ausgewerteter Kampf" neben der Wartekarte.
-        #
-
-        self.service.archiveChanged.connect(
-            self._on_archive_changed
-        )
-
-        self.service.replayChanged.connect(
-            self._on_replay_changed
-        )
-
-        self.service.snapshotChanged.connect(
-            self._on_snapshot
-        )
-
-        self.refresh()
+        self._build(root)
 
     # --------------------------------------------------
-    # Aufbau: Hinweis
+    # Aufbau
     # --------------------------------------------------
 
-    def _build_disabled_notice(self) -> Card:
-
-        card = Card()
-
-        title = QLabel("WeintAcademy ist deaktiviert")
-
-        title.setStyleSheet(
-            f"font-size:15px;font-weight:600;color:{Colors.WHITE};"
-            "background:transparent;border:none;"
-        )
-
-        card.addWidget(title)
-
-        text = QLabel(
-            "Das Modul lässt sich unter Einstellungen · Module "
-            "wieder einschalten."
-        )
-
-        text.setWordWrap(True)
-
-        text.setStyleSheet(
-            f"font-size:13px;color:{Colors.TEXT_SECONDARY};"
-            "background:transparent;border:none;"
-        )
-
-        card.addWidget(text)
-
-        card.setVisible(False)
-
-        return card
-
-    # --------------------------------------------------
-    # Aufbau: Übersicht
-    # --------------------------------------------------
-
-    def _build_overview(self) -> QWidget:
-
-        page = QWidget()
-
-        layout = QVBoxLayout(page)
-
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        layout.setSpacing(16)
+    def _build(self, layout: QVBoxLayout):
 
         #
         # --------------------------------------------------
@@ -488,10 +196,16 @@ class AcademyPage(QWidget):
 
         empty_row.addStretch()
 
-        self.empty_button = HeroButton("Log wählen …")
+        self.empty_button = HeroButton("Pull auswählen …")
+
+        #
+        # Der Knopf führt in die Quellenansicht und nicht mehr in
+        # ein Fenster darüber: die Liste der Raidabende ist seit 4.0
+        # eine der vier Perspektiven und kein Dialog.
+        #
 
         self.empty_button.clicked.connect(
-            self.archive_picker.open_browser
+            lambda: self.viewRequested.emit(RAID_VIEW_SOURCE)
         )
 
         empty_row.addWidget(self.empty_button)
@@ -501,6 +215,28 @@ class AcademyPage(QWidget):
         self.empty_card.setVisible(False)
 
         layout.addWidget(self.empty_card)
+
+        #
+        # --------------------------------------------------
+        # Die größten Baustellen
+        # --------------------------------------------------
+        #
+        # Das Erste auf der Seite, weil es die Frage ist, mit der man
+        # hinsieht. Alles darunter ist Beleg dafür: die vollständige
+        # Bewertung, die Zahlen, der Plan, die Kurve.
+        #
+
+        self.focus_card = FocusCard()
+
+        self.focus_card.lessonRequested.connect(self.show_lesson)
+
+        self.focus_card.momentRequested.connect(self.momentRequested)
+
+        self.focus_card.analysisRequested.connect(
+            lambda _category: self.viewRequested.emit(RAID_VIEW_ANALYSIS)
+        )
+
+        layout.addWidget(self.focus_card)
 
         #
         # Charakterkarte
@@ -601,74 +337,6 @@ class AcademyPage(QWidget):
         layout.addWidget(self.rating_notice)
 
         #
-        # Nächste Lektion
-        #
-
-        self.next_card = Card(accent=True)
-
-        next_eyebrow = eyebrow_label(
-            "NÄCHSTE LEKTION",
-            Colors.PRIMARY_HOVER,
-        )
-
-        self.next_card.addWidget(next_eyebrow)
-
-        self.next_title = QLabel("-")
-
-        self.next_title.setWordWrap(True)
-
-        self.next_title.setStyleSheet(
-            f"font-size:17px;font-weight:700;color:{Colors.WHITE};"
-            "background:transparent;border:none;"
-        )
-
-        self.next_card.addWidget(self.next_title)
-
-        self.next_summary = QLabel("")
-
-        self.next_summary.setWordWrap(True)
-
-        self.next_summary.setStyleSheet(
-            f"font-size:13px;color:{Colors.TEXT_SECONDARY};"
-            "background:transparent;border:none;"
-        )
-
-        self.next_card.addWidget(self.next_summary)
-
-        open_row = QHBoxLayout()
-
-        open_row.addStretch()
-
-        #
-        # Der Sprung in WeintTVs Analyse: die Bewertung sagt WAS
-        # schieflief, die Analyse zeigt die Zahlen dahinter. Ohne
-        # diesen Weg müsste man ihn über die Seitenleiste suchen.
-        #
-
-        self.open_analysis_button = HeroButton(
-            "Zur Analyse",
-            primary=False,
-        )
-
-        self.open_analysis_button.clicked.connect(
-            self._open_analysis
-        )
-
-        open_row.addWidget(self.open_analysis_button)
-
-        self.open_plan_button = HeroButton("Zum Trainingsplan")
-
-        self.open_plan_button.clicked.connect(
-            lambda: self.tabs.setValue(TAB_PLAN)
-        )
-
-        open_row.addWidget(self.open_plan_button)
-
-        self.next_card.addLayout(open_row)
-
-        layout.addWidget(self.next_card)
-
-        #
         # Kennzahlen der Tiefenauswertung
         #
         # Die Zahlen, auf denen die Bewertungen beruhen - sichtbar
@@ -712,73 +380,27 @@ class AcademyPage(QWidget):
         layout.addLayout(self.tile_grid)
 
         #
-        # Fortschritt
+        # --------------------------------------------------
+        # Der Trainingsplan
+        # --------------------------------------------------
+        #
+        # Bis 3.6.0 ein eigener Reiter. Er steht jetzt in derselben
+        # Spalte, weil er die Fortsetzung der Baustellen darüber ist und
+        # keine zweite Ansicht: "woran arbeiten" und "in welcher
+        # Reihenfolge" sind eine Frage.
         #
 
-        progress_card = SectionCard(
-            Resources.backup(),
-            "Fortschritt",
-            "Erledigte Lektionen dieses Charakters.",
-        )
+        plan_wrap = QWidget()
 
-        self.progress_bar = MeterBar(height=8)
-
-        progress_card.addWidget(self.progress_bar)
-
-        progress_row = QHBoxLayout()
-
-        self.progress_label = QLabel("0 von 0 Lektionen")
-
-        self.progress_label.setStyleSheet(
-            f"font-size:12px;color:{Colors.TEXT_SECONDARY};"
-            "background:transparent;border:none;"
-        )
-
-        progress_row.addWidget(self.progress_label)
-
-        progress_row.addStretch()
-
-        self.reset_button = HeroButton("Lernpfad zurücksetzen", primary=False)
-
-        self.reset_button.clicked.connect(
-            self._reset_progress
-        )
-
-        progress_row.addWidget(self.reset_button)
-
-        progress_card.addLayout(progress_row)
-
-        layout.addWidget(progress_card)
-
-        #
-        # Verlauf über mehrere Pulls (§6.3) - die Lernkurve. Sie
-        # kommt nicht aus dem gerade gezeigten Snapshot, sondern aus
-        # den aufgezeichneten Pulls dieses Charakters (siehe
-        # core/academy_history.py); gezeichnet wird sie in
-        # `_apply_history()`.
-        #
-
-        self.history_card = HistoryCard()
-
-        layout.addWidget(self.history_card)
-
-        layout.addStretch()
-
-        return page
-
-    # --------------------------------------------------
-    # Aufbau: Trainingsplan
-    # --------------------------------------------------
-
-    def _build_plan(self) -> QWidget:
-
-        page = QWidget()
-
-        self.plan_layout = QVBoxLayout(page)
+        self.plan_layout = QVBoxLayout(plan_wrap)
 
         self.plan_layout.setContentsMargins(0, 0, 0, 0)
 
         self.plan_layout.setSpacing(14)
+
+        self.plan_layout.addWidget(
+            eyebrow_label("DEIN TRAININGSPLAN")
+        )
 
         self.plan_placeholder = QLabel(
             "Sobald ein Kampf ausgewertet wurde, entsteht hier "
@@ -841,23 +463,78 @@ class AcademyPage(QWidget):
 
         self._lesson_cards: list[LessonCard] = []
 
-        return page
+        layout.addWidget(plan_wrap)
+
+        #
+        # Fortschritt
+        #
+
+        progress_card = SectionCard(
+            Resources.backup(),
+            "Fortschritt",
+            "Erledigte Lektionen dieses Charakters.",
+        )
+
+        self.progress_bar = MeterBar(height=8)
+
+        progress_card.addWidget(self.progress_bar)
+
+        progress_row = QHBoxLayout()
+
+        self.progress_label = QLabel("0 von 0 Lektionen")
+
+        self.progress_label.setStyleSheet(
+            f"font-size:12px;color:{Colors.TEXT_SECONDARY};"
+            "background:transparent;border:none;"
+        )
+
+        progress_row.addWidget(self.progress_label)
+
+        progress_row.addStretch()
+
+        self.reset_button = HeroButton("Lernpfad zurücksetzen", primary=False)
+
+        self.reset_button.clicked.connect(
+            self._reset_progress
+        )
+
+        progress_row.addWidget(self.reset_button)
+
+        progress_card.addLayout(progress_row)
+
+        layout.addWidget(progress_card)
+
+        #
+        # Verlauf über mehrere Pulls (§6.3) - die Lernkurve. Sie
+        # kommt nicht aus dem gerade gezeigten Snapshot, sondern aus
+        # den aufgezeichneten Pulls dieses Charakters (siehe
+        # core/academy_history.py); gezeichnet wird sie in
+        # `_apply_history()`.
+        #
+
+        self.history_card = HistoryCard()
+
+        layout.addWidget(self.history_card)
+
 
     # --------------------------------------------------
-    # Aufbau: Katalog
+    # Aufbau: Trainingsplan
     # --------------------------------------------------
 
-    def _build_catalog(self) -> QWidget:
-
-        page = QWidget()
-
-        layout = QVBoxLayout(page)
-
-        layout.setContentsMargins(0, 0, 0, 0)
-
-        layout.setSpacing(16)
+        #
+        # --------------------------------------------------
+        # Der Katalog
+        # --------------------------------------------------
+        #
+        # Zuletzt und mit Absicht: er ist **Konfiguration** und keine
+        # Auskunft über diesen Pull. Als eigener Reiter stand er
+        # gleichrangig neben der Bewertung, obwohl man ihn einmal
+        # einstellt und danach nie wieder aufsucht.
+        #
 
         self.catalog_lists = {}
+
+        layout.addWidget(eyebrow_label("LEKTIONSKATALOG"))
 
         hint = QLabel(
             "Alle Lektionen sind standardmäßig aktiv. Wer eine "
@@ -919,90 +596,32 @@ class AcademyPage(QWidget):
 
         layout.addStretch()
 
-        return page
-
     # --------------------------------------------------
-    # Navigation innerhalb der Seite
+    # Von aussen
     # --------------------------------------------------
 
-    def show_player(self, name: str):
+    def show_lesson(self, lesson_id: str):
         """
-        Von außen einen Charakter auswählen - der Sprung aus WeintTVs
-        Analyse ("diesen Spieler in der Academy ansehen").
+        Die Lektionskarte zu `lesson_id` in den Blick holen.
 
-        Muss VOR dem Seitenwechsel aufgerufen werden: change_page()
-        löst on_enter() und refresh() aus, die aus dem aktuellen
-        Snapshot neu zeichnen. Andersherum stünde für einen Moment der
-        falsche Charakter auf der Seite.
+        Kein Seitenwechsel und kein Dialog: die Karte steht auf
+        derselben Spalte, ein Stück weiter unten. `ensureWidgetVisible`
+        auf dem Scrollbereich des Raid Centers erledigt das - gefunden
+        wird er über den Elternbaum, damit diese Ansicht ihren Rahmen
+        nicht kennen muss.
         """
 
-        if not name:
-            return
+        for card in self._lesson_cards:
 
-        # Der Sprung aus WeintTV ist eine ausdrückliche Wahl - anders
-        # als der dortige Anzeigefilter, der die Identität bewusst
-        # nicht anfasst.
-        self.academy.note_manual_choice(name)
+            if card.lesson.lesson_id != lesson_id:
+                continue
 
-        self._plan_signature = None
+            area = _scroll_area_of(self)
 
-        self._apply_snapshot(self.service.current())
-
-    def _show_tab(self, key):
-
-        index = self._tab_index.get(key)
-
-        if index is None:
-            return
-
-        self.stack.setCurrentIndex(index)
-
-        self.tab_hint.setText(TAB_HINTS.get(key, ""))
-
-    # --------------------------------------------------
-    # Lebenszyklus
-    # --------------------------------------------------
-
-    def _module_enabled(self) -> bool:
-
-        return bool(
-            self.manager.config.data.get("academy_enabled", True)
-        )
-
-    def on_enter(self):
-
-        enabled = self._module_enabled()
-
-        self.disabled_notice.setVisible(not enabled)
-
-        self.tabs.setVisible(enabled)
-
-        self.stack.setVisible(enabled)
-
-        self.character_box.setVisible(enabled)
-
-        if not enabled:
-
-            self.on_leave()
+            if area is not None:
+                area.ensureWidgetVisible(card, 0, 24)
 
             return
-
-        if not self._attached:
-
-            self.service.attach()
-
-            self._attached = True
-
-        self._apply_snapshot(self.service.current())
-
-    def on_leave(self):
-
-        if not self._attached:
-            return
-
-        self.service.detach()
-
-        self._attached = False
 
     def on_layout_changed(self, state):
         """
@@ -1062,32 +681,19 @@ class AcademyPage(QWidget):
             self.tile_grid.setColumnStretch(column, 1 if column < columns else 0)
 
     # --------------------------------------------------
-
-    def refresh(self):
-
-        self._apply_snapshot(self.service.current())
-
-    # --------------------------------------------------
     # Snapshot anwenden
     # --------------------------------------------------
 
-    def _on_snapshot(self, snapshot: RaidSnapshot):
+    def apply(self, snapshot: RaidSnapshot):
         """
-        Der Anschluss an `snapshotChanged` - dieselbe Prüfung und
-        derselbe Grund wie in WeintTvPage._on_snapshot(): eine
-        unsichtbare Seite wertet nicht mit aus. Hier wiegt das noch
-        etwas schwerer, weil jedes Bild ein vollständiges Profil und
-        einen Trainingsplan nach sich zieht.
+        Bewertung und Plan aus **genau diesem** Stand.
+
+        Der Snapshot kommt vom Raid Center und wird nicht daneben noch
+        einmal geholt: `service.current()` ist während einer Wiedergabe
+        nachweislich ein anderer Stand als der gerade gezeigte, und dann
+        beschrieben die Sterne eine andere Sekunde als die Kennzahlen
+        darunter.
         """
-
-        if not self._attached:
-            return
-
-        self._apply_snapshot(snapshot)
-
-    def _apply_snapshot(self, snapshot: RaidSnapshot):
-
-        self._sync_roster(snapshot)
 
         self._profile = self.academy.build_profile(snapshot)
 
@@ -1095,8 +701,8 @@ class AcademyPage(QWidget):
         # Der Snapshot geht mit, damit der Plan seine Lektionen gegen
         # genau den gerade gezeigten Kampf prüfen kann. Im
         # Wiedergabe-Modus ist das der Stand der laufenden Sekunde -
-        # daraus entsteht die Verzahnung mit WeintTV, ohne dass diese
-        # Seite etwas von einer Wiedergabe wissen müsste.
+        # daraus entsteht die Verzahnung mit der Analyse, ohne dass
+        # diese Ansicht etwas von einer Wiedergabe wissen müsste.
         #
 
         #
@@ -1111,7 +717,7 @@ class AcademyPage(QWidget):
             character=self.academy.player_name(),
         )
 
-        self._apply_overview(snapshot)
+        self._apply_profile(snapshot)
 
         self._apply_history()
 
@@ -1119,122 +725,33 @@ class AcademyPage(QWidget):
 
         self._apply_catalog()
 
-    # --------------------------------------------------
-
-    def _sync_roster(self, snapshot: RaidSnapshot):
+    def on_archive_changed(self):
         """
-        Die Auswahlliste nur dann neu füllen, wenn sich der Raid
-        tatsächlich geändert hat - sonst würde sie im Sekundentakt
-        zurückspringen, während der Nutzer sie gerade bedient.
-        """
+        Nur der Leerzustand wird nachgezogen - alles andere hängt am
+        Snapshot und wäre hier eine zweite Quelle für dieselbe
+        Anzeige.
 
-        names = self.academy.roster(snapshot)
-
-        if names == self._roster_signature:
-            return
-
-        self._roster_signature = names
-
-        #
-        # reconcile_selection() entscheidet UND schreibt fest. Vorher
-        # stand hier ein blosses "wenn der gespeicherte Name noch
-        # vorkommt, setz ihn" - fehlte er, blieb die Box sichtbar auf
-        # dem ersten Namen stehen, während die Config den alten
-        # behielt. Die Nutzlast ins Addon entsteht aus der Config,
-        # also zeigte die App X und im Spiel stand Y. Nichts schlug
-        # dabei fehl, deshalb ist es so lange unentdeckt geblieben.
-        #
-        self._sync_ingame_hint()
-
-        selected = self.academy.reconcile_selection(names)
-
-        self.character_box.blockSignals(True)
-
-        self.character_box.clear()
-
-        self.character_box.addItems(names)
-
-        if selected in names:
-
-            self.character_box.setCurrentText(selected)
-
-        self.character_box.blockSignals(False)
-
-    def _on_character_changed(self, name: str):
-
-        if not name:
-            return
-
-        #
-        # Eine Wahl von Hand: sie gilt für den Charakter, auf dem sie
-        # getroffen wurde, und stellt sofort ins Addon zu.
-        #
-        self.academy.note_manual_choice(name)
-
-        self._sync_ingame_hint()
-
-        self._apply_snapshot(self.service.current())
-
-    def _on_follow_game_toggled(self, checked: bool):
-
-        self.manager.config.data["academy_follow_game"] = bool(checked)
-
-        self.manager.config.save()
-
-        if not checked:
-            self._sync_ingame_hint()
-            return
-
-        #
-        # Wieder eingeschaltet: die zuletzt gemeldete Anmeldung
-        # sofort anwenden, statt bis zum nächsten Login zu warten.
-        # note_ingame_character() räumt dabei die Handauswahl weg.
-        #
-        self.manager.config.data["academy_player_source"] = ""
-        self.manager.config.data["academy_manual_for"] = ""
-        self.manager.config.save()
-
-        self.academy.note_ingame_character(
-            self.academy.ingame_character(),
-            self.manager.config.data.get("academy_ingame_realm", ""),
-        )
-
-        self._sync_ingame_hint()
-
-        self._roster_signature = None
-
-        self._apply_snapshot(self.service.current())
-
-    def _sync_ingame_hint(self):
-        """
-        Nennt den zuletzt vom Spiel gemeldeten Charakter - und sagt,
-        wenn eine Auswahl von Hand ihn gerade überstimmt.
+        Gerufen wird das vom Raid Center: während ein Pull geholt wird,
+        ändert sich kein Snapshot, und ohne diesen Weg stünde die
+        Leerzustandskarte die ganze Wartezeit über mit "kein
+        ausgewerteter Kampf" neben der Wartekarte.
         """
 
-        ingame = self.academy.ingame_character()
+        self._apply_empty_state(self.service.current())
 
-        if not ingame:
-            text = (
-                "Das Addon hat noch nicht gemeldet, wer angemeldet ist "
-                "(WeintCodex 1.3.3.0 oder neuer, nach dem nächsten Login)."
-            )
+    def invalidate(self):
+        """
+        Plan und Kurve beim nächsten Zeichnen neu aufbauen.
 
-        else:
-            realm = self.manager.config.data.get("academy_ingame_realm", "")
-            text = "Ingame angemeldet: " + ingame + (f"-{realm}" if realm else "")
+        Nötig, wenn sich von aussen etwas geändert hat, was die
+        Signaturen nicht sehen - ein Charakterwechsel im Kopfblock
+        wechselt den ganzen Lernstand, ohne dass eine einzelne Lektion
+        anders aussieht.
+        """
 
-            manual = (
-                self.manager.config.data.get("academy_player_source") == "manual"
-                and self.manager.config.data.get("academy_follow_game", True)
-            )
+        self._plan_signature = None
 
-            if manual:
-                text += "  ·  eigene Auswahl hat Vorrang"
-
-        if self.ingame_hint.text() != text:
-            self.ingame_hint.setText(text)
-
-    # --------------------------------------------------
+        self._history_signature = None
 
     def _apply_rating_notice(self, snapshot: RaidSnapshot):
         """
@@ -1441,7 +958,7 @@ class AcademyPage(QWidget):
             else ", ".join(entry.label for entry in supplies)
         )
 
-    def _apply_overview(self, snapshot: RaidSnapshot):
+    def _apply_profile(self, snapshot: RaidSnapshot):
         """
         Der Snapshot wird **gereicht und nicht neu geholt**.
 
@@ -1479,16 +996,15 @@ class AcademyPage(QWidget):
             self.profile_title.setText(profile.title)
 
         #
-        # Was für ein Kampf war das? Bis 2.8.0 stand hier "Horridon ·
-        # Pull 12 · Ø 3,7/5" - und damit weder die Schwierigkeit noch
-        # der Ausgang, obwohl beides im Snapshot liegt. Für eine
-        # Bewertung ist das nicht nebensächlich: derselbe Boss
-        # heroisch und normal sind zwei verschiedene Ansprüche, und
-        # ein Wipe bei 80 % erklärt eine schwache Cooldown-Wertung von
-        # selbst.
+        # Nur die Durchschnittsnote. Boss, Schwierigkeit, Pull und
+        # Ausgang standen hier bis 3.6.0 mit (`encounter_meta`) - seit
+        # 4.0 trägt sie der Kontextblock des Raid Centers, der beim
+        # Perspektivwechsel stehen bleibt. Ein zweites Mal hier wäre
+        # genau die Doppelung, die dieser Umbau beseitigt; die Note
+        # dagegen steht nirgends sonst.
         #
 
-        self.profile_meta.setText(encounter_meta(snapshot, profile))
+        self.profile_meta.setText(average_text(profile))
 
         self.profile_note.setText(profile.note)
 
@@ -1506,45 +1022,32 @@ class AcademyPage(QWidget):
         self._apply_metric_tiles(snapshot)
 
         #
-        # Nächste Lektion
+        # Die größten Baustellen - die Karte oben.
+        #
+        # Sie ersetzt die frühere Karte "Nächste Lektion". Der
+        # Unterschied ist nicht die Form: die alte Karte nannte **eine**
+        # Lektion und liess offen, aus welchem Befund sie folgt; diese
+        # nennt die zwei bis drei schwächsten Bereiche mit ihrer
+        # Begründung, der Lektion dazu und dem Moment im Kampf. Das ist
+        # die Antwort auf "was soll ich verbessern" statt auf "was ist
+        # die nächste Lektion".
+        #
+        # Der Platzhaltersatz kommt aus `analysis_gap.py`, damit diese
+        # Karte und die Leerzustandskarte darüber dieselbe Lage nicht
+        # verschieden erklären. `focus_placeholder()` zieht dabei zwei
+        # Linien: ohne Kampfdaten ist NICHTS erledigt (es ist nur
+        # nichts berechnet), und "bewertet, aber nichts Schwaches" ist
+        # ein Lob und kein Mangel.
         #
 
-        lesson = self._plan.next_lesson
-
-        if lesson is None:
-
-            #
-            # Zwei Fälle, zwei Sätze, und sie sind das Gegenteil
-            # voneinander: ohne Kampfdaten ist NICHTS erledigt, es ist
-            # nur nichts berechnet. Bis 2.8.0 stand "Alle Lektionen
-            # erledigt" auch dann da - keine Ungenauigkeit, sondern
-            # eine falsche Aussage über den Lernstand, ausgerechnet
-            # auf der Karte, die den nächsten Schritt nennen soll.
-            #
-
-            self.next_title.setText(
-                next_lesson_placeholder(snapshot.has_data)
-            )
-
-            self.next_summary.setText(
-                "Der aktuelle Lernpfad ist abgeschlossen - neue "
-                "Lektionen entstehen mit der nächsten Auswertung."
-                if snapshot.has_data
-                else "Sobald ein Pull ausgewertet ist, entsteht hier "
-                "automatisch ein Lernpfad für diesen Charakter."
-            )
-
-            self.open_plan_button.setEnabled(False)
-
-        else:
-
-            self.next_title.setText(lesson.title)
-
-            self.next_summary.setText(
-                f"{lesson.category_label} · {lesson.summary}"
-            )
-
-            self.open_plan_button.setEnabled(True)
+        self.focus_card.apply(
+            profile,
+            self._plan,
+            placeholder=focus_placeholder(
+                snapshot.has_data,
+                bool(profile.rated),
+            ),
+        )
 
         #
         # Fortschritt
@@ -1571,17 +1074,6 @@ class AcademyPage(QWidget):
         )
 
         self.reset_button.setEnabled(done > 0)
-
-    # --------------------------------------------------
-
-    def _on_archive_changed(self):
-        """
-        Nur der Leerzustand wird nachgezogen - alles andere hängt am
-        Snapshot und wäre hier eine zweite Quelle für dieselbe
-        Anzeige.
-        """
-
-        self._apply_empty_state(self.service.current())
 
     def _apply_empty_state(self, snapshot: RaidSnapshot):
         """
@@ -1613,8 +1105,6 @@ class AcademyPage(QWidget):
             academy_empty_action(snapshot) == ACTION_ARCHIVE
         )
 
-    # --------------------------------------------------
-
     def _apply_history(self):
         """
         Die Lernkurve zeichnen - die aufgezeichneten Pulls dieses
@@ -1624,7 +1114,7 @@ class AcademyPage(QWidget):
         `_apply_snapshot()` und läuft damit im Sekundentakt, in einer
         Wiedergabe viermal je Sekunde - die Kurve ändert sich dagegen
         höchstens einmal je Pull. Dieselbe Regel wie beim
-        `ArchivePicker` und der WeakAura-Liste.
+        Archivbrowser und der WeakAura-Liste.
 
         Gefiltert wird nach **Datenquelle und Spezialisierung**: die
         Simulation ist keine Lernkurve, und eine Rotationsbewertung
@@ -1652,8 +1142,6 @@ class AcademyPage(QWidget):
         self._history_signature = signature
 
         self.history_card.apply(records, _source_note(source))
-
-    # --------------------------------------------------
 
     def _practice_text(self) -> str:
         """
@@ -1765,7 +1253,7 @@ class AcademyPage(QWidget):
             )
 
             card.momentRequested.connect(
-                self._on_moment_requested
+                self.momentRequested
             )
 
             #
@@ -1788,7 +1276,7 @@ class AcademyPage(QWidget):
             completed,
         )
 
-        self._apply_snapshot(self.service.current())
+        self.apply(self.service.current())
 
     def _reset_progress(self):
 
@@ -1796,14 +1284,7 @@ class AcademyPage(QWidget):
 
         self._plan_signature = None
 
-        self._apply_snapshot(self.service.current())
-
-    def _open_analysis(self):
-        """
-        WeintTV öffnen und dort direkt die Analyse zeigen.
-        """
-
-        self._open_weinttv("analysis")
+        self.apply(self.service.current())
 
     def _reset_selection(self):
 
@@ -1811,9 +1292,7 @@ class AcademyPage(QWidget):
 
         self._plan_signature = None
 
-        self._apply_snapshot(self.service.current())
-
-    # --------------------------------------------------
+        self.apply(self.service.current())
 
     def _apply_catalog(self):
 
@@ -1892,73 +1371,35 @@ class AcademyPage(QWidget):
 
         self._plan_signature = None
 
-        self._apply_snapshot(self.service.current())
+        self.apply(self.service.current())
 
-    def _on_moment_requested(self, seconds: float):
-        """
-        Aus einem Befund an genau die Sekunde der Wiedergabe springen,
-        an der er entstanden ist.
 
-        Läuft noch keine Wiedergabe, wird sie zuerst gestartet. Der
-        Sprung selbst passiert dann erst, wenn die Zeitleiste geladen
-        ist - deshalb der zweite Aufruf über das replayChanged-Signal
-        statt sofort.
-        """
+# --------------------------------------------------
+# Hilfen
+# --------------------------------------------------
 
-        from core.raid_data_service import MODE_REPLAY
 
-        if self.service.archive_state().mode != MODE_REPLAY:
+def _scroll_area_of(widget):
+    """
+    Der Scrollbereich, in dem dieses Widget liegt - oder `None`.
 
-            self._pending_seek = seconds
+    Über den Elternbaum und nicht über eine Rückreferenz: die Ansicht
+    soll ihren Rahmen nicht kennen müssen, und ein gespeicherter Zeiger
+    auf den Rahmen wäre ein Kreis, den der Sammler nicht auflöst.
+    """
 
-            self.service.start_replay()
+    from PySide6.QtWidgets import QScrollArea
 
-        else:
+    parent = widget.parentWidget()
 
-            self.service.seek_replay(seconds)
+    while parent is not None:
 
-            self.service.set_replay_playing(False)
+        if isinstance(parent, QScrollArea):
+            return parent
 
-        self._open_weinttv("live")
+        parent = parent.parentWidget()
 
-    def _open_weinttv(self, tab: str):
-        """
-        WeintTV öffnen und dort einen bestimmten Bereich zeigen.
-
-        Ohne die Bereichswahl landete man in dem Tab, den WeintTV
-        zuletzt zeigte - beim Sprung auf eine Sekunde also womöglich
-        in der Rückschau statt bei dem Moment, den man sehen wollte.
-        """
-
-        weinttv = getattr(self.window(), "weinttv", None)
-
-        if weinttv is not None and hasattr(weinttv, "show_tab"):
-
-            weinttv.show_tab(tab)
-
-        self.pageRequested.emit(PageId.WEINTTV)
-
-    def _on_replay_changed(self):
-        """
-        Einen vorgemerkten Sprung nachholen, sobald die Zeitleiste da
-        ist.
-        """
-
-        if self._pending_seek is None:
-            return
-
-        state = self.service.replay_state()
-
-        if state.loading or state.duration <= 0:
-            return
-
-        seconds = self._pending_seek
-
-        self._pending_seek = None
-
-        self.service.seek_replay(seconds)
-
-        self.service.set_replay_playing(False)
+    return None
 
 
 def _source_note(source: str) -> str:

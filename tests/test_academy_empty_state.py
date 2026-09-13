@@ -222,20 +222,27 @@ def page(pull):
             self.logger = _Logger()
             self.academy = AcademyService(self)
 
-    from gui.pages.academy import AcademyPage
+    from gui.pages.raid.learn_view import LearnView
 
-    built = AcademyPage(_Manager())
+    #
+    # Seit 4.0 ist die Academy eine **Ansicht** des Raid Centers und
+    # keine Seite: Charakterwahl, Quellenzeile und Archiv-Wähler stehen
+    # im Kontextblock darüber, hier steht nur noch die Bewertung. Der
+    # Test greift deshalb die Auswahl am Dienst ab (`note_manual_choice`)
+    # statt an einer Auswahlbox auf der Seite - genau der Weg, den der
+    # Kopfblock auch nimmt.
+    #
 
-    built._attached = True
-
-    return built
+    return LearnView(_Manager())
 
 
 def _tiles(page, pull, name):
 
-    page.character_box.setCurrentText(name)
+    page.academy.note_manual_choice(name)
 
-    page._apply_snapshot(pull)
+    page.invalidate()
+
+    page.apply(pull)
 
     return {
         tile.label.text(): (tile.value.text(), tile.caption.text())
@@ -279,7 +286,7 @@ def test_without_a_pull_every_metric_says_no_data_not_zero(page, nothing):
     Ein Strich heisst "nicht geliefert", eine Null wäre ein Vorwurf.
     """
 
-    page._apply_snapshot(nothing)
+    page.apply(nothing)
 
     for tile in page._tiles:
         assert tile.value.text() == "-", tile.label.text()
@@ -287,7 +294,7 @@ def test_without_a_pull_every_metric_says_no_data_not_zero(page, nothing):
 
 def test_without_a_pull_the_empty_card_and_its_button_are_there(page, nothing):
 
-    page._apply_snapshot(nothing)
+    page.apply(nothing)
 
     assert page.empty_card.isVisibleTo(page)
     assert page.empty_button.isVisibleTo(page)
@@ -321,3 +328,80 @@ def test_while_a_pull_is_being_fetched_the_empty_card_holds_still(nothing):
     assert academy_empty_text(nothing, loading=True) == ""
 
     assert academy_empty_text(nothing, loading=False)
+
+
+# --------------------------------------------------
+# Die Baustellenkarte (4.0)
+# --------------------------------------------------
+
+
+def test_only_really_weak_areas_are_called_baustellen(page, pull):
+    """
+    `profile.weakest` gibt **alle** bewerteten Bereiche aufsteigend
+    zurück. Blind die ersten drei zu nehmen führte unter der
+    Überschrift "deine grössten Baustellen" Bereiche mit fünf Sternen
+    auf - das Gegenteil dessen, was dort steht.
+    """
+
+    card = page.focus_card
+
+    for name in pull.actor_names:
+
+        _tiles(page, pull, name)
+
+        shown = [
+            row.rating.stars.stars()
+            for row in card.rows
+            if row.isVisibleTo(card)
+        ]
+
+        assert all(stars <= 3 for stars in shown), (name, shown)
+
+
+def test_a_clean_pull_is_praised_and_not_reported_as_a_gap(page, pull):
+    """
+    "Bewertet, aber nichts Schwaches" ist eine Auskunft über den Pull
+    und ein Lob - sie darf nicht aussehen wie ein Mangel. Und sie ist
+    etwas anderes als "nichts ausgewertet".
+    """
+
+    from gui.widgets.tv.analysis_gap import (
+        focus_placeholder,
+        next_lesson_placeholder,
+    )
+
+    clean = focus_placeholder(True, True)
+
+    assert "auffällig" in clean
+
+    #
+    # Ohne Kampfdaten bleibt es beim Satz der nächsten Lektion: dann ist
+    # NICHTS erledigt, es ist nur nichts berechnet.
+    #
+
+    assert focus_placeholder(False, False) == next_lesson_placeholder(False)
+
+    assert focus_placeholder(True, False) == next_lesson_placeholder(True)
+
+
+def test_a_focus_row_offers_no_button_that_hits_nothing(page, pull):
+    """
+    Den Sprung in die Wiedergabe gibt es nur, wenn die Bewertung einen
+    Moment nennt (`at_seconds >= 0`; -1 heisst "kein Moment" und nie
+    "Sekunde 0").
+    """
+
+    card = page.focus_card
+
+    _tiles(page, pull, pull.top_damage[3].name)
+
+    for row in card.rows:
+
+        if not row.isVisibleTo(card):
+            continue
+
+        if row._seconds < 0:
+            assert not row.moment_button.isVisibleTo(row)
+
+        if not row._lesson_id:
+            assert not row.lesson_button.isVisibleTo(row)

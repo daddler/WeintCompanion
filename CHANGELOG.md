@@ -2,6 +2,144 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 4.0.0
+
+**WeintTV, Academy und Archiv sind keine drei Bereiche mehr, sondern vier
+Ansichten eines Raid Centers.** Das ist die grösste Umstellung an der
+Bedienung seit 2.0, und sie behebt keinen Anzeigefehler, sondern die
+Gliederung selbst.
+
+Bisher standen unter RAID vier Einträge: Übersicht, WeintTV, Academy,
+Archiv. Die letzten drei zeigten **denselben Pull** — sie teilten sich
+unsichtbar eine Datenquelle, einen Datenstand und eine Archivauswahl.
+Wissen musste man das selbst:
+
+- wann WeintTV, wann die Academy, wann das Archiv das Richtige ist,
+- wie man einen vergangenen Pull findet,
+- und wie man von einem ausgewerteten Pull zur passenden Lektion kommt.
+
+Der letzte Weg war der schlimmste. Er ging: Analyse → Seitenleiste →
+Academy → Charakter wählen → Pull wiederfinden → Lektion suchen. Jeder
+dieser Schritte war nötig, weil der **Pull** nicht der Gegenstand der
+Oberfläche war, sondern die Module.
+
+Jetzt gibt es unter RAID zwei Einträge — *Übersicht* und *Raid Center* —
+und im Raid Center vier Ansichten desselben Kampfes:
+
+> **BELAGERUNG VON ORGRIMMAR · 25 HEROISCH**
+> **Garrosh Höllschrei**  · WIPE · ARCHIV
+> Pull 17 · Wipe · 42 % · 06:31   ·   Mittwoch · 10.09. · 21:43
+>
+> [ **Live** | Analyse | Lernen | Quelle ]
+
+**Dieser Kopfblock bleibt stehen**, während du darunter die Ansicht
+wechselst. Du verlierst deinen Pull also nie beim Umschalten, und du
+musst nie wieder etwas zweimal einstellen.
+
+- **Live** ist das bisherige Live-Dashboard: Bossleben, Pulluhr, Schaden
+  und Heilung je Spieler, Tanks, Tode, Kampf-Rezz, Heldentum, Phasen.
+- **Analyse** ist die bisherige Tiefenauswertung: erhaltener Schaden und
+  wie viel davon vermeidbar war, Wirkungsdauern, Aktivzeit,
+  Cooldown-Nutzung mit Zeitstrahl, Unterbrechungen, Mechanikfehler.
+- **Lernen** ist die Academy — neu sortiert, siehe unten.
+- **Quelle** ist das Archiv plus der frühere Reiter *Verlauf*.
+
+**Die Academy fragt nicht mehr, welche Seite du öffnen willst.** Sie
+beginnt mit der Frage, mit der man hinsieht: *deine grössten Baustellen*.
+Zwei bis drei Bereiche, jeder mit Sternen, der Begründung dazu, der
+passenden Lektion — und den zwei Wegen, die man von dort aus will:
+
+> **DEINE GRÖSSTEN BAUSTELLEN**
+> **Bewegung** ★★☆☆☆   3 vermeidbare Treffer
+> Lektion: „Bewegung während der Übergänge"
+> [ Lektion starten ]  [ Moment 03:41 ]  [ Zahlen dazu ]
+
+*Moment* springt in die Wiedergabe an genau die Sekunde, an der es
+passiert ist. *Zahlen dazu* führt in die Analyse — derselbe Pull, andere
+Perspektive. Die drei Reiter (Übersicht, Trainingsplan, Katalog) sind zu
+**einer Spalte** geworden, in der Reihenfolge der Frage: Baustellen →
+alle sechs Bewertungen → die Zahlen dahinter → der Trainingsplan →
+Fortschritt und Lernkurve → der Katalog. An der Bewertungslogik ändert
+sich nichts.
+
+**Das Archiv ist kein Fenster mehr.** Der Knopf „Log wählen …" legte
+einen Dialog über genau die Ansicht, auf der man ihn drückte, und
+daneben gab es die Archiv-Seite mit derselben Liste — zwei Wege zum
+selben Ort. Jetzt ist die Liste die Ansicht *Quelle*, mit drei neuen
+Abkürzungen für die Fragen, die man fast immer hat:
+
+> **SCHNELLAUSWAHL**  [ Letzter Raid ]  [ Letzter Kill ]  [ Bester Versuch ]
+
+Und **sobald ein Pull geladen ist, wechselt das Raid Center von selbst
+auf die Analyse**. Bisher stand dort „die Zahlen erscheinen in WeintTV" —
+richtig, und trotzdem ein Seitenwechsel von Hand.
+
+**Nur nachsehen, welche Raidabende es gibt, hält den laufenden Raid nicht
+mehr an.** Solange die Liste in einem Fenster steckte, war ihr Öffnen die
+ausdrückliche Absicht, den Live-Feed zu verlassen. Als Ansicht einen
+Klick neben *Live* darf sie das nicht mehr — sie lädt die Berichtsliste,
+ohne die Betriebsart anzutasten.
+
+**Ein Klick auf einen Spieler in der Analyse öffnet ihn unter *Lernen*** —
+mit demselben Pull, ohne erneutes Suchen. Der Anzeigefilter der Analyse
+bleibt dabei, was er war: er sagt **nicht**, wer „ich" bin. Die
+Raidansicht ist dazu da, sich auch andere anzusehen.
+
+**Die Übersicht führt direkt zum letzten Pull.** Die Karte „Dein letzter
+Pull" hatte einen Knopf „Lektion öffnen", der in die Academy führte —
+wo die Arbeit von vorn begann. Jetzt trägt sie zwei Knöpfe, die den Pull
+**mitnehmen**: *Pull ansehen* öffnet ihn in der Analyse, *Daraus lernen*
+unter Lernen. Und sie nennt endlich deinen Fokus:
+
+> **DEIN FOKUS**  Bewegung ★★☆☆☆
+> Bewegung ist dein schwächster Bereich.
+
+Die Sternreihe stand dort seit 2.0 und blieb immer leer. Sie kommt jetzt
+aus der **aufgezeichneten** Bewertung genau dieses Pulls — und bleibt
+leer, wenn es keine gibt, statt eine zu schätzen. Dass die Kennung
+übereinstimmen muss, ist keine Feinheit: der zuletzt *ausgewertete* und
+der zuletzt *gespielte* Pull sind an einem Raidabend regelmässig zwei
+verschiedene Kämpfe.
+
+**Weniger Doppeltes auf dem Bildschirm.** Was einmal im Kopfblock steht,
+steht nicht noch einmal darunter:
+
+- Der Bossname stand zweimal (im Kopf von WeintTV und in der
+  Archivauswahl) und konnte sich beim Umschalten kurz widersprechen — der
+  eine kam aus dem Datenstand, der andere aus der Auswahl.
+- Die Quellenzeile stand dreimal, weil es drei Seiten waren. Jetzt nennt
+  ein Chip im Kopfblock die laufende Quelle (in Warnfarbe, wenn es
+  Beispieldaten sind) und führt mit einem Klick dorthin, wo man sie
+  wechselt.
+- Die Wiedergabeleiste stand zweimal, die Wartekarte dreimal, der
+  Live/Archiv-Schalter dreimal.
+- Der Charakterwähler stand im Kopf der Academy — also an genau einer der
+  drei Seiten, obwohl die Analyse daneben denselben Charakter meint. Er
+  gehört zum Kontext und steht jetzt im Kopfblock.
+- Ein verborgener Aufbau aus 1.7 (eine Boss-Karte samt vier
+  Kennzahlkacheln, dauerhaft unsichtbar) wurde bei jedem Bild
+  mitbeschriftet. Er ist entfallen.
+
+**Ein abgeschaltetes Modul kostet eine Ansicht, nicht den Bereich.** Wer
+die Academy unter *Einstellungen · Module* ausschaltet, sieht Live,
+Analyse und Quelle unverändert; nur unter *Lernen* steht, wo sie wieder
+anzuschalten ist. Bisher leerte derselbe Schalter einen ganzen
+Navigationspunkt.
+
+**Der Wegweiser („Was ist das hier?") erklärt jetzt die vier Ansichten**
+statt drei Bereiche, und der Rundgang beim ersten Start ebenso. Die Namen
+WeintTV und WeintAcademy bleiben: sie stehen in den Einstellungen, im
+Addon und auf dem Discord und benennen die Module, die dahinter rechnen.
+Sie sind nur keine Orte mehr, an die man gehen muss.
+
+**Nichts davon geht verloren.** Live-Daten, WarcraftLogs, Archiv,
+Wiedergabe, Bewertung, Trainingsplan, Katalog, Fortschritt,
+Charakterauswahl, Quellenumschaltung, Overlay, die Pulls dieser Sitzung —
+alles ist weiterhin da, nur an einer Stelle statt an dreien. Unter der
+Oberfläche bleibt auch die Architektur, die das möglich macht: es gibt
+weiterhin **einen** Archivzustand, **einen** Wiedergabezustand und
+**einen** Datenstand, alle auf dem `RaidDataService`.
+
 ## 3.6.0
 
 **Beim Laden eines Pulls siehst du jetzt, wie lange es dauert.** Bisher

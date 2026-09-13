@@ -1,11 +1,19 @@
 """
-Der Archivbrowser und die Quellenzeile.
+Der Archivbrowser und die Quellenansicht des Raid Centers.
 
-Diese Datei baut Widgets - wie die fünf anderen unter `tests/`, und
-aus demselben Grund: die Fehler, um die es hier geht, sind von aussen
-unsichtbar. Eine Liste, die sich beim Laden selbst leert, ein Fenster,
-das sich in der Sekunde schliesst, in der es aufgeht, und ein Klick,
-der beim falschen Dienst landet, werfen alle keine Ausnahme.
+Diese Datei baut Widgets - wie die anderen unter `tests/`, und aus
+demselben Grund: die Fehler, um die es hier geht, sind von aussen
+unsichtbar. Eine Liste, die sich beim Laden selbst leert, ein "geladen"
+in der Sekunde, in der die Ansicht erscheint, und ein Klick, der beim
+falschen Dienst landet, werfen alle keine Ausnahme.
+
+**Seit 4.0 gibt es kein Fenster mehr.** Der Browser steckte bis dahin
+zusätzlich in einem Dialog (`ArchiveDialog`), den WeintTV und die
+Academy über "Log wählen …" öffneten - zwei Wege zur selben Liste, von
+denen der eine sich über den anderen legte. Er ist entfallen; die Liste
+ist die Perspektive *Quelle*. Was vom Fenster geprüft wurde (es schliesst
+nur für den Pull, der **in ihm** angeklickt wurde), gilt unverändert
+für das Signal `fightLoaded`, das jetzt an seiner Stelle steht.
 
 `importorskip` und `QT_QPA_PLATFORM=offscreen` wie dort.
 """
@@ -76,6 +84,14 @@ class FakeService(QObject):
     archiveChanged = Signal()
     replayChanged = Signal()
 
+    #
+    # Die Quellenansicht traegt die Quellenzeile (`SourceStrip`), und die
+    # haengt an `sourceChanged` - damit ein Wechsel in den Einstellungen
+    # hier nicht als alter Stand stehen bleibt.
+    #
+
+    sourceChanged = Signal()
+
     def __init__(self, **state):
 
         super().__init__()
@@ -105,6 +121,22 @@ class FakeService(QObject):
 
     def enter_archive_mode(self):
         self.calls.append("enter")
+
+    def ensure_reports(self):
+        self.calls.append("reports")
+
+    def configured_source(self):
+        return "mock"
+
+    def active_source(self):
+        return "mock"
+
+    def set_source(self, source):
+        self.calls.append(("source", source))
+        return False
+
+    def history(self):
+        return ()
 
     def show_live(self):
         self.calls.append("live")
@@ -169,22 +201,29 @@ def _flat(body):
 
 def _browser(qt_app, service):
     """
-    Der Browser selbst - seit 3.5.0 ein Widget, das sowohl in der
-    Archiv-Seite steckt als auch im Fenster darum. Geprueft wird
-    deshalb er und nicht der Rahmen; fuer die zwei Regeln, die wirklich
-    zum Fenster gehoeren, gibt es `_dialog()` daneben.
+    Der Browser - seit 4.0 ausschliesslich als Teil der Quellenansicht.
     """
 
-    from gui.dialogs.archive_dialog import ArchiveBrowser
+    from gui.widgets.raid.archive_browser import ArchiveBrowser
 
     return ArchiveBrowser(service)
 
 
-def _dialog(qt_app, service):
+def _loaded(browser):
+    """
+    Ob der Browser einen geladenen Pull gemeldet hat.
 
-    from gui.dialogs.archive_dialog import ArchiveDialog
+    Das ist der Nachfolger von "hat sich das Fenster geschlossen": das
+    Raid Center schaltet auf dieses Signal hin auf die Analyse um, und
+    ein Signal zur falschen Zeit ist derselbe Fehler wie ein Fenster,
+    das sich zur falschen Zeit schliesst.
+    """
 
-    return ArchiveDialog(service)
+    seen = []
+
+    browser.fightLoaded.connect(lambda: seen.append(True))
+
+    return seen
 
 
 # --------------------------------------------------
@@ -345,34 +384,57 @@ def test_clicking_a_pull_loads_it(qt_app):
     assert ("fight", "aBcDeF12", 3) in service.calls
 
 
-def test_the_window_stays_open_while_the_pull_is_still_loading(qt_app):
+def test_a_still_loading_pull_is_not_reported_as_loaded(qt_app):
     """
-    Der einzelne Pull kostet den Bot Minuten. Ein Fenster, das sich
-    beim Klick schliesst, lässt den Nutzer vor einer Seite stehen, die
-    sich aus unerfindlichen Gründen nicht ändert.
+    Der einzelne Pull kostet den Bot Minuten. Ein "geladen" beim Klick
+    liesse das Raid Center auf die Analyse umschalten, die dann
+    minutenlang leer dastünde - und der Nutzer vor einem Bildschirm,
+    der sich aus unerfindlichen Gründen nicht ändert.
     """
-
-    service = FakeService()
-
-    dialog = _dialog(qt_app, service)
-
-    service.select_archive_fight = lambda code, fight_id: None
-
-    dialog.browser._awaiting = 3
-
-    service.state = replace(service.state, selected_fight=3, fight_loading=True)
-
-    dialog.browser._refresh()
-
-    assert dialog.result() == 0
-    assert dialog.browser._awaiting == 3
-
-
-def test_an_error_does_not_close_the_window_over_its_own_message(qt_app):
 
     service = FakeService()
 
     browser = _browser(qt_app, service)
+
+    seen = _loaded(browser)
+
+    browser._awaiting = 3
+
+    service.state = replace(service.state, selected_fight=3, fight_loading=True)
+
+    browser._refresh()
+
+    assert seen == []
+    assert browser._awaiting == 3
+
+
+def test_a_finished_pull_is_reported_once(qt_app):
+
+    service = FakeService()
+
+    browser = _browser(qt_app, service)
+
+    seen = _loaded(browser)
+
+    browser._awaiting = 3
+
+    service.state = replace(service.state, selected_fight=3)
+
+    browser._refresh()
+
+    browser._refresh()
+
+    assert seen == [True]
+    assert browser._awaiting is None
+
+
+def test_an_error_does_not_report_a_loaded_pull_over_its_own_message(qt_app):
+
+    service = FakeService()
+
+    browser = _browser(qt_app, service)
+
+    seen = _loaded(browser)
 
     browser._awaiting = 3
 
@@ -384,23 +446,45 @@ def test_an_error_does_not_close_the_window_over_its_own_message(qt_app):
 
     browser._refresh()
 
+    assert seen == []
     assert browser._awaiting is None
     assert "Bot nicht erreichbar" in browser.status.text()
 
 
-def test_a_pull_selected_before_the_window_opened_does_not_close_it(qt_app):
+def test_a_pull_selected_before_the_view_was_entered_reports_nothing(qt_app):
     """
-    Beim Öffnen ist meist noch der Pull von vorhin gewählt und längst
-    geladen. Ohne den Merker schlösse sich das Fenster in der Sekunde,
-    in der es aufgeht.
+    Beim Betreten ist meist noch der Pull von vorhin gewählt und längst
+    geladen. Ohne den Merker meldete der Browser ihn in der Sekunde, in
+    der die Ansicht erscheint - und das Raid Center sprang sofort weg
+    von der Liste, die man gerade aufgeschlagen hat.
     """
 
     service = FakeService(selected_fight=3)
 
-    dialog = _dialog(qt_app, service)
+    browser = _browser(qt_app, service)
 
-    assert dialog.browser._awaiting is None
-    assert dialog.result() == 0
+    seen = _loaded(browser)
+
+    browser._refresh()
+
+    assert browser._awaiting is None
+    assert seen == []
+
+
+def test_entering_the_list_loads_the_reports_without_leaving_live(qt_app):
+    """
+    Die Liste liegt einen Klick neben *Live*. Wer nachsieht, welche
+    Abende es gibt, hat damit noch nicht entschieden, den laufenden Raid
+    zu verlassen - `enter_archive_mode()` hätte genau das getan (der
+    Live-Poll verwirft seine Ergebnisse, sobald `browsing` gilt).
+    """
+
+    service = FakeService()
+
+    _browser(qt_app, service)
+
+    assert "reports" in service.calls
+    assert "enter" not in service.calls
 
 
 # --------------------------------------------------
@@ -433,81 +517,156 @@ def test_without_a_report_the_pull_column_points_left(qt_app):
 
 
 # --------------------------------------------------
-# Quellenzeile
+# Die Quellenansicht
 # --------------------------------------------------
+#
+# Sie hat die Quellenzeile (`ArchivePicker`) der drei alten Seiten
+# ersetzt. Zwei Dinge daran sind neu und gehören geprüft: die
+# Schnellauswahl (drei Fragen, die man vor der Liste hat) und der
+# Umschalter zwischen laufendem Raid und Archiv, der jetzt hier steht
+# und nicht dreimal.
 
 
-def _picker(qt_app, service):
+def _source_view(qt_app, service):
 
-    from gui.widgets.tv.archive_picker import ArchivePicker
+    from core.config import Config
+    from gui.pages.raid.source_view import SourceView
 
-    return ArchivePicker(service)
+    class _Manager:
+
+        def __init__(self):
+            self.config = Config()
+            self.raid_data = service
+
+    return SourceView(_Manager())
 
 
-def test_the_source_line_names_the_loaded_pull(qt_app):
+def test_the_status_line_names_the_loaded_pull(qt_app):
 
-    picker = _picker(qt_app, FakeService(selected_fight=3))
+    view = _source_view(qt_app, FakeService(selected_fight=3))
 
-    text = picker.status_label.text()
+    text = view.status_label.text()
 
     assert text.startswith("Mittwoch, ")
     assert "Pull 2 · Garrosh · 4 %" in text
 
 
-def test_without_a_pull_the_source_line_points_at_the_browser(qt_app):
+def test_without_a_pull_the_status_line_points_at_the_list(qt_app):
 
     service = FakeService()
     service.state = replace(service.state, selected_report="")
 
-    picker = _picker(qt_app, service)
+    view = _source_view(qt_app, service)
 
-    assert "Log w" in picker.status_label.text()
+    assert "Raidabend" in view.status_label.text()
 
 
-def test_the_live_mode_leaves_the_source_line_to_the_page_header(qt_app):
+def test_the_live_mode_says_where_the_numbers_come_from(qt_app):
 
     service = FakeService()
     service.state = replace(service.state, mode=MODE_LIVE)
 
-    picker = _picker(qt_app, service)
+    view = _source_view(qt_app, service)
 
-    assert picker.status_label.text() == ""
+    assert "laufenden Log" in view.status_label.text()
 
 
-def test_an_error_reaches_the_source_line(qt_app):
+def test_an_error_reaches_the_status_line(qt_app):
 
     service = FakeService()
     service.state = replace(service.state, fights_error="Bot nicht erreichbar")
 
-    picker = _picker(qt_app, service)
+    view = _source_view(qt_app, service)
 
-    assert "Bot nicht erreichbar" in picker.status_label.text()
+    assert "Bot nicht erreichbar" in view.status_label.text()
 
 
-def test_the_browse_button_stays_available_in_live_mode(qt_app):
+def test_the_quick_selection_picks_the_last_kill(qt_app):
+
+    service = FakeService()
+
+    view = _source_view(qt_app, service)
+
+    view.last_kill_button.click()
+
+    #
+    # Immerseus ist der einzige Kill der Liste.
+    #
+
+    assert ("fight", "aBcDeF12", 1) in service.calls
+
+
+def test_the_quick_selection_picks_the_best_attempt(qt_app):
     """
-    *lock, don't hide*: "einen vergangenen Pull ansehen" ist eine
-    Absicht, kein Zustand.
+    Ein Kill schlägt jeden Wipe - `best_try()` entscheidet das, und
+    dieser Knopf zeigt dieselbe Zeile, die die Liste markiert.
     """
 
     service = FakeService()
-    service.state = replace(service.state, mode=MODE_LIVE)
 
-    picker = _picker(qt_app, service)
+    view = _source_view(qt_app, service)
 
-    assert picker.browse_button.isEnabled()
+    view.best_try_button.click()
+
+    assert ("fight", "aBcDeF12", 1) in service.calls
 
 
-def test_the_play_button_hides_during_playback(qt_app):
+def test_the_quick_selection_picks_the_latest_report(qt_app):
+
+    service = FakeService()
+
+    view = _source_view(qt_app, service)
+
+    view.last_raid_button.click()
+
+    #
+    # zZz9 ist der Donnerstag und damit der jüngere Abend.
+    #
+
+    assert ("report", "zZz9") in service.calls
+
+
+def test_a_quick_button_without_a_target_is_disabled_not_hidden(qt_app):
+    """
+    *lock, don't hide*: ein Knopf, der je nach Lage verschwindet, lässt
+    sich weder erklären noch danach fragen.
+    """
+
+    service = FakeService()
+    service.state = replace(service.state, reports=(), fights=())
+
+    view = _source_view(qt_app, service)
+
+    view.show()
+
+    assert view.last_kill_button.isVisible()
+    assert not view.last_kill_button.isEnabled()
+    assert not view.last_raid_button.isEnabled()
+
+    view.hide()
+
+
+def test_the_mode_switch_leads_back_to_the_running_raid(qt_app):
+
+    service = FakeService()
+
+    view = _source_view(qt_app, service)
+
+    view.mode_switch.setValue(MODE_LIVE)
+
+    assert "live" in service.calls
+
+
+def test_the_replay_mode_keeps_the_switch_on_archive(qt_app):
+    """
+    `SegmentedControl.setValue()` tut bei einem unbekannten Wert
+    stillschweigend nichts - ohne die Zuordnung stünde der Schalter
+    während einer Wiedergabe auf seinem alten Stand.
+    """
 
     service = FakeService()
     service.state = replace(service.state, mode=MODE_REPLAY)
-    service._available = True
 
-    picker = _picker(qt_app, service)
+    view = _source_view(qt_app, service)
 
-    picker.show()
-
-    assert not picker.play_button.isVisible()
-
-    picker.hide()
+    assert view.mode_switch.value() == MODE_ARCHIVE

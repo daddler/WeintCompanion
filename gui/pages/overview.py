@@ -60,11 +60,15 @@ from core.browser import open_url
 from core.changelog_reader import format_changelog_body
 from core.changelog_source import ADDON, COMPANION, LABELS, update_note
 from core.greeting import greeting, headline
+from analyzer.academy.models import CATEGORY_LABELS
+from analyzer.academy.progression import weakest_of
+
+from core.academy_history import today
 from core.last_pull import (
     LastPull,
     from_history,
+    record_key,
     result_text,
-    source_text,
     when_text,
 )
 from core.platform import is_linux
@@ -84,6 +88,11 @@ from core.raid_schedule import (
 )
 from gui.dialogs.changelog_dialog import show_changelog
 from gui.motion.pulse_clock import KIND_WARN, OPACITY_LOW, pulse_clock
+from gui.navigation import (
+    RAID_VIEW_ANALYSIS,
+    RAID_VIEW_LEARN,
+    RaidLink,
+)
 from gui.pages._page import Page
 from gui.theme import tokens
 from gui.theme.fonts import font
@@ -1484,11 +1493,25 @@ class LastPullCard(Card):
     schwächsten Bereich zu nennen, den niemand gemessen hat.
     """
 
-    academyRequested = Signal()
+    #
+    # Ein Tiefenverweis auf genau diesen Pull. Er trägt die
+    # Perspektive mit, weil die beiden Knöpfe zwei verschiedene Fragen
+    # stellen: "zeig ihn mir" und "was lerne ich daraus".
+    #
+
+    raidCenterRequested = Signal(object)
 
     def __init__(self, parent=None):
 
         super().__init__(parent=parent)
+
+        #
+        # Der Pull, den die Karte gerade beschreibt. Die Knöpfe lesen
+        # ihn beim Klick und nicht beim Bauen: eine Lambda, die den
+        # Pull einfängt, wäre beim nächsten `apply()` veraltet.
+        #
+
+        self._pull: LastPull | None = None
 
         header = QHBoxLayout()
 
@@ -1561,7 +1584,7 @@ class LastPullCard(Card):
         weakest.setSpacing(tokens.SPACE[1])
 
         weakest.addWidget(
-            eyebrow_label("SCHWÄCHSTER BEREICH", tokens.STATE_TEXT["error"])
+            eyebrow_label("DEIN FOKUS", tokens.STATE_TEXT["error"])
         )
 
         self.area = QLabel("—")
@@ -1653,13 +1676,32 @@ class LastPullCard(Card):
 
         actions.setSpacing(tokens.SPACE[1])
 
-        self.open_lesson = QPushButton("Lektion öffnen")
+        #
+        # **Der Hauptweg von hier aus.** Bis 3.6.0 stand hier ein
+        # einzelner Knopf "Lektion öffnen", der in die Academy führte -
+        # und dort begann die Arbeit von vorn: Charakter wählen, Pull
+        # wiederfinden. Jetzt trägt der Verweis den Pull mit, und der
+        # erste Knopf ist der, den man zuerst will: **diesen Pull
+        # ansehen**.
+        #
 
-        self.open_lesson.setObjectName("secondaryAccent")
+        self.open_pull = QPushButton("Pull ansehen")
+
+        self.open_pull.setObjectName("secondaryAccent")
+
+        self.open_pull.setCursor(Qt.PointingHandCursor)
+
+        self.open_pull.clicked.connect(self._request_analysis)
+
+        actions.addWidget(self.open_pull)
+
+        self.open_lesson = QPushButton("Daraus lernen")
+
+        self.open_lesson.setObjectName("secondary")
 
         self.open_lesson.setCursor(Qt.PointingHandCursor)
 
-        self.open_lesson.clicked.connect(self.academyRequested.emit)
+        self.open_lesson.clicked.connect(self._request_learn)
 
         actions.addWidget(self.open_lesson)
 
@@ -1673,15 +1715,66 @@ class LastPullCard(Card):
 
     # --------------------------------------------------
 
-    def apply(self, pull):
+    def _request_analysis(self):
+
+        self._request(RAID_VIEW_ANALYSIS)
+
+    def _request_learn(self):
+
+        self._request(RAID_VIEW_LEARN)
+
+    def _request(self, view: str):
+        """
+        Den Tiefenverweis auf **diesen** Pull ausgeben.
+
+        Bericht und Kampfnummer nur, wenn der Pull sie trägt: ein Pull
+        dieser Sitzung hat keine (er lief live mit), und eine halbe
+        Kennung würde die bestehende Archivauswahl verwerfen, ohne
+        etwas laden zu können.
+        """
+
+        pull = self._pull
+
+        self.raidCenterRequested.emit(
+            RaidLink(
+                view=view,
+                report_code=(
+                    pull.report_code
+                    if pull is not None and pull.report_code and pull.fight_id
+                    else ""
+                ),
+                fight_id=(
+                    int(pull.fight_id)
+                    if pull is not None and pull.report_code and pull.fight_id
+                    else None
+                ),
+            )
+        )
+
+    # --------------------------------------------------
+
+    def apply(self, pull, focus=None):
         """
         `pull` ist ein `LastPull` - aus der Sitzung oder aus dem
         Archiv, die Karte behandelt beide gleich.
+
+        `focus` ist die aufgezeichnete Bewertung **genau dieses** Pulls
+        (`(Bereich, Sterne)`) oder `None`. Sie kommt von aussen und
+        wird hier nicht berechnet: die Übersicht darf keinen Kampf
+        auswerten, dafür müsste sie ihn beim Bot holen, und das kostet
+        Minuten. Woher sie kommt, steht in
+        `OverviewPage._pull_focus()`.
 
         Der Leerzustand ist der Fall "es gibt wirklich keinen": kein
         Pull in dieser Sitzung, kein Bericht beim Bot, kein
         Zwischenspeicher. Er sagt weiterhin, woran es liegt.
         """
+
+        self._pull = pull if pull is not None and pull.known else None
+
+        self.open_pull.setEnabled(self._pull is not None)
+
+        self.open_lesson.setEnabled(self._pull is not None)
 
         if pull is None or not pull.known:
 
@@ -1695,7 +1788,9 @@ class LastPullCard(Card):
 
             self.sparkline.setValues([])
 
-            self.lesson_title.setText("Die Academy schlägt sie vor.")
+            self._apply_focus(None)
+
+            self.lesson_title.setText("Noch nichts auszuwerten.")
 
             self.lesson_reason.setText(
                 "Nach dem ersten ausgewerteten Pull steht hier, woran "
@@ -1719,34 +1814,49 @@ class LastPullCard(Card):
 
         self.sparkline.setValues(list(pull.trend))
 
-        if pull.live:
+        self._apply_focus(focus)
 
-            self.lesson_title.setText("Die Academy schlägt sie vor.")
+    def _apply_focus(self, focus):
+        """
+        Der Fokus - oder ehrlich, dass es noch keinen gibt.
+
+        **Es wird nichts geschätzt.** Liegt für diesen Pull keine
+        aufgezeichnete Bewertung vor, bleibt die Sternreihe leer und der
+        Satz sagt, was zu tun ist, um eine zu bekommen. Ein
+        "schwächster Bereich" ohne Auswertung wäre geraten, und die
+        leere Sternreihe daneben sähe ohne diesen Satz wie ein Urteil
+        aus.
+        """
+
+        if not focus:
+
+            self.area.setText("—")
+
+            self.rating.setStars(0)
+
+            self.lesson_title.setText("Dieser Pull ist noch nicht bewertet.")
 
             self.lesson_reason.setText(
-                "Der Pull ist ausgewertet - in der Academy steht, "
-                "woran zu arbeiten sich am meisten lohnt, mit den "
-                "Messwerten, aus denen sich das ergibt."
+                "„Pull ansehen“ lädt ihn ins Raid Center; unter "
+                "*Lernen* stehen dann Bewertung, Baustellen und die "
+                "Lektion dazu. Die vollständige Auswertung eines Pulls "
+                "holt der Bot erst auf Anforderung."
             )
 
             return
 
-        #
-        # Ein Pull aus dem Archiv ist nicht ausgewertet, und das steht
-        # hier auch so. Ein "schwächster Bereich" ohne Auswertung wäre
-        # geraten, und die leere Sternreihe daneben sähe ohne diesen
-        # Satz wie ein Urteil aus.
-        #
+        label, stars = focus
 
-        source = source_text(pull)
+        self.area.setText(label)
 
-        self.lesson_title.setText("Dieser Pull ist noch nicht bewertet.")
+        self.rating.setStars(int(stars))
+
+        self.lesson_title.setText(f"{label} ist dein schwächster Bereich.")
 
         self.lesson_reason.setText(
-            f"Er stammt aus dem Archiv ({source}). Öffne ihn in der "
-            "Academy unter \"Archiv\", um Bewertung und Lektion dazu "
-            "zu bekommen - die vollständige Auswertung eines Pulls "
-            "holt der Bot erst auf Anforderung."
+            "„Daraus lernen“ öffnet diesen Pull unter *Lernen* - mit "
+            "der Begründung, der passenden Lektion und dem Moment im "
+            "Kampf, an dem es passiert ist."
         )
 
 
@@ -2260,6 +2370,14 @@ class OverviewPage(Page):
     playerRequested = Signal(str)
 
     #
+    # Ein Tiefenverweis auf einen Pull. Duck-getypt vom MainWindow
+    # verbunden, wie `pageRequested` - siehe
+    # `MainWindow.open_raid_center()`.
+    #
+
+    openRaidCenter = Signal(object)
+
+    #
     # Das Ende der Update-Prüfung kommt aus einem Hintergrund-Thread
     # zurück in den Hauptthread - der Knopf ist ein Widget und darf
     # von dort nicht angefasst werden (dieselbe Regel wie bei
@@ -2382,7 +2500,7 @@ class OverviewPage(Page):
 
         self.last_pull = LastPullCard()
 
-        self.last_pull.academyRequested.connect(self._open_academy)
+        self.last_pull.raidCenterRequested.connect(self.openRaidCenter)
 
         self.row.addWidget(self.last_pull, 0, 0)
 
@@ -2872,12 +2990,6 @@ class OverviewPage(Page):
 
     # --------------------------------------------------
 
-    def _open_academy(self):
-
-        from gui.navigation import PageId
-
-        self.pageRequested.emit(PageId.ACADEMY)
-
     def _open_preparation(self):
 
         from gui.navigation import PageId
@@ -2948,11 +3060,48 @@ class OverviewPage(Page):
 
         return pull if pull is not None else LastPull()
 
+    def _pull_focus(self, pull):
+        """
+        Die aufgezeichnete Bewertung **genau dieses** Pulls.
+
+        Zwei Bedingungen, und beide sind der Grund, warum diese Methode
+        existiert statt eines `curve()[-1]`:
+
+        - **Die Kennung muss passen.** Der zuletzt *ausgewertete* Pull
+          und der zuletzt *gespielte* sind an einem Raidabend
+          regelmässig zwei verschiedene Kämpfe. Eine Bewertung unter
+          dem falschen Kampf wäre eine falsche Aussage, nicht eine
+          ungenaue.
+        - **Null Sterne sind kein Fokus.** `weakest_of()` überspringt
+          sie - `stars == 0` heisst "keine Daten" und nie "schlecht".
+
+        `None`, sobald eine der beiden nicht erfüllt ist. Die Karte sagt
+        dann, wie man zu einer Bewertung kommt.
+        """
+
+        academy = getattr(self.manager, "academy", None)
+
+        if academy is None or pull is None or not pull.known:
+            return None
+
+        record = academy.record_for(record_key(pull, today()))
+
+        weakest = weakest_of(record)
+
+        if weakest is None:
+            return None
+
+        category, stars = weakest
+
+        return (CATEGORY_LABELS.get(category, category), stars)
+
     def refresh(self):
 
         self.system.refresh()
 
-        self.last_pull.apply(self._last_pull())
+        pull = self._last_pull()
+
+        self.last_pull.apply(pull, self._pull_focus(pull))
 
         #
         # Der Raidtermin liegt bereits im `RaidScheduleSync` - gelesen

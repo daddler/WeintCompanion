@@ -463,7 +463,7 @@ class AcademyService:
         Steht die gespeicherte Auswahl nicht (mehr) im Roster, wird
         auf den ersten Eintrag gewechselt **und das gespeichert**.
         Genau hier lag der Hauptfehler: `_sync_roster()` in
-        `gui/pages/academy.py` füllte die Auswahlbox neu und setzte
+        Die Academy-Seite füllte die Auswahlbox neu und setzte
         die Auswahl nur, *wenn* der gespeicherte Name noch vorkam.
         Fehlte er, stand die Box sichtbar auf dem ersten Namen,
         während die Config den alten behielt - und die Nutzlast
@@ -744,6 +744,28 @@ class AcademyService:
         )
 
         return True
+
+    def record_for(self, key: str, character: str = ""):
+        """
+        Der aufgezeichnete Pull zu dieser Kennung - oder `None`.
+
+        Ein Lesezugang und kein zweiter Speicher: die Übersicht braucht
+        die Bewertung **eines bestimmten** Pulls, und ohne diesen Weg
+        müsste sie in `history.data` greifen. Über den Dienst, damit die
+        Frage genau einmal formuliert ist.
+        """
+
+        if not key:
+            return None
+
+        for record in self.history.all_records(
+            character or self.player_name()
+        ):
+
+            if record.key == key:
+                return record
+
+        return None
 
     def curve_for(
         self,

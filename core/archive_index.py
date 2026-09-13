@@ -398,6 +398,82 @@ def group_fights(
     )
 
 
+#
+# --------------------------------------------------
+# Schnellauswahl
+# --------------------------------------------------
+#
+# Drei Fragen, die man vor der Liste fast immer hat, und die man
+# bisher durch Lesen der Liste beantworten musste: der letzte Abend,
+# der letzte Kill, der beste Versuch. Sie sind bewusst hier und nicht
+# in der Ansicht - "welcher Pull ist der beste Versuch" ist eine
+# Auskunft und keine Darstellung, und `best_try()` steht ohnehin schon
+# hier.
+#
+# Alle drei antworten `None`, wenn die Frage nicht beantwortbar ist.
+# Die Ansicht schaltet den zugehörigen Knopf dann ab - ein Knopf, der
+# nichts trifft, ist schlimmer als keiner.
+#
+
+
+def latest_report(reports):
+    """
+    Der jüngste Bericht.
+
+    Die Liste kommt neueste-zuerst vom Bot (siehe
+    `docs/warcraftlogs-bridge.md`); verlassen wird sich darauf aber
+    nicht, wo ein Datum lesbar ist - ein Bericht ohne Datum verliert
+    gegen jeden mit, statt die Auswahl an sich zu reissen.
+    """
+
+    usable = [report for report in (reports or ()) if report is not None]
+
+    if not usable:
+        return None
+
+    dated = [
+        report
+        for report in usable
+        if _parse(getattr(report, "start", "")) is not None
+    ]
+
+    if not dated:
+        return usable[0]
+
+    return max(dated, key=lambda report: _parse(report.start))
+
+
+def last_kill(fights):
+    """
+    Der letzte Kill dieses Berichts - "der Abend hat geklappt, zeig
+    mir das Ende".
+
+    Der **letzte** und nicht der erste: an einem Abend mit mehreren
+    Bossen ist der letzte Kill der, über den gesprochen wird.
+    """
+
+    kills = [
+        fight
+        for fight in (fights or ())
+        if fight is not None and getattr(fight, "kill", False)
+    ]
+
+    return kills[-1] if kills else None
+
+
+def best_attempt(fights):
+    """
+    Der beste Versuch über den **ganzen** Bericht, Bosse hinweg.
+
+    `best_try()` beantwortet dieselbe Frage innerhalb einer
+    Bossgruppe; hier geht es um den Abend als Ganzes. Die Regel bleibt
+    dieselbe, damit die Markierung in der Liste und dieser Knopf nicht
+    auf verschiedene Zeilen zeigen können.
+    """
+
+    return best_try([fight for fight in (fights or ()) if fight is not None])
+
+
 def fight_count(groups) -> int:
     """
     Wie viele Pulls die gefilterte Ansicht insgesamt zeigt.
