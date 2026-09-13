@@ -230,7 +230,24 @@ class _FakeArchiveClient:
         return FetchResult(payload=TIMELINE_PAYLOAD)
 
 
-def _wait_until(condition, timeout=5.0):
+#
+# Wie lange auf einen Hintergrund-Thread gewartet wird.
+#
+# Grosszügig, und das kostet nichts: `_wait_until()` **pollt**, ist bei
+# einer erfüllten Bedingung also sofort zurück. Die Zahl entscheidet
+# allein darüber, was passiert, wenn der Rechner gerade beschäftigt
+# ist - und in einem vollständigen Durchlauf ist er das: die Suite baut
+# inzwischen in dreissig Dateien Widgets, und fünf Sekunden für eine
+# Thread-Übergabe plus eine Qt-Queued-Connection waren darin genau die
+# Grenze zwischen "grün" und "einmal von fünf Läufen rot". Ein Test,
+# der von der Auslastung des Rechners abhängt, prüft nicht mehr das,
+# wofür er geschrieben wurde.
+#
+
+WAIT_SECONDS = 20.0
+
+
+def _wait_until(condition, timeout=WAIT_SECONDS):
     """
     Wartet auf `condition()`, verarbeitet dabei fortlaufend die
     Qt-Event-Loop.
