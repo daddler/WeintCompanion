@@ -932,7 +932,7 @@ dessen Daten ansehen - unabhängig davon, ob gerade ein Livelog läuft.
 Das ist companion-seitig bereits vollständig umgesetzt
 (`core/warcraftlogs_archive_client.py`,
 `core/raid_data_service.py`'s Archiv-Zustandsmaschine,
-`gui/widgets/tv/archive_picker.py`) und wartet auf die drei folgenden
+`gui/pages/raid/source_view.py`) und wartet auf die drei folgenden
 Endpunkte.
 
 Alle drei verwenden dieselbe Authentifizierung wie der Live-Endpunkt
@@ -1131,12 +1131,13 @@ nur eben für einen bestimmten statt den letzten Kampf.
 | `analyzer/analysis/movement.py` | Karteneinheiten → Meter; seit 3.6.0 von nichts mehr gelesen |
 | `analyzer/academy/checks.py` | Auflösung der Metriknamen für den automatischen Trainingsplan |
 | `core/raid_data_service.py` | Registrierung der Quelle, Live/Archiv/Wiedergabe-Zustandsmaschine |
-| `gui/widgets/tv/archive_picker.py` | Live/Archiv-Umschalter und Wiedergabe-Start (WeintTV + Academy) |
+| `gui/pages/raid/source_view.py` | Live/Archiv-Umschalter, Schnellauswahl und die Liste (Ansicht *Quelle*) |
+| `gui/widgets/raid/context_header.py` | Kopfblock des Raid Centers: welcher Pull, welche Quelle, Wiedergabe-Start |
 | `gui/widgets/tv/replay_bar.py` | Steuerung der Wiedergabe |
-| `gui/widgets/tv/analysis_gap.py` | Begründung, wenn die Quelle keine Tiefenauswertung liefert (WeintTV + Academy) |
+| `gui/widgets/tv/analysis_gap.py` | Begründung, wenn die Quelle keine Tiefenauswertung liefert (Analyse + Lernen) |
 | `gui/widgets/tv/cooldown_timeline.py` | Der Cooldown-Zeitstrahl: Einsätze, Deckung, ungenutzte Bereitschaft, Heldentum-Fenster |
 | `core/loading_progress.py` | Schätzung und Fortschrittstext beim Holen eines Pulls |
-| `gui/widgets/tv/loading_card.py` | Die Wartekarte auf WeintTV, Academy und Archiv |
+| `gui/widgets/tv/loading_card.py` | Die Wartekarte, einmal über den vier Ansichten des Raid Centers |
 | `gui/pages/settings_sections/modules.py` | Auswahl der Live-Quelle und Statusanzeige |
 | `tests/test_warcraftlogs_payload.py` | Mapping und Robustheit, auch der v2-Blöcke |
 | `tests/test_warcraftlogs_provider.py` | Lebenszyklus und Fehlerfälle (Live) |

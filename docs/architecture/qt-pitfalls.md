@@ -58,8 +58,10 @@ the process reaches the assertion at all *is* the assertion.
 
 The same class of bug (a callback closure that outlives its window and
 gets reached into after the C++ object is gone → SIGSEGV, no traceback)
-recurs in `gui/dialogs/archive_dialog.py` (rows hand their click out as a
-signal to a bound method rather than a captured callback) and in
+recurs in `gui/widgets/raid/archive_browser.py` (rows hand their click out
+as a signal to a bound method rather than a captured callback; the same
+rule holds for `gui/widgets/academy/focus_card.py`'s rows, which carry
+what the target needs instead of a reference back to the row) and in
 `SegmentedControl` (a lambda closing a control → button → connection →
 lambda → control cycle the garbage collector can't see). Same fix pattern
 each time: a bound method, never a closure holding the window.
