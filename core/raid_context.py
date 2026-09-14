@@ -48,7 +48,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from core.raid_data_service import (
+from core.raid_state import (
     MODE_ARCHIVE,
     MODE_LIVE,
     MODE_REPLAY,

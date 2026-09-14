@@ -33,7 +33,7 @@ from core.raid_context import (
     same_pull,
     when_line,
 )
-from core.raid_data_service import (
+from core.raid_state import (
     ArchiveState,
     MODE_ARCHIVE,
     MODE_LIVE,

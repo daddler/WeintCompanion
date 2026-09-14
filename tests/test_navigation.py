@@ -5,6 +5,8 @@ Dashboard-Karten stillschweigend auf die falschen Ziele um, ohne
 dass irgendetwas abstürzt.
 """
 
+import pytest
+
 from gui.navigation import PageId
 
 
@@ -58,7 +60,13 @@ def test_the_raid_group_has_exactly_two_entries():
     """
     Die Zahl selbst ist die Aussage: "wo muss ich jetzt hin" entstand
     daraus, dass vier Einträge dieselbe Frage beantworteten.
+
+    `build_page_specs()` baut die echten Seitenklassen auf - anders
+    als der Rest dieser Datei also nicht Qt-frei, siehe
+    `pytest.importorskip()` unten.
     """
+
+    pytest.importorskip("PySide6")
 
     from gui.navigation import GROUP_RAID, build_page_specs
 
