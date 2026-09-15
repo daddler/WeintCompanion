@@ -41,7 +41,8 @@ from PySide6.QtWidgets import (
 )
 
 from core.discord_account import is_usable
-from core.wow_folder import resolve_classic_folder
+from core.wow_clients import released_clients
+from core.wow_folder import check_client_folder
 
 from gui.theme import tokens
 from gui.theme.fonts import font
@@ -56,6 +57,7 @@ from gui.widgets.appearance_picker import (
 from gui.widgets.card import Card
 from gui.widgets.chip import Chip
 from gui.widgets.eyebrow import eyebrow_label
+from gui.widgets.segmented_control import SegmentedControl
 from gui.widgets.status_dot import StatusDot
 from gui.widgets.wrapped_label import enable_wrap
 
@@ -294,12 +296,60 @@ class SetupWizard(QDialog):
 
     def _build_wow_step(self):
 
+        client = self.manager.config.get_wow_client()
+
+        #
+        # Nach der Spielversion wird hier nur gefragt, wenn es mehr
+        # als eine erschienene gibt. Solange Forever nicht draussen
+        # ist, bleibt der erste Schritt so kurz wie bisher - und er
+        # wird von selbst zu einer Frage, sobald `released=True` in
+        # core/wow_clients.py steht. Eine Auswahl mit einem einzigen
+        # Eintrag ist keine Wahl, sondern eine Hürde.
+        #
+
+        choices = released_clients()
+
+        if len(choices) > 1:
+
+            title = "Welche Spielversion, und wo liegt sie?"
+
+            explanation = (
+                "Wähle deine Spielversion und danach den Ordner, in "
+                "dem sie installiert ist."
+            )
+
+        else:
+
+            title = f"Wo ist deine {client.short_name}-Installation?"
+
+            explanation = (
+                f"Wähle den Ordner, in dem {client.name} installiert "
+                "ist. Eine andere Spielversion stellst du später "
+                "unter Einstellungen → WoW-Client ein."
+            )
+
         step = _Step(
             "SCHRITT 1",
-            "Wo ist deine MoP-Classic-Installation?",
-            "Wähle den Ordner, in dem World of Warcraft: Mists of "
-            "Pandaria Classic installiert ist.",
+            title,
+            explanation,
         )
+
+        self.client_control = None
+
+        if len(choices) > 1:
+
+            self.client_control = SegmentedControl([
+                (entry.short_name, entry.id)
+                for entry in choices
+            ])
+
+            self.client_control.setValue(client.id)
+
+            self.client_control.valueChanged.connect(
+                self._on_wizard_client_changed
+            )
+
+            step.action_row.addWidget(self.client_control)
 
         self.wow_button = QPushButton("Ordner wählen")
 
@@ -314,6 +364,16 @@ class SetupWizard(QDialog):
         self.stack.addWidget(step)
 
         self._steps.append(step)
+
+    def _on_wizard_client_changed(self, client_id):
+
+        self.manager.config.set_wow_client(client_id)
+
+        self.manager.refresh()
+
+        self._refresh_wow_step()
+
+        self._refresh_addon_step()
 
     def _refresh_wow_step(self):
 
@@ -331,28 +391,30 @@ class SetupWizard(QDialog):
 
     def _choose_wow_folder(self):
 
+        client = self.manager.config.get_wow_client()
+
         folder = QFileDialog.getExistingDirectory(
-            self, "MoP Classic auswählen",
+            self, f"{client.name} auswählen",
         )
 
         if not folder:
             return
 
-        resolved = resolve_classic_folder(folder)
+        check = check_client_folder(folder, client)
 
-        if resolved is None:
+        if not check.ok:
 
-            self._steps[0].set_status(
-                "error", "Das ist kein gültiger MoP-Classic-Ordner.",
-            )
+            self._steps[0].set_status("error", check.reason)
 
             return
 
-        self.manager.config.set_classic_path(resolved)
+        self.manager.config.set_wow_path(check.path)
 
         self.manager.refresh()
 
-        self.manager.logger.success(f"Classic-Pfad geändert: {resolved}")
+        self.manager.logger.success(
+            f"Pfad für {client.short_name} geändert: {check.path}"
+        )
 
         self._refresh_wow_step()
 

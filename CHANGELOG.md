@@ -2,6 +2,59 @@
 
 Alle nennenswerten Änderungen an WeintCompanion, von Version 0.7.2 bis 1.6.2.
 
+## 4.1.0
+
+**Die Spielversion lässt sich umstellen.** Unter Einstellungen →
+WoW-Client steht jetzt ein Umschalter zwischen *MoP Classic* und
+*Forever* — und jede der beiden behält ihren **eigenen**
+Installationspfad. Hin und zurück wechseln vergisst nichts; das ist der
+Grund, warum es ein Umschalter ist und nicht ein zweiter Ordnerknopf.
+
+Das ist Vorbereitung, keine Umstellung: *World of Warcraft: Forever* ist
+angekündigt und noch nicht erschienen, MoP Classic bleibt die
+Voreinstellung. Was sich ändert, ist die Bauart darunter — bis 4.0 stand
+der Ordnername `_classic_` an sechs Stellen im Quelltext, eine
+Spielversion war keine Sache, sondern eine Annahme. Jetzt ist sie ein
+Eintrag in einer Tabelle (`core/wow_clients.py`), und alles, was zwei
+Spielversionen unterscheidet, ist ein Feld darin.
+
+**Zwei Dinge über Forever sind nicht bekannt, und die App tut nicht so,
+als wären sie es:**
+
+- *Der Ordnername.* Wie der Unterordner unter „World of Warcraft" heissen
+  wird, weiss zur Zeit niemand ausserhalb von Blizzard. Statt zu raten,
+  erkennt die Ordnerauswahl eine Installation an ihren Kennzeichen
+  (`Interface/AddOns`, `WTF`) — und schliesst dabei alles aus, was
+  erkennbar zu einer anderen Spielversion gehört (`_retail_`,
+  `_classic_`, PTR-Ordner). Liegen mehrere Installationen nebeneinander,
+  **wird nicht geraten**: die Meldung bittet dann darum, den Ordner
+  selbst zu wählen. Ein falsch geratener Ordner hiesse, dass das Addon
+  in einer Installation landet, die nie gestartet wird — und man sähe
+  dem nichts an.
+- *Die Höchststufe.* „Meine Charaktere" zeigt Charaktere ab der
+  Höchststufe der Spielversion. Solange die von Forever unbekannt ist,
+  verschwindet lieber kein Charakter, als dass eine erfundene Zahl
+  welche ausblendet — dieselbe Linie wie bei `stars == 0`: aus einer
+  Datenlücke wird kein Befund.
+
+Ausserdem:
+
+- Die Fehlermeldung bei einem ungültigen Ordner sagt jetzt, **was** an
+  ihm nicht stimmt („hier liegt nur `_retail_`", „hier liegen mehrere
+  Installationen") statt nur „ungültig".
+- Die Einrichtung fragt nach der Spielversion **erst dann**, wenn es
+  mehr als eine erschienene gibt — solange bleibt der erste Schritt so
+  kurz wie bisher.
+- Der bisherige `classic_path` in der `config.json` wird beim ersten
+  Start übernommen und weiter mitgeschrieben: wer auf eine ältere
+  Fassung zurückgeht, findet seinen Ordner dort noch.
+
+**Was diese Version ausdrücklich nicht kann:** Forever spielen. Die
+Auswertung — Encounter, Spezialisierungen, Lektionen, die Adressen von
+wowsims und QE Live — hängt an dem, was gespielt wird, und nicht daran,
+wo es installiert ist. Sie wandert, wenn es das Spiel gibt.
+`docs/systems/wow-client-profiles.md` führt die Liste.
+
 ## 4.0.0
 
 **WeintTV, Academy und Archiv sind keine drei Bereiche mehr, sondern vier

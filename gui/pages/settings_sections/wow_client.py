@@ -10,7 +10,8 @@ from PySide6.QtWidgets import (
 )
 
 from core.platform import is_linux
-from core.wow_folder import resolve_classic_folder
+from core.wow_clients import all_clients
+from core.wow_folder import check_client_folder
 from gui.theme.colors import Colors
 from gui.widgets.hero_banner import HeroButton
 from gui.widgets.segmented_control import SegmentedControl
@@ -30,16 +31,77 @@ LINUX_LAUNCHER_PLACEHOLDERS = {
 
 
 class WowClientSection(SectionContent):
+    """
+    Spielversion **und** Pfad - in dieser Reihenfolge, weil die zweite
+    Frage von der ersten abhängt: welcher Ordner gültig ist, steht in
+    der Spielversion (`core/wow_clients.py`).
+
+    Jede Version behält ihren eigenen Pfad (`config.wow_paths`). Ein
+    Wechsel hin und zurück verliert deshalb nichts - das ist der
+    ganze Grund, warum der Umschalter hier steht und nicht nur ein
+    zweiter Ordnerknopf.
+    """
 
     def __init__(self, manager):
 
         super().__init__(
             "EINSTELLUNGEN · WOW-CLIENT",
             "World of Warcraft",
-            "Pfad zu deiner MoP-Classic-Installation.",
+            "Spielversion und Pfad zu deiner Installation.",
         )
 
         self.manager = manager
+
+        #
+        # --------------------------------------------------
+        # Spielversion
+        # --------------------------------------------------
+        #
+
+        version_card = QWidget()
+
+        version_layout = QVBoxLayout(version_card)
+
+        version_layout.setContentsMargins(0, 0, 0, 0)
+
+        version_layout.setSpacing(10)
+
+        version_title = QLabel("Spielversion")
+
+        version_title.setStyleSheet(
+            f"font-size:14px;font-weight:700;color:{Colors.WHITE};"
+        )
+
+        version_layout.addWidget(version_title)
+
+        self.client_control = SegmentedControl([
+            (entry.short_name, entry.id)
+            for entry in all_clients()
+        ])
+
+        self.client_control.valueChanged.connect(
+            self._on_client_changed
+        )
+
+        version_layout.addWidget(self.client_control)
+
+        self.client_hint = QLabel("")
+
+        self.client_hint.setWordWrap(True)
+
+        self.client_hint.setStyleSheet(
+            f"font-size:13px;color:{Colors.TEXT_MUTED};"
+        )
+
+        version_layout.addWidget(self.client_hint)
+
+        self.addRow(version_card)
+
+        #
+        # --------------------------------------------------
+        # Installationsordner
+        # --------------------------------------------------
+        #
 
         card = QWidget()
 
@@ -73,7 +135,7 @@ class WowClientSection(SectionContent):
         button_row.addStretch()
 
         self.change_button = HeroButton(
-            "Classic-Ordner auswählen",
+            "Ordner auswählen",
             primary=False,
         )
 
@@ -218,11 +280,32 @@ class WowClientSection(SectionContent):
 
     def refresh(self):
 
-        path = self.manager.config.get_classic_path()
+        config = self.manager.config
+
+        client = config.get_wow_client()
+
+        #
+        # blockSignals: `setValue()` löst `valueChanged` aus, und der
+        # Slot schriebe die Version zurück und liesse den Manager neu
+        # laden - aus einem Zeichnen würde ein Schreibvorgang (siehe
+        # docs/architecture/navigation.md).
+        #
+
+        self.client_control.blockSignals(True)
+        self.client_control.setValue(client.id)
+        self.client_control.blockSignals(False)
+
+        self.client_hint.setText(client.hint)
+
+        self.client_hint.setVisible(bool(client.hint))
+
+        path = config.get_wow_path()
 
         if path:
 
-            self.status_label.setText("Classic gefunden")
+            self.status_label.setText(
+                f"{client.short_name} gefunden"
+            )
 
             self.status_label.setStyleSheet(
                 f"font-size:14px;font-weight:700;color:{Colors.SUCCESS};"
@@ -232,14 +315,17 @@ class WowClientSection(SectionContent):
 
         else:
 
-            self.status_label.setText("Kein Classic-Pfad ausgewählt")
+            self.status_label.setText(
+                f"Kein Pfad für {client.short_name} ausgewählt"
+            )
 
             self.status_label.setStyleSheet(
                 f"font-size:14px;font-weight:700;color:{Colors.ERROR};"
             )
 
             self.path_label.setText(
-                "Bitte wähle deinen World of Warcraft Classic-Ordner aus."
+                f"Bitte wähle den Ordner deiner Installation von "
+                f"{client.name} aus."
             )
 
         if self.linux_card is not None:
@@ -294,34 +380,73 @@ class WowClientSection(SectionContent):
 
     # --------------------------------------------------
 
+    def _on_client_changed(self, client_id):
+        """
+        Der Wechsel der Spielversion.
+
+        Er holt nichts nach: der hinterlegte Pfad der neuen Version
+        (falls es ihn gibt) steht in der Konfiguration, und
+        `manager.refresh()` zieht Addon-Stand und Synchronisation
+        nach. Was er **nicht** tut, ist den Ordner der neuen Version
+        suchen - das erledigt `CompanionManager.detect_wow()` von
+        selbst, sobald keiner hinterlegt ist.
+        """
+
+        config = self.manager.config
+
+        if client_id == config.get_wow_client_id():
+            return
+
+        config.set_wow_client(client_id)
+
+        client = config.get_wow_client()
+
+        self.manager.refresh()
+
+        self.manager.logger.info(
+            f"Spielversion gewechselt: {client.name}"
+        )
+
+        self.refresh()
+
+    # --------------------------------------------------
+
     def choose_folder(self):
+
+        client = self.manager.config.get_wow_client()
 
         folder = QFileDialog.getExistingDirectory(
             self,
-            "MoP Classic auswählen",
+            f"{client.name} auswählen",
         )
 
         if not folder:
             return
 
-        folder = resolve_classic_folder(folder)
+        check = check_client_folder(folder, client)
 
-        if folder is None:
+        if not check.ok:
+
+            #
+            # Die Begründung kommt aus der Prüfung selbst - sie kennt
+            # den Unterschied zwischen "da ist gar nichts", "da liegt
+            # eine andere Spielversion" und "da liegen mehrere".
+            #
 
             QMessageBox.warning(
                 self,
                 "Ungültiger Ordner",
-                "Dies ist kein gültiger MoP-Classic-Ordner.",
+                check.reason,
             )
 
             return
 
-        self.manager.config.set_classic_path(folder)
+        self.manager.config.set_wow_path(check.path)
 
         self.manager.refresh()
 
         self.manager.logger.success(
-            f"Classic-Pfad geändert: {folder}"
+            f"Pfad für {client.short_name} geändert: {check.path}"
         )
 
         self.refresh()

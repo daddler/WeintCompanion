@@ -11,7 +11,14 @@ upset to lose goes under `config()`.
 
 `core/config.py` is a flat JSON-backed settings store (`config.json` in
 `Paths.config()`) with a defaults dict merged on load so new settings get
-backfilled into existing installs. Discord account linking:
+backfilled into existing installs.
+
+The WoW installation path is **per game version** (`wow_client` plus
+`wow_paths`), not a single `classic_path` — that key survives as the
+pre-4.1 spelling and is migrated on load. Why, and what else the game
+version decides: `../systems/wow-client-profiles.md`.
+
+Discord account linking:
 `core/discord_auth.py`'s `DiscordAuth.login()` runs the OAuth2 flow
 (local callback server, system browser, code exchange against
 `/companion/auth/exchange`), `core/discord_account.py`'s

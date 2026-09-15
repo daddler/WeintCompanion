@@ -1,8 +1,14 @@
 {
+    "wow_client": "mop_classic",
+    "wow_paths": {
+        "mop_classic": "",
+        "forever": ""
+    },
     "classic_path": "",
     "check_updates": true,
     "auto_sync": false,
     "sync_interval": 5,
     "roster_sync_enabled": true,
-    "character_roster_sync_enabled": true
+    "character_roster_sync_enabled": true,
+    "characters_min_level": 0
 }

@@ -25,7 +25,8 @@ Zwei Dinge, die die Seite über ihre Daten sagt und nicht verschweigt:
   anmelden") statt "wird nicht übertragen".
 
 Seit 2.3.1 zeigt die Seite **nur Charaktere auf hoher Stufe**
-(`CharacterStore.min_level()`, in MoP Classic die 90). Die Frage vor
+(`CharacterStore.min_level()` - die Höchststufe der eingestellten
+Spielversion, in MoP Classic die 90). Die Frage vor
 dieser Seite ist "womit gehe ich in den Raid", und die stellt sich für
 einen Twink der Stufe 34 nicht; vier Karten, die sie nicht
 beantworten, machen die eine, die es tut, unauffindbar. Zwei Dinge

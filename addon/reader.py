@@ -3,9 +3,15 @@ from pathlib import Path
 
 class AddonReader:
 
-    def __init__(self, classic_path):
+    def __init__(self, wow_path):
+        """
+        `wow_path` ist das Installationsverzeichnis der eingestellten
+        Spielversion - bei MoP Classic `_classic_`, bei einer anderen
+        was `core/wow_clients.py` dafür führt. Unterhalb davon liegt
+        `Interface/AddOns/` in jeder Fassung gleich.
+        """
 
-        self.classic_path = Path(classic_path)
+        self.wow_path = Path(wow_path)
 
     # --------------------------------------------------
 
@@ -13,7 +19,7 @@ class AddonReader:
     def addon_path(self):
 
         return (
-            self.classic_path
+            self.wow_path
             / "Interface"
             / "AddOns"
             / "WeintCodex"
