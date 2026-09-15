@@ -721,20 +721,22 @@ class CompanionManager(QObject):
             )
 
     # --------------------------------------------------
-    # Classic Installation
+    # Installation der Spielversion
     # --------------------------------------------------
 
     def detect_wow(self):
 
-        classic_path = self.config.get_classic_path()
+        client = self.config.get_wow_client()
 
-        if classic_path is None:
+        wow_path = self.config.get_wow_path()
 
-            finder = WoWFinder()
-            classic_path = finder.find()
+        if wow_path is None:
 
-            if classic_path:
-                self.config.set_classic_path(classic_path)
+            finder = WoWFinder(client)
+            wow_path = finder.find()
+
+            if wow_path:
+                self.config.set_wow_path(wow_path)
 
         #
         # Ein anderer Pfad heißt eine andere SavedVariables-Datei, in
@@ -743,7 +745,16 @@ class CompanionManager(QObject):
         # Verwerfen würde die erste Zustellung dorthin als
         # "unverändert" unterdrückt und käme nie an.
         #
-        if classic_path != self.state.wow_path:
+        # Dasselbe gilt für einen Wechsel der Spielversion, und der
+        # wird ausdrücklich mitgeprüft: er führt in aller Regel schon
+        # zu einem anderen Pfad, aber nicht zwingend - wer zwei
+        # Versionen auf denselben Ordner zeigen lässt (Testaufbau,
+        # Symlink), bekäme sonst die Zustellung unterdrückt.
+        #
+        if (
+            wow_path != self.state.wow_path
+            or client.id != self.state.wow_client_id
+        ):
 
             for attribute in (
                 "addon_analysis_sync",
@@ -757,13 +768,14 @@ class CompanionManager(QObject):
                 if sync is not None:
                     sync.invalidate()
 
-        self.state.wow_path = classic_path
-        self.state.wow_found = classic_path is not None
+        self.state.wow_client_id = client.id
+        self.state.wow_path = wow_path
+        self.state.wow_found = wow_path is not None
 
         if self.state.wow_found:
 
             self.state.addons_path = (
-                classic_path
+                wow_path
                 / "Interface"
                 / "AddOns"
             )

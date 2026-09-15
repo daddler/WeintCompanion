@@ -3,6 +3,14 @@ import os
 from pathlib import Path
 
 from core.paths import Paths
+from core.wow_clients import (
+    DEFAULT_CLIENT_ID,
+    MOP_CLASSIC,
+    client as wow_client,
+)
+
+
+MOP_CLASSIC_ID = MOP_CLASSIC.id
 
 
 class Config:
@@ -15,6 +23,35 @@ class Config:
         )
 
         self.data = {
+
+            #
+            # Welche Spielversion diese Installation bedient
+            # (core/wow_clients.py). Eine unbekannte Kennung fällt dort
+            # auf die Vorgabe zurück, statt den Start zu verhindern.
+            #
+
+            "wow_client": DEFAULT_CLIENT_ID,
+
+            #
+            # Der Installationspfad JE Spielversion:
+            # {"mop_classic": "...", "forever": "..."}.
+            #
+            # Absichtlich eine Zuordnung und nicht ein Pfad: der
+            # Wechsel zwischen zwei Spielversionen ist genau dann
+            # zumutbar, wenn er nichts vergisst. Ein einzelner Pfad
+            # hiesse, dass jeder Wechsel den anderen überschreibt -
+            # und wer zurückwechselt, sucht seinen Ordner erneut.
+            #
+
+            "wow_paths": {},
+
+            #
+            # Altlast (bis 4.0 der einzige Pfad). Wird beim Laden nach
+            # `wow_paths["mop_classic"]` übernommen und danach nur noch
+            # für MoP Classic mitgeschrieben - eine ältere
+            # Companion-Fassung, auf die jemand zurückgeht, findet so
+            # weiterhin ihren Ordner.
+            #
 
             "classic_path": "",
 
@@ -34,15 +71,21 @@ class Config:
 
             #
             # Ab welcher Stufe ein Charakter in "Meine Charaktere" und
-            # "Vorbereitung" erscheint. 90 ist die Hoechststufe von
-            # MoP Classic: die Seiten fragen, ob man raidfertig ist,
-            # und das fragt sich nur fuer Charaktere, die mitkoennen.
-            # Wer seine 85er mitzaehlen will, setzt die Zahl herunter;
-            # ein unbrauchbarer Wert wird ignoriert
+            # "Vorbereitung" erscheint: die Seiten fragen, ob man
+            # raidfertig ist, und das fragt sich nur fuer Charaktere,
+            # die mitkoennen. Wer seine 85er mitzaehlen will, setzt die
+            # Zahl herunter.
+            #
+            # **0 heisst "Hoechststufe der Spielversion"** und nicht
+            # "alles anzeigen" - bis 4.0 stand hier fest die 90, und
+            # die waere beim Wechsel auf Forever stillschweigend falsch
+            # geworden. Bestehende Installationen tragen die 90
+            # weiterhin ausdruecklich; `set_wow_client()` setzt sie
+            # beim Wechsel zurueck, wenn sie nie eine eigene Wahl war
             # (core/character_store.py).
             #
 
-            "characters_min_level": 90,
+            "characters_min_level": 0,
 
             #
             # Zugriffsprofil: holt die Discord-Rollen beim Bot ab und
@@ -229,12 +272,14 @@ class Config:
 
                 defaults = {
 
+                    "wow_client": DEFAULT_CLIENT_ID,
+                    "wow_paths": {},
                     "check_updates": True,
                     "auto_sync": True,
                     "sync_interval": 5,
                     "roster_sync_enabled": True,
                     "character_roster_sync_enabled": True,
-                    "characters_min_level": 90,
+                    "characters_min_level": 0,
                     "addon_analysis_sync_enabled": True,
                     "start_on_boot": False,
                     "minimize_to_tray": False,
@@ -289,6 +334,9 @@ class Config:
 
                         self.data[key] = value
                         changed = True
+
+                if self._migrate_wow_paths():
+                    changed = True
 
                 if changed:
 
@@ -364,15 +412,75 @@ class Config:
         os.replace(tmp_path, self.file)
 
     # --------------------------------------------------
-    # Classic-Pfad
+    # Spielversion
     # --------------------------------------------------
 
-    def get_classic_path(self):
+    def get_wow_client_id(self):
 
-        path = self.data.get(
-            "classic_path",
-            "",
+        return self.data.get(
+            "wow_client",
+            DEFAULT_CLIENT_ID,
         )
+
+    def get_wow_client(self):
+        """
+        Die aktive Spielversion als Eintrag aus `core/wow_clients.py`.
+        Eine unbekannte Kennung fällt dort auf die Vorgabe zurück.
+        """
+
+        return wow_client(self.get_wow_client_id())
+
+    def set_wow_client(self, client_id):
+        """
+        Wechselt die Spielversion.
+
+        Nimmt dabei die Mindeststufe mit, **falls sie nie eine eigene
+        Wahl war**: bis 4.0 trug jede Konfiguration die 90 aus dem
+        Backfill, also die Höchststufe von MoP Classic. Wer sie nie
+        angefasst hat, will nach dem Wechsel die Höchststufe der neuen
+        Version und nicht die der alten - wer sie auf 85 gesetzt hat,
+        behält seine 85.
+        """
+
+        previous = self.get_wow_client()
+
+        client_id = str(client_id)
+
+        if client_id == previous.id:
+            return
+
+        stored_minimum = self.data.get("characters_min_level")
+
+        if (
+            previous.max_level is not None
+            and stored_minimum == previous.max_level
+        ):
+
+            self.data["characters_min_level"] = 0
+
+        self.data["wow_client"] = client_id
+
+        self.save()
+
+    # --------------------------------------------------
+    # Installationspfad (je Spielversion)
+    # --------------------------------------------------
+
+    def get_wow_path(self, client_id=None):
+        """
+        Der hinterlegte Ordner einer Spielversion, oder None - auch
+        dann, wenn er zwar hinterlegt ist, aber nicht mehr existiert
+        (externe Platte abgezogen, Neuinstallation woanders).
+        """
+
+        client_id = client_id or self.get_wow_client_id()
+
+        paths = self.data.get("wow_paths")
+
+        if not isinstance(paths, dict):
+            paths = {}
+
+        path = paths.get(client_id, "")
 
         if not path:
             return None
@@ -386,11 +494,77 @@ class Config:
 
     # --------------------------------------------------
 
-    def set_classic_path(self, path):
+    def set_wow_path(self, path, client_id=None):
 
-        self.data["classic_path"] = str(path)
+        client_id = client_id or self.get_wow_client_id()
+
+        paths = self.data.get("wow_paths")
+
+        if not isinstance(paths, dict):
+            paths = {}
+
+        paths[client_id] = str(path)
+
+        self.data["wow_paths"] = paths
+
+        self._mirror_legacy_path()
 
         self.save()
+
+    # --------------------------------------------------
+
+    def _migrate_wow_paths(self) -> bool:
+        """
+        Übernimmt den bis 4.0 einzigen `classic_path` nach
+        `wow_paths["mop_classic"]`.
+
+        Läuft bei jedem Laden und nicht einmalig mit Merker: sie ist
+        idempotent, weil sie nur eine *fehlende* Zuordnung ergänzt -
+        ein Merker wäre hier ein zweiter Zustand, der falsch stehen
+        kann, für eine Ersparnis von einem Wörterbuchzugriff.
+        """
+
+        changed = False
+
+        paths = self.data.get("wow_paths")
+
+        if not isinstance(paths, dict):
+
+            paths = {}
+
+            self.data["wow_paths"] = paths
+
+            changed = True
+
+        legacy = self.data.get("classic_path", "")
+
+        if legacy and not paths.get(MOP_CLASSIC_ID):
+
+            paths[MOP_CLASSIC_ID] = legacy
+
+            changed = True
+
+        if self._mirror_legacy_path():
+            changed = True
+
+        return changed
+
+    def _mirror_legacy_path(self) -> bool:
+        """
+        Hält `classic_path` auf dem Stand von
+        `wow_paths["mop_classic"]` - siehe den Kommentar am Schlüssel.
+        """
+
+        paths = self.data.get("wow_paths") or {}
+
+        current = paths.get(MOP_CLASSIC_ID, "")
+
+        if self.data.get("classic_path", "") == current:
+            return False
+
+        self.data["classic_path"] = current
+
+        return True
 
     # --------------------------------------------------
     # Battle.net-Start (Linux)

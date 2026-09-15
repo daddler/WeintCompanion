@@ -66,6 +66,11 @@ WeintCodex Bot (Discord bot backend)  ←─────────────
   timestamp known", never second 0.** These two conventions cross every
   layer (analyzer, Academy, addon bridge) and must never be normalized
   away. Detail: `docs/systems/weinttv-academy.md`.
+- **The game version is a table entry, never a hard-coded folder name.**
+  `core/wow_clients.py` is the one place that knows what `_classic_` is;
+  an empty `folder_names` means "not known yet" (Forever) and switches
+  detection to markers-only, and `max_level=None` means *unknown*, never
+  *none*. Detail: `docs/systems/wow-client-profiles.md`.
 - **A single 401 must never unlink a Discord account.** Detail:
   `docs/companion-auth.md`.
 - **`upsert_variable()` (writing into the addon's SavedVariables) is the
@@ -127,6 +132,7 @@ Linux/Windows/AppImage build commands.
 | Simmen-Seite (wowsims/QE Live/WowSimsExporter) | `docs/systems/sim-pages.md` + `docs/sim-run.md` |
 | WeakAuras-Editor-Seite, Gilde-Freigabe | `docs/systems/weakauras-editor.md` |
 | Onboarding-Tour, "Was ist neu"-Popup | `docs/systems/whats-new-and-onboarding.md` |
+| Spielversion (MoP Classic ↔ Forever), Client-Erkennung, Installationspfade | `docs/systems/wow-client-profiles.md` |
 | Pfade, atomare Writes, Backups, Config/Auth-Speicherung | `docs/development/paths-and-storage.md` |
 | Tests, Build, AppImage/Windows-Installer | `docs/development/testing-and-build.md` |
 | "warum war das mal kaputt" | `docs/history/install-and-auth-incidents.md` |

@@ -11,9 +11,11 @@ Deshalb wird nicht auf einen festen Namen geprüft, sondern die
 zuletzt geschriebene passende Datei gewählt: das ist immer die des
 laufenden Raids.
 
-`wow_path` ist dabei das `_classic_`-Verzeichnis, also genau das,
-was `addon.finder.WoWFinder.find()` liefert und in
-`AppState.wow_path` landet.
+`wow_path` ist dabei das Installationsverzeichnis der eingestellten
+Spielversion (bei MoP Classic `_classic_`), also genau das, was
+`addon.finder.WoWFinder.find()` liefert und in `AppState.wow_path`
+landet. Welcher Ordner das ist, entscheidet `core/wow_clients.py`;
+hier spielt es keine Rolle - `Logs/` heisst in jeder Fassung `Logs/`.
 """
 
 from __future__ import annotations

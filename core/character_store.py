@@ -44,6 +44,7 @@ from core.character_sheet_sync import (
     sheet_key,
 )
 from core.paths import Paths
+from core.wow_clients import client as wow_client
 
 
 CHARACTERS_FILE = "characters.json"
@@ -66,10 +67,30 @@ CHARACTERS_FILE = "characters.json"
 # wie bei `access_role_map`: eine Zahl, die sich mit dem Spiel ändert,
 # soll ohne ein Release änderbar bleiben.
 #
+# Seit 4.1 kommt die Zahl aus der Spielversion
+# (`core/wow_clients.py`) und steht nicht mehr fest hier; die
+# Konstanten bleiben als Wert von MoP Classic bestehen.
+#
 
 MAX_LEVEL = 90
 
 MIN_LEVEL = MAX_LEVEL
+
+
+def default_min_level(client_id=None) -> int:
+    """
+    Die Mindeststufe, solange niemand eine eigene eingetragen hat: die
+    Höchststufe der Spielversion.
+
+    **Ist sie unbekannt, wird 1 zurückgegeben und nicht die Zahl einer
+    anderen Spielversion.** Eine geratene Höchststufe liesse Charaktere
+    aus "Meine Charaktere" verschwinden, über deren Stufe nichts
+    bekannt ist - dieselbe Linie wie `is_high_level()` selbst, wo eine
+    fehlende Stufe als hohe zählt: aus einer Datenlücke wird kein
+    Befund.
+    """
+
+    return wow_client(client_id).max_level or 1
 
 
 def is_high_level(sheet: dict, minimum: int = MIN_LEVEL) -> bool:
@@ -235,20 +256,20 @@ class CharacterStore:
 
         config = getattr(self.manager, "config", None)
 
-        value = (
-            config.data.get("characters_min_level")
-            if config is not None
-            else None
-        )
+        data = getattr(config, "data", None) or {}
+
+        fallback = default_min_level(data.get("wow_client"))
+
+        value = data.get("characters_min_level")
 
         try:
             minimum = int(value)
 
         except (TypeError, ValueError):
-            return MIN_LEVEL
+            return fallback
 
         if minimum < 1:
-            return MIN_LEVEL
+            return fallback
 
         return minimum
 

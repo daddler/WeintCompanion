@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from core.version import VERSION
+from core.wow_clients import DEFAULT_CLIENT_ID
 
 
 @dataclass
@@ -10,6 +11,16 @@ class AppState:
     # --------------------------------------------------
     # World of Warcraft
     # --------------------------------------------------
+
+    #
+    # Welche Spielversion gerade bedient wird
+    # (core/wow_clients.py). Steht hier und nicht nur in der
+    # Konfiguration, damit die Oberfläche sie beim Zeichnen zur Hand
+    # hat, ohne dafür die Konfiguration zu befragen - eine Seite darf
+    # in `refresh()` nichts holen (docs/architecture/navigation.md).
+    #
+
+    wow_client_id: str = DEFAULT_CLIENT_ID
 
     wow_found: bool = False
 

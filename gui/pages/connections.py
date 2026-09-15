@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.resources import Resources
+from core.wow_clients import client as wow_client
 from gui.pages._page import Page
 from gui.theme import tokens
 from gui.theme.fonts import font
@@ -418,7 +419,9 @@ class ConnectionsPage(Page):
         if state.wow_found:
 
             self.wow_endpoint.set_state(
-                "ok", f"MoP Classic · {state.wow_path.name}"
+                "ok",
+                f"{wow_client(state.wow_client_id).short_name}"
+                f" · {state.wow_path.name}",
             )
 
         else:

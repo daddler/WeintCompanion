@@ -264,7 +264,9 @@ class AboutSection(QWidget):
 
         text_col.addWidget(name)
 
-        version = QLabel(f"v{VERSION} · MoP Classic")
+        self.version_label = QLabel()
+
+        version = self.version_label
 
         version.setStyleSheet(
             'font-family:"JetBrains Mono";'
@@ -369,5 +371,17 @@ class AboutSection(QWidget):
 
         body.addStretch()
 
+        self.refresh()
+
     def refresh(self):
-        pass
+        """
+        Die Zeile unter dem Namen trägt die Spielversion, und die kann
+        sich zur Laufzeit ändern (Einstellungen → WoW-Client). Sie wird
+        deshalb hier gesetzt und nicht einmalig beim Aufbau.
+        """
+
+        client = self.manager.config.get_wow_client()
+
+        self.version_label.setText(
+            f"v{VERSION} · {client.short_name}"
+        )

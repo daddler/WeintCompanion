@@ -1,9 +1,46 @@
+"""
+Sucht die Installation einer Spielversion auf der Platte.
+
+Bis 4.0 suchte diese Klasse nach einem Ordner namens `_classic_`.
+Seit 4.1 bekommt sie eine Spielversion (`core/wow_clients.py`), und
+davon hängt ab, *wonach* sie sucht:
+
+* **Ordnername bekannt** (MoP Classic: `_classic_`): der Name
+  entscheidet, danach die Kennzeichen. Das ist die alte, enge Suche -
+  ein Ordner, der zufällig `Interface/` und `WTF/` enthält, gilt nicht
+  als Treffer.
+* **Ordnername unbekannt** (Forever, solange Blizzard ihn nicht
+  nennt): allein die Kennzeichen entscheiden - **ausser** bei
+  Ordnernamen, die erkennbar zu einer anderen Spielversion gehören
+  (`FOREIGN_FLAVOR_FOLDERS`). Ohne diesen Ausschluss fände eine Suche
+  nach Forever `_retail_` und gäbe es als Forever aus; der Nutzer
+  installierte sein Addon in eine Installation, die er nie startet,
+  und nichts daran wäre sichtbar.
+
+Gefunden wird automatisch nur, wenn noch kein Pfad hinterlegt ist
+(`CompanionManager.detect_wow()`). Die Handauswahl in den
+Einstellungen geht über `core/wow_folder.py` und ist die verlässliche
+Antwort - die Suche hier ist Bequemlichkeit, keine Wahrheit.
+"""
+
 from pathlib import Path
+
+from core.wow_clients import (
+    default_client,
+    foreign_flavor_folders,
+)
+from core.wow_folder import is_installation
 
 
 class WoWFinder:
 
-    def __init__(self):
+    def __init__(self, client=None):
+
+        self.client = client or default_client()
+
+        self.foreign_folders = set(
+            foreign_flavor_folders(self.client)
+        )
 
         self.search_roots = [
 
@@ -90,25 +127,18 @@ class WoWFinder:
 
         visited.add(real)
 
+        #
+        # Eine fremde Spielversion wird weder als Treffer genommen
+        # noch betreten - darunter liegt keine andere Installation.
+        #
+
+        if directory.name in self.foreign_folders:
+            return None
+
         try:
 
-            #
-            # _classic_ gefunden?
-            #
-
-            if directory.name == "_classic_":
-
-                interface = directory / "Interface"
-                addons = interface / "AddOns"
-                wtf = directory / "WTF"
-
-                if (
-                    interface.exists()
-                    and addons.exists()
-                    and wtf.exists()
-                ):
-
-                    return directory
+            if self._matches(directory):
+                return directory
 
             #
             # Rekursiv weitersuchen
@@ -132,3 +162,19 @@ class WoWFinder:
             return None
 
         return None
+
+    # --------------------------------------------------
+
+    def _matches(self, directory):
+        """
+        Ist dieser Ordner die gesuchte Installation?
+        """
+
+        if (
+            self.client.folder_known
+            and directory.name not in self.client.folder_names
+        ):
+
+            return False
+
+        return is_installation(directory, self.client)
