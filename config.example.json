@@ -10,5 +10,12 @@
     "sync_interval": 5,
     "roster_sync_enabled": true,
     "character_roster_sync_enabled": true,
-    "characters_min_level": 0
+    "characters_min_level": 0,
+    "forever_migration": {
+        "enabled": false,
+        "channel": "stable",
+        "repository": "",
+        "target_major": 0,
+        "dry_run": false
+    }
 }

@@ -73,3 +73,9 @@ Linux updater script; also lists `CHANGELOG.md` under `datas` — see
 - Stat-weights/QE-Live parser parity with the addon's own Lua tests:
   `tests/test_stat_weights.py`, `tests/test_qelive.py` — see
   `../systems/sim-pages.md`.
+- Generationswechsel auf Companion-Forever (Versionslogik, Release-
+  Discovery, Asset-Auswahl, Integrität, Zustand, Übergabe, Payload,
+  Sichtbarkeit): `tests/test_migration_*.py` — see
+  `../systems/forever-migration.md`. Der erste davon hält fest, dass
+  der Schalter auf **aus** steht; wer ihn umlegt, ändert diesen Test
+  bewusst mit.

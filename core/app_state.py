@@ -81,6 +81,25 @@ class AppState:
     companion_changelog: list[str] | None = None
 
     # --------------------------------------------------
+    # Generationswechsel (Companion-Forever)
+    # --------------------------------------------------
+    #
+    # Steht neben den Companion-Feldern und nicht darin: ein Update
+    # bleibt dieselbe Anwendung, ein Generationswechsel ist eine
+    # andere. Die Oberfläche soll beides nie in denselben Satz
+    # packen (siehe `core/migration/service.MigrationOffer`).
+    #
+    # Solange die Migration nicht freigegeben ist, bleiben diese
+    # Felder auf ihren Vorgaben - es wird dann gar nicht geprüft.
+    #
+
+    forever_migration_available: bool = False
+
+    forever_target_version: str = ""
+
+    forever_target_product: str = ""
+
+    # --------------------------------------------------
     # Discord Bot
     # --------------------------------------------------
 

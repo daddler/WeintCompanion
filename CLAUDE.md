@@ -80,6 +80,14 @@ WeintCodex Bot (Discord bot backend)  ←─────────────
 - **Every shared contract doc in `docs/*.md` is authoritative** — don't
   restate a wire format in a system doc under `docs/systems/`/
   `docs/architecture/`; point to the contract file instead.
+- **The migration to Companion-Forever is off until it is switched
+  on, and the target generation is *computed*, never typed.**
+  `MIGRATION_ENABLED_DEFAULT = False` means no request, no dialog, no
+  stored state; the target major is `next_major(VERSION)`, which is
+  why a completed switch can never repeat itself and why 5.x → 6.x
+  needs no rewrite. Never weaken two rules there: no install without a
+  checksum, and the running 4.x installation is never overwritten or
+  removed. Detail: `docs/systems/forever-migration.md`.
 - **Every release needs its `CHANGELOG.md` entry, checked by
   `scripts/check_version.py`** — same three-places rule as the addon.
   Detail: `docs/systems/update-system.md`.
@@ -115,6 +123,7 @@ Linux/Windows/AppImage build commands.
 | Charakterzuordnung, raid-roster, WeintAdmin-Backup | `docs/character-links-and-admin-bridge.md` |
 | Academy/Rotationshelfer lokale Nachrichten | `docs/academy-and-practice-bridge.md` |
 | Companion-Token/Auth, 401-Regel | `docs/companion-auth.md` |
+| Companion-Forever-Releases (Assets, Versionen, Übergabedatei) | `docs/companion-forever-release-contract.md` |
 
 ### This repo's own architecture and pages
 
@@ -127,6 +136,7 @@ Linux/Windows/AppImage build commands.
 | WeintTV/Academy (live), ratings, lesson catalog, "wer bin ich", Datenquelle/Quellenzeile/Wegweiser | `docs/systems/weinttv-academy.md` |
 | Archiv-Modus, Wiedergabe/Replay | `docs/systems/archive-and-replay.md` |
 | Addon-/Companion-Updates, Storage-Warnung, Changelog-Anzeige | `docs/systems/update-system.md` |
+| Generationswechsel auf Companion-Forever 5.x (Migration, Feature-Flag, Probelauf) | `docs/systems/forever-migration.md` + `docs/companion-forever-release-contract.md` |
 | Übersicht-Seite (Termin, Roster, letzter Pull, Discord-Link) | `docs/systems/overview-page.md` |
 | Meine Charaktere, Vorbereitung, Charakterzuordnung-Seite | `docs/systems/character-pages.md` |
 | Simmen-Seite (wowsims/QE Live/WowSimsExporter) | `docs/systems/sim-pages.md` + `docs/sim-run.md` |

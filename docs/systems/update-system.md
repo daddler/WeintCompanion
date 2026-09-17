@@ -23,6 +23,20 @@ call `stop_auto_sync()` **before** it, has to restart auto-sync on
 failure, and quits the process on success. One runner also means one busy
 flag — two pages cannot start two installs into the same folder.
 
+### Und ein dritter Kanal, der keiner ist
+
+Der Wechsel auf **Companion-Forever 5.x** läuft ausdrücklich *nicht*
+über diese beiden Kanäle: er ersetzt keine Fassung, sondern eine
+Anwendung. Er hat eine eigene Schicht (`core/migration/`), eine
+eigene Anzeige (kein Eintrag auf der Update-Karte, sondern ein
+Assistent) und ist bis auf Weiteres abgeschaltet. Siehe
+`forever-migration.md`.
+
+Was er sich mit dem Selbstupdate teilt: den `Downloader`, die
+Plattformerkennung aus `core/runtime.py` und seit 4.1 den Start
+losgelöster Prozesse (`core/process_spawn.py` — die systemd-Scope-
+Lehre unten steht nur noch dort).
+
 ## A finished check has to reach the screen by itself
 
 `CompanionManager.state_changed` is emitted at the end of `full_refresh()`

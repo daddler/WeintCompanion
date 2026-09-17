@@ -239,6 +239,34 @@ class Config:
             "motion_reduced": False,
             "nav_collapsed": False,
 
+            #
+            # Generationswechsel auf Companion-Forever
+            # (core/migration/). "enabled" ist der Schalter aus der
+            # Aufgabenstellung, und er steht auf **False**: solange
+            # Companion-Forever nicht veröffentlicht ist, fragt diese
+            # App das Zielrepository nicht einmal.
+            #
+            # Die drei anderen Schlüssel sind Überschreibungen für
+            # die Erprobung und dürfen leer/0 bleiben - dann gilt
+            # `daddler/Companion-Forever`, die nächste Generation
+            # nach der eigenen (also 5) und der Kanal "stable".
+            # 0 heisst hier "automatisch" und nicht "Generation 0",
+            # dieselbe Linie wie bei `characters_min_level`.
+            #
+            # Der Fortschritt eines begonnenen Wechsels steht NICHT
+            # hier, sondern unter `forever_migration_state` - was
+            # der Nutzer wählt und was die Migration gelernt hat,
+            # sind zwei Dinge.
+            #
+
+            "forever_migration": {
+                "enabled": False,
+                "channel": "stable",
+                "repository": "",
+                "target_major": 0,
+                "dry_run": False,
+            },
+
         }
 
         self.load()
@@ -303,6 +331,13 @@ class Config:
                     "density": "comfortable",
                     "motion_reduced": False,
                     "nav_collapsed": False,
+                    "forever_migration": {
+                        "enabled": False,
+                        "channel": "stable",
+                        "repository": "",
+                        "target_major": 0,
+                        "dry_run": False,
+                    },
 
                 }
 

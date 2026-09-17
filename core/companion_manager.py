@@ -12,6 +12,7 @@ from core.installer import Installer
 from core.logger import Logger
 from core.installer_workflow import InstallerWorkflow
 from core.companion_updater import CompanionUpdater
+from core.migration import MigrationService
 from core.launcher import Launcher
 from core.battlenet_launcher import BattleNetLauncher
 from addon.sync_reader import SyncReader
@@ -116,6 +117,18 @@ class CompanionManager(QObject):
         self.installer = Installer()
         self.workflow = InstallerWorkflow(self)
         self.companion_updater = CompanionUpdater(self)
+
+        #
+        # Der Generationswechsel auf Companion-Forever. Er ist
+        # standardmässig **abgeschaltet** und tut dann nichts - der
+        # Dienst existiert trotzdem, damit die Oberfläche ihn nicht
+        # von Fall zu Fall bauen muss (siehe core/migration/).
+        #
+
+        self.migration = MigrationService(
+            config=self.config,
+            logger=self.logger,
+        )
         self.launcher = Launcher()
         self.battlenet_launcher = BattleNetLauncher(self.config)
         self.sync = SyncManager(self)
@@ -1128,6 +1141,40 @@ class CompanionManager(QObject):
         if watch is not None:
             watch.note_checked()
 
+    def check_forever_migration(self, force: bool = False):
+        """
+        Fragt, ob die nächste Generation (Companion-Forever) bereit
+        steht - und tut gar nichts, solange die Migration nicht
+        freigegeben ist.
+
+        Steht hier und nicht in einer Seite: der Aufruf geht ins
+        Netz, und eine Seite darf in `refresh()` nichts holen
+        (docs/architecture/navigation.md). Der Platz ist derselbe
+        Hintergrundlauf, der auch die beiden Update-Kanäle prüft.
+        """
+
+        state = self.state
+
+        if not self.migration.enabled():
+
+            state.forever_migration_available = False
+            state.forever_target_version = ""
+            state.forever_target_product = ""
+
+            return None
+
+        result = self.migration.check(force=force)
+
+        offer = self.migration.offer(result)
+
+        state.forever_migration_available = offer is not None
+
+        state.forever_target_version = offer.target_version if offer else ""
+
+        state.forever_target_product = offer.target_product if offer else ""
+
+        return offer
+
     def full_refresh(self):
 
         try:
@@ -1137,6 +1184,7 @@ class CompanionManager(QObject):
             self.check_github()
             self.check_discord()
             self.companion_updater.check_for_update()
+            self.check_forever_migration()
             self.sync.process()
 
         finally:
@@ -1189,6 +1237,16 @@ class CompanionManager(QObject):
             self.detect_addon()
             self.check_github()
             self.companion_updater.check_for_update()
+
+            #
+            # "Erneut prüfen" heisst alles, was diese App an Fassungen
+            # kennt - auch die nächste Generation. `force` verwirft
+            # den Zwischenspeicher, aus demselben Grund wie oben: wer
+            # den Knopf drückt, weiss gerade von etwas Neuem und
+            # bekäme sonst die Antwort von vorhin.
+            #
+
+            self.check_forever_migration(force=True)
 
         finally:
 

@@ -1,12 +1,11 @@
 from pathlib import Path
 import os
-import shutil
-import subprocess
 
 from core.downloader import ChecksumError
 from core.github_updater import GitHubUpdater
 from core.linux_updater import LinuxUpdater
 from core.paths import Paths
+from core.process_spawn import spawn_detached, spawn_windows_hidden
 from core.windows_updater import WindowsUpdater
 from core.runtime import Runtime
 from core.version import VERSION, versions_equal
@@ -259,165 +258,18 @@ class CompanionUpdater:
         Startet das Updater-Skript so, dass es das Beenden von
         WeintCompanion überlebt.
 
-        Hintergrund:
-        Auf modernen Linux-Desktops (GNOME/KDE unter Fedora,
-        openSUSE, CachyOS, ...) wird eine per Doppelklick oder
-        aus dem Dateimanager gestartete AppImage häufig in einer
-        eigenen transienten systemd-Scope ausgeführt
-        ("app-...AppImage@....service").
-        Beendet sich der Hauptprozess (hier über QApplication.quit()),
-        beendet systemd standardmäßig (KillMode=control-group) die
-        GESAMTE Cgroup - inklusive aller Kindprozesse. Das betrifft
-        auch das Updater-Skript, selbst wenn es über
-        start_new_session=True in eine eigene Sitzung gestartet wurde,
-        denn eine neue Session ändert nichts an der Cgroup-Zugehörigkeit.
-
-        Ergebnis: Der Updater wird zusammen mit WeintCompanion
-        abgeschossen, bevor er die neue Version installieren kann -
-        der Update-Button "funktioniert" scheinbar nicht.
-
-        Lösung: Ist "systemd-run" verfügbar, wird der Updater in
-        eine eigene, unabhängige transiente Scope ausgelagert
-        (--user --scope), die das Beenden von WeintCompanion übersteht.
-
-        WICHTIG: systemd-run wird NUR verwendet, wenn wir auch
-        wirklich in einer solchen Scope laufen UND eine
-        funktionierende D-Bus-User-Session vorhanden ist. Auf
-        schlankeren Setups (z. B. i3, Sway, Hyprland - häufig auf
-        CachyOS) läuft die App oft gar nicht in einer Scope und/oder
-        die D-Bus-Session-Umgebung ist für den Startkontext nicht
-        vollständig gesetzt. In diesem Fall würde systemd-run im
-        Hintergrund lautlos fehlschlagen (z. B. "Failed to create
-        bus connection") - das Updater-Skript würde dann NIE
-        ausgeführt, obwohl unser Python-Code keinen Fehler bemerkt
-        (der Fehler passiert asynchron im schon gestarteten
-        Kindprozess). Deshalb wird hier vorher aktiv geprüft, ob
-        der Einsatz überhaupt nötig und sicher möglich ist - sonst
-        wird direkt der normale, bewährte Fallback genutzt.
+        Der Ablauf samt seiner drei Lehren (systemd-Scope, D-Bus,
+        bereinigte Umgebung) steht seit 4.1 in
+        `core/process_spawn.py` - der Generationswechsel
+        (`core/migration/handover.py`) startet die neue Anwendung
+        auf demselben Weg, und zwei Kopien dieser Lehren wären zwei
+        Stellen, an denen sie beim nächsten Mal nur an einer
+        nachgezogen werden.
         """
 
-        if self._running_in_systemd_scope() and self._has_dbus_session():
-
-            systemd_run = shutil.which("systemd-run")
-
-            if systemd_run:
-
-                try:
-
-                    #
-                    # WICHTIG für Debugging:
-                    # systemd-run kann asynchron fehlschlagen
-                    # (z. B. "Failed to create bus connection"),
-                    # ohne dass unser Popen()-Aufruf hier einen
-                    # Fehler wirft. Deshalb wird die Ausgabe in
-                    # eine Log-Datei neben der AppImage geschrieben,
-                    # statt sie mit DEVNULL zu verwerfen - so lässt
-                    # sich ein stiller Fehlschlag im Nachhinein
-                    # nachvollziehen.
-                    #
-
-                    debug_log_path = (
-                        Path(args[1]).parent
-                        / "systemd-run-debug.log"
-                    )
-
-                    debug_log = open(
-                        debug_log_path,
-                        "w",
-                        encoding="utf-8",
-                    )
-
-                    subprocess.Popen(
-                        [
-                            systemd_run,
-                            "--user",
-                            "--scope",
-                            "--collect",
-                            "--",
-                        ]
-                        + args,
-                        start_new_session=True,
-                        stdin=subprocess.DEVNULL,
-                        stdout=debug_log,
-                        stderr=debug_log,
-                        #
-                        # Siehe Runtime.clean_subprocess_env(): ohne
-                        # das vererbt das AppImage-Bundle sein eigenes
-                        # LD_LIBRARY_PATH an update.sh (und damit an
-                        # jedes darin aufgerufene System-Tool wie mv/
-                        # chmod/bash selbst) - klassisches "symbol
-                        # lookup error", das update.sh lautlos
-                        # abbrechen lässt, bevor es die AppImage
-                        # ersetzen kann.
-                        #
-                        env=Runtime.clean_subprocess_env(),
-                    )
-
-                    return
-
-                except Exception as exc:
-
-                    self.manager.logger.warning(
-                        f"systemd-run fehlgeschlagen, nutze Fallback: {exc}"
-                    )
-
-        #
-        # Normaler Fallback (kein Desktop-Scope, kein systemd
-        # oder keine D-Bus-Session - z. B. i3, Sway, Hyprland,
-        # oder direkter Start über ein Terminal)
-        #
-
-        subprocess.Popen(
+        spawn_detached(
             args,
-            start_new_session=True,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=Runtime.clean_subprocess_env(),
-        )
-
-    # --------------------------------------------------
-
-    @staticmethod
-    def _running_in_systemd_scope() -> bool:
-        """
-        Prüft, ob der aktuelle Prozess innerhalb einer
-        transienten systemd-Scope läuft (typisch für Apps, die
-        über GNOME/KDE per Doppelklick/Dateimanager gestartet
-        wurden). Nur dann besteht überhaupt das Risiko, dass
-        systemd beim Beenden die komplette Cgroup mitsamt dem
-        Updater-Prozess killt.
-        """
-
-        try:
-
-            cgroup_file = Path("/proc/self/cgroup")
-
-            if not cgroup_file.exists():
-
-                return False
-
-            content = cgroup_file.read_text()
-
-            return ".scope" in content
-
-        except Exception:
-
-            return False
-
-    # --------------------------------------------------
-
-    @staticmethod
-    def _has_dbus_session() -> bool:
-        """
-        Prüft, ob eine funktionierende D-Bus-User-Session
-        Umgebung vorhanden ist. systemd-run benötigt diese, um
-        mit dem systemd --user Manager zu kommunizieren.
-        """
-
-        return bool(
-            os.environ.get("DBUS_SESSION_BUS_ADDRESS")
-            or os.environ.get("XDG_RUNTIME_DIR")
+            logger=self.manager.logger,
         )
 
     # --------------------------------------------------
@@ -426,41 +278,17 @@ class CompanionUpdater:
 
     def _spawn_windows_waiter(self, script):
         """
-        Startet das Wartescript unsichtbar (kein Konsolenfenster)
-        und komplett unabhängig von WeintCompanion, damit es auch
-        nach dem Beenden von WeintCompanion weiterläuft.
-
-        WICHTIG: Hier NICHT zusätzlich DETACHED_PROCESS setzen.
-        Laut Win32-Doku wird CREATE_NO_WINDOW ignoriert, wenn es
-        zusammen mit DETACHED_PROCESS verwendet wird. Der Kind-
-        prozess startet dann komplett ohne Konsole - "timeout"
-        (aufgerufen aus dem Wartescript) braucht aber ein Konsolen-
-        Handle, um auf STRG+C zu prüfen, und erzeugt sich in diesem
-        Fall selbst ein neues, sichtbares Konsolenfenster. Genau das
-        ist das eingefrorene "timeout /t 1 /nobreak"-Fenster, das
-        Nutzer beim Update sehen. CREATE_NO_WINDOW allein reicht:
-        der Kindprozess bekommt eine (unsichtbare) Konsole und läuft
-        unabhängig von WeintCompanion weiter, da Windows-Kindprozesse
-        ohnehin nicht am Elternprozess hängen.
+        Startet das Wartescript unsichtbar und unabhängig von
+        WeintCompanion - Begründung der Creation-Flags siehe
+        `core/process_spawn.spawn_windows_hidden()`.
         """
 
-        creationflags = getattr(
-            subprocess,
-            "CREATE_NO_WINDOW",
-            0,
-        )
-
-        subprocess.Popen(
+        spawn_windows_hidden(
             [
                 "cmd",
                 "/c",
                 str(script),
-            ],
-            creationflags=creationflags,
-            close_fds=True,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            ]
         )
 
     # --------------------------------------------------

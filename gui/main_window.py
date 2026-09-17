@@ -30,6 +30,7 @@ from core.resources import Resources
 
 from gui.controllers.update_runner import UpdateRunner
 from gui.dialogs.discord_link_prompt import show_discord_link_prompt_if_needed
+from gui.dialogs.migration_dialog import show_migration_offer_if_needed
 from gui.dialogs.whats_new_dialog import show_whats_new_if_needed
 
 from gui.layout.breakpoints import LayoutState, resolve as resolve_layout
@@ -416,6 +417,13 @@ class MainWindow(QMainWindow):
 
         self._startup_popups_queued = False
 
+        #
+        # Der Generationswechsel wird höchstens einmal je Sitzung
+        # angeboten - siehe _announce_forever_migration().
+        #
+
+        self._forever_migration_offered = False
+
     # --------------------------------------------------
     # Meldungen
     # --------------------------------------------------
@@ -725,6 +733,55 @@ class MainWindow(QMainWindow):
         self._announce_updates()
 
         self._announce_storage()
+
+        self._announce_forever_migration()
+
+    def _announce_forever_migration(self):
+        """
+        Den Wechsel auf die nächste Generation anbieten - einmal je
+        Sitzung.
+
+        **Warum hier und nicht bei den Start-Popups.** Die Prüfung
+        geht ins Netz und läuft deshalb im Hintergrundlauf
+        (`CompanionManager.check_forever_migration()`), der ungefähr
+        eine Sekunde nach dem Zeichnen der Übersicht fertig wird -
+        zu diesem Zeitpunkt sind `_show_startup_popups()` längst
+        durch. Derselbe Grund, aus dem der Update-Hinweis an
+        `state_changed` hängt und nicht an `change_page()`.
+
+        Der Dialog wird über einen 0-ms-Timer geöffnet und nicht
+        direkt: `exec()` startet eine eigene Ereignisschleife, und
+        die gehört nicht mitten in die Wiedereintrittssperre von
+        `_on_state_changed()`. Der Merker wird **vorher** gesetzt,
+        sonst stellt die nächste Prüfung einen zweiten Dialog in die
+        Schlange, während der erste noch offen ist.
+
+        Ist die Migration nicht freigegeben - die Vorgabe -, steht
+        `forever_migration_available` nie auf True und hier passiert
+        nichts.
+        """
+
+        if not self.manager.state.forever_migration_available:
+            return
+
+        if self._forever_migration_offered:
+            return
+
+        self._forever_migration_offered = True
+
+        QTimer.singleShot(0, self._open_forever_migration)
+
+    def _open_forever_migration(self):
+
+        try:
+
+            show_migration_offer_if_needed(self.manager, self)
+
+        except Exception as exc:
+
+            self.manager.logger.error(
+                f"Migrationsdialog konnte nicht geöffnet werden: {exc}"
+            )
 
     def _announce_updates(self):
         """
