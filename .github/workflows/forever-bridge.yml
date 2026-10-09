@@ -1,0 +1,107 @@
+name: Brücke zu WeintCompanion Forever
+
+#
+# Der Umstieg aller Nutzer der alten Companion (Mists of Pandaria) auf
+# WeintCompanion Forever (daddler/Companion-Forever) - als EIN
+# gewöhnliches Update.
+#
+# Jede bereits installierte Companion fragt ausschliesslich dieses
+# Repository nach dem neuesten Release (core/companion_updater.py) und
+# lässt sich nicht mehr umkonfigurieren. Deshalb spiegelt dieser
+# Workflow ein fertiges Forever-Release - Setup, AppImage und beide
+# Prüfsummen, byte-genau - als neuestes Release hierher. Die alte App
+# sieht eine andere Versionsnummer, lädt, prüft die Prüfsumme und
+# installiert wie bei jedem Update. Funktioniert, weil beide Apps
+# dieselbe Windows-AppId, denselben Programmordner, dieselben
+# Asset-Namen und dieselbe Konfigurationsdatei haben (siehe
+# docs/systems/update-system.md, "Die Brücke zu Forever").
+#
+# Nach dem Umstieg fragt die App nur noch daddler/Companion-Forever.
+# Für weitere Forever-Releases muss hier nichts mehr passieren - nur
+# wer bis dahin nicht aktualisiert hat, landet erst auf der gespiegelten
+# Fassung und aktualisiert dann dort weiter. Erneutes Spiegeln einer
+# neueren Fassung ist trotzdem möglich und schadet nicht.
+#
+# Bewusst nur von Hand: dieser Lauf beendet den MoP-Kanal für alle.
+#
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Forever-Release, das gespiegelt wird (z. B. v5.1.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+
+  mirror:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Forever-Release herunterladen
+        env:
+          #
+          # Nur zum LESEN des anderen Repositorys. Ist es öffentlich,
+          # reicht das Standard-Token; ist es privat, braucht es ein
+          # Token mit Lesezugriff als Secret FOREVER_READ_TOKEN.
+          #
+          GH_TOKEN: ${{ secrets.FOREVER_READ_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          mkdir release
+          gh release download "${{ inputs.tag }}" \
+            --repo daddler/Companion-Forever \
+            --dir release \
+            --pattern 'WeintCompanion-Setup.exe' \
+            --pattern 'WeintCompanion-Setup.exe.sha256' \
+            --pattern 'WeintCompanion-x86_64.AppImage' \
+            --pattern 'WeintCompanion-x86_64.AppImage.sha256'
+
+          #
+          # Ohne Prüfsumme bricht die alte App das Update ab - und ein
+          # Release mit falscher Prüfsumme ist für sie nicht von einem
+          # manipulierten zu unterscheiden. Also hier prüfen, nicht
+          # beim Nutzer.
+          #
+          cd release
+          ls -l
+          sha256sum -c WeintCompanion-x86_64.AppImage.sha256
+          sha256sum -c WeintCompanion-Setup.exe.sha256
+
+      - name: Release-Text schreiben
+        run: |
+          cat > notes.md <<'NOTES'
+          **WeintCompanion wird zu WeintCompanion Forever.**
+
+          Dieses Update bringt dich auf die neue Companion für World of
+          Warcraft: Forever. Mit ihr kannst du WeintCodex Forever für die
+          Beta herunterladen. Deine Einstellungen und deine
+          Discord-Verknüpfung bleiben erhalten.
+
+          **Danach bitte einmal prüfen:** Unter *Einstellungen → WoW-Client*
+          muss der Ordner deiner Forever-Beta ausgewählt sein, bevor du
+          WeintCodex installierst. Die App erinnert dich beim ersten Start
+          daran.
+          NOTES
+
+      - name: Als neuestes Release veröffentlichen
+        env:
+          #
+          # Absichtlich das Standard-Token: ein damit angelegter Tag
+          # löst build.yml NICHT aus (der würde am Versionsabgleich
+          # ohnehin scheitern, aber das soll gar nicht erst passieren).
+          #
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${{ inputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "WeintCompanion Forever ${{ inputs.tag }}" \
+            --notes-file notes.md \
+            --latest \
+            release/*

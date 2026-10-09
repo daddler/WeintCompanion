@@ -115,6 +115,22 @@ Download**; `WorkflowResult.message` trägt den Satz aus der Ausnahme; die
 Einblendung hängt an `UpdateRunner.finished` in `MainWindow`, nicht an
 einer Seite (**ein** Läufer, beide Seiten lösen ihn aus).
 
+## Die Brücke zu Forever
+
+Diese App wird nicht weiterentwickelt, sondern durch WeintCompanion
+Forever (`daddler/Companion-Forever`) ersetzt — für alle, als **ein**
+Update. Eine installierte Companion fragt nur dieses Repository, also
+spiegelt `.github/workflows/forever-bridge.yml` (nur von Hand, Eingabe:
+Forever-Tag) ein fertiges Forever-Release byte-genau als neuestes
+Release hierher. Der Updater sieht eine andere Versionsnummer, lädt,
+prüft die `.sha256` und installiert wie immer.
+
+Das trägt nur, solange beide Apps dieselbe Windows-AppId, denselben
+Programmordner, dieselben Asset-Namen und dieselbe `config.json`
+haben. Der Hinweis, den Beta-Ordner zu prüfen, und warum der MoP-Ordner
+nicht übernommen wird, liegen auf der Forever-Seite
+(`../Companion-Forever/docs/systems/update-system.md`).
+
 ## Every release ships its changelog — this is not optional
 
 Same rule as the addon (see `../../../WeintCodex/docs/development/releases.md`),
